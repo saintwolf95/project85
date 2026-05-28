@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-dark: #0B0F19;
+  --color-brand-surface: #161B28;
+  --color-brand-cyan: #00F5FF;
+  --color-brand-blue: #2563EB;
+  --font-orbitron: 'Orbitron', sans-serif;
+  --font-inter: 'Inter', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 dark:bg-brand-dark dark:text-slate-100 font-inter antialiased;
+  }
+}
+
+@layer utilities {
+  .title-corporate {
+    @apply font-inter uppercase tracking-wider font-medium text-slate-700 dark:text-slate-300;
+  }
+}

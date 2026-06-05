@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 export interface ProductMetrics {
+  producto_id: number;
   fecha: string;
   nombre_art: string;
   cod_art: string;
@@ -10,6 +11,8 @@ export interface ProductMetrics {
   peso: number;
   familia: string;
   marca: string;
+  product_manager?: string;
+  seccion?: string;
   precio_unit: number;
   unidades: number;
   valor_inv: number;
@@ -43,6 +46,18 @@ export interface AIInsight {
   tipo: string;
 }
 
+export interface ProductHistoryDaily {
+  fecha: string;
+  ventas_eur: number;
+  inventario_eur: number;
+}
+
+export interface ProductHistoryResponse {
+  producto_id: number;
+  nombre: string;
+  historico: ProductHistoryDaily[];
+}
+
 export const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
 });
@@ -54,6 +69,17 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const getInventoryAbc = async (
   page: number = 1, 

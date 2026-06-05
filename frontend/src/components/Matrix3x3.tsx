@@ -38,25 +38,40 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
   const cells = ['AA', 'AB', 'AC', 'BA', 'BB', 'BC', 'CA', 'CB', 'CC'];
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl">
-      <h3 className="title-corporate mb-6">Matriz de Doble Análisis (Ventas vs Inventario)</h3>
-      <div className="relative pt-6 pl-8">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider">ABC Inventario (Inversión) &rarr;</div>
-        <div className="absolute top-1/2 left-0 -translate-y-1/2 -rotate-90 text-xs font-bold text-slate-500 uppercase tracking-wider origin-left whitespace-nowrap">ABC Ventas (Demanda) &rarr;</div>
-        
-        <div className="grid grid-cols-3 gap-3 h-64">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm overflow-hidden">
+      <h3 className="title-corporate text-sm mb-2">Matriz de Doble Análisis (Ventas vs Inventario)</h3>
+      
+      {/* Eje X label */}
+      <div className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+        ABC Inventario (Inversión) →
+      </div>
+
+      {/* Contenedor Matriz + Eje Y */}
+      <div className="flex gap-1 items-stretch">
+        {/* Eje Y label (vertical) */}
+        <div className="flex items-center justify-center shrink-0" style={{ width: 16 }}>
+          <span
+            className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            ABC Ventas (Demanda) →
+          </span>
+        </div>
+
+        {/* Grid 3x3 — sin altura fija, las celdas se dimensionan por contenido */}
+        <div className="flex-1 grid grid-cols-3 gap-1.5">
           {cells.map(cell => (
             <div 
               key={cell} 
               onClick={() => onCellClick && onCellClick(cell)}
-              className={`flex flex-col items-center justify-center p-2 sm:p-4 rounded-xl border-2 transition-all 
+              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border-2 transition-all
                 ${getCellColor(cell)} 
-                ${onCellClick ? 'cursor-pointer hover:scale-[1.02] hover:shadow-lg' : ''}
-                ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan scale-[1.02] shadow-lg' : ''}
+                ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
+                ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
               `}>
-              <span className="text-xl sm:text-2xl font-bold">{counts[cell as keyof typeof counts]}</span>
-              <span className="text-xs font-medium uppercase mt-1 opacity-80">{cell}</span>
-              <span className="text-[10px] text-center mt-1 opacity-70 leading-tight hidden sm:block">{getCellLabel(cell)}</span>
+              <span className="text-lg font-bold leading-none">{counts[cell as keyof typeof counts]}</span>
+              <span className="text-[10px] font-medium uppercase mt-0.5 opacity-80">{cell}</span>
+              <span className="text-[9px] text-center opacity-60 leading-tight hidden sm:block">{getCellLabel(cell)}</span>
             </div>
           ))}
         </div>

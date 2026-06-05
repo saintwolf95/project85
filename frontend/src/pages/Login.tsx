@@ -38,10 +38,10 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-blue/10 border border-brand-blue/30 mb-6">
-            <Lock className="w-8 h-8 text-brand-cyan" />
+            <span className="font-bold text-3xl text-brand-cyan leading-none">5m</span>
           </div>
           <h1 className="text-3xl font-light text-white tracking-wide">
-            SupplyChain <span className="font-bold text-brand-cyan">AI</span>
+            five-<span className="font-bold text-brand-cyan">minutes</span>
           </h1>
           <p className="text-slate-400 mt-2">Acceso seguro corporativo</p>
         </div>

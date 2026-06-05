@@ -99,6 +99,21 @@ def crear_datos_demo(db: Session):
         costo = round(costo, 2)
         peso = round(peso, 2)
         lead_time = random.choice([7, 14, 30])
+        # Mapping de PM y Sección
+        pm_map = {
+            "Portátiles": "JAC", "Monitores": "JAC",
+            "Móviles": "AMI",
+            "Ordenadores": "LKT",
+            "Tarjetas Gráficas": "UCR",
+            "Reproductores": "TDS", "Periféricos": "TDS"
+        }
+        seccion_map = {
+            "Portátiles": "Informática", "Monitores": "Informática", "Ordenadores": "Informática",
+            "Móviles": "Telefonía",
+            "Tarjetas Gráficas": "Componentes",
+            "Reproductores": "Audio",
+            "Periféricos": "Accesorios"
+        }
         
         prod = Producto(
             empresa_id=empresa_demo.id,
@@ -111,7 +126,9 @@ def crear_datos_demo(db: Session):
             ean=generar_ean(),
             peso=peso,
             familia=familia,
-            marca=marca
+            marca=marca,
+            product_manager=pm_map.get(familia, "JAC"),
+            seccion=seccion_map.get(familia, "General")
         )
         return prod, stock_r, prob_venta, cant_venta_r
 
@@ -132,20 +149,42 @@ def crear_datos_demo(db: Session):
     
     db.commit()
 
-    # 3. Inventario y Ventas (Últimos 60 días)
-    fecha_inicio = date.today() - timedelta(days=60)
+    # 3. Inventario y Ventas (Últimos 90 días)
+    fecha_inicio = date.today() - timedelta(days=90)
     for prod, stock_r, prob_venta, cant_venta_r in productos_creados:
-        stock = random.randint(*stock_r)
-        db.add(Inventario(producto_id=prod.id, stock_disponible=stock))
+        current_stock = random.randint(*stock_r)
         
-        for dia in range(60):
+        for dia in range(90):
             fecha_actual = fecha_inicio + timedelta(days=dia)
+            cantidad = 0
             if random.random() < prob_venta:
                 cantidad = random.randint(*cant_venta_r)
+                
+                # Simular venta
+                current_stock -= cantidad
+                
+                # Simular reabastecimiento si quiebra stock
+                if current_stock < 0:
+                    current_stock += random.randint(*stock_r) + cantidad
+
                 db.add(VentaHistorica(
                     producto_id=prod.id,
                     fecha_venta=fecha_actual,
                     cantidad_vendida=cantidad,
-                    ingreso_total=round(cantidad * prod.precio_venta, 2)
+                    ingreso_total=round(cantidad * prod.precio_venta, 2),
+                    stock_disponible=current_stock
                 ))
+            else:
+                # Aunque no haya venta, guardamos el registro para tener el histórico de stock coherente cada día
+                db.add(VentaHistorica(
+                    producto_id=prod.id,
+                    fecha_venta=fecha_actual,
+                    cantidad_vendida=0,
+                    ingreso_total=0.0,
+                    stock_disponible=current_stock
+                ))
+                
+        # El inventario actual es el stock del último día
+        db.add(Inventario(producto_id=prod.id, stock_disponible=current_stock))
+
     db.commit()

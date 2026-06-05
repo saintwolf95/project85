@@ -1,8 +1,16 @@
 import pandas as pd
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
+from cachetools import cached, TTLCache
 from .models import Producto, Inventario, VentaHistorica
 
+# Caché de 5 minutos (300 segundos) para almacenar métricas por empresa
+metrics_cache = TTLCache(maxsize=10, ttl=300)
+
+def metrics_cache_key(db: Session, empresa_id: int):
+    return hash(empresa_id)
+
+@cached(metrics_cache, key=metrics_cache_key)
 def calculate_inventory_metrics(db: Session, empresa_id: int):
     # Obtener productos e inventario
     productos = db.query(Producto, Inventario).join(
@@ -37,6 +45,8 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         "peso": p.Producto.peso or 0.0,
         "familia": p.Producto.familia or "",
         "marca": p.Producto.marca or "",
+        "product_manager": p.Producto.product_manager or "",
+        "seccion": p.Producto.seccion or "",
         "stock_disponible": p.Inventario.stock_disponible
     } for p in productos])
 
@@ -112,9 +122,9 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         lead_time = row["lead_time_dias"]
         riesgos = []
 
-        if stock == 0:
-            dias_cobertura = 0.0
-            riesgos.append("Riesgo Rotura")
+        if stock <= 1:
+            dias_cobertura = 0.0 if stock == 0 else (stock / ads if ads > 0 else 999.0)
+            riesgos.append("Alerta Rotura")
         elif ads == 0:
             dias_cobertura = 999.0
             riesgos.append("Riesgo Comercial")
@@ -146,10 +156,13 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     df["unidades"] = df["stock_disponible"]
     df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
     
+    df["product_manager"] = df["product_manager"]
+    df["seccion"] = df["seccion"]
+    
     # Preparar el resultado como diccionarios
     columnas_finales = [
-        "fecha", "nombre_art", "cod_art", "pn", "ean", "costo_unit", "peso", 
-        "familia", "marca", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d",
+        "producto_id", "fecha", "nombre_art", "cod_art", "pn", "ean", "costo_unit", "peso", 
+        "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d",
         "abc_ventas", "abc_inventario", "matriz_abc", "ads", "dias_cobertura", "riesgos_categorizados"
     ]
     df_final = df[columnas_finales]
@@ -167,9 +180,9 @@ def get_dashboard_kpis(metrics: list) -> dict:
 
     valor_total = df["valor_inv"].sum()
     
-    # Calcular alertas totales basándose en si existe 'Riesgo Rotura'
+    # Calcular alertas totales basándose en si existe 'Riesgo Rotura' o 'Alerta Rotura'
     def has_rotura(riesgos):
-        return "Riesgo Rotura" in riesgos
+        return "Riesgo Rotura" in riesgos or "Alerta Rotura" in riesgos
         
     df["has_rotura"] = df["riesgos_categorizados"].apply(has_rotura)
     alertas_totales = int(df["has_rotura"].sum())

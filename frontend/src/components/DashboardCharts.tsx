@@ -86,7 +86,7 @@ export const DashboardCharts = ({ abcData, familyData, onAbcClick, onFamilyClick
           <p className="text-sm text-slate-500 dark:text-slate-400">Capital inmovilizado (€) por categoría tecnológica. (Interactivo)</p>
         </div>
         <div className="flex-1 min-h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={350}>
             <BarChart
               data={familyData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}

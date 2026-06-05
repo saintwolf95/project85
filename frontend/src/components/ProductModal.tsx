@@ -6,10 +6,11 @@ interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  description?: string;
   products: ProductMetrics[];
 }
 
-export const ProductModal = ({ isOpen, onClose, title, products }: ProductModalProps) => {
+export const ProductModal = ({ isOpen, onClose, title, description, products }: ProductModalProps) => {
   if (!isOpen) return null;
 
   const totalVentas = products.reduce((acc, p) => acc + p.ventas_60d, 0);
@@ -34,7 +35,9 @@ export const ProductModal = ({ isOpen, onClose, title, products }: ProductModalP
                 {products.length} ítems
               </span>
             </h2>
-            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Detalle interactivo del segmento seleccionado.</p>
+            <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">
+              {description || 'Detalle interactivo del segmento seleccionado.'}
+            </p>
           </div>
           <button 
             onClick={onClose}

@@ -35,6 +35,8 @@ class Producto(Base):
     peso = Column(Float, nullable=True)
     familia = Column(String, nullable=True)
     marca = Column(String, nullable=True)
+    product_manager = Column(String, nullable=True)
+    seccion = Column(String, nullable=True)
     
     empresa = relationship("Empresa", back_populates="productos")
     inventario = relationship("Inventario", back_populates="producto", uselist=False)
@@ -53,3 +55,4 @@ class VentaHistorica(Base):
     fecha_venta = Column(Date, nullable=False)
     cantidad_vendida = Column(Integer, nullable=False)
     ingreso_total = Column(Float, nullable=False)
+    stock_disponible = Column(Integer, nullable=False, default=0)

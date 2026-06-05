@@ -134,3 +134,45 @@ def get_dashboard_kpis(
 
     kpis = services.get_dashboard_kpis(metrics)
     return kpis
+
+from datetime import date, timedelta
+from ..models import Producto, VentaHistorica
+from fastapi import HTTPException
+
+@router.get("/product-history/{producto_id}", response_model=schemas.ProductHistoryResponse)
+def get_product_history(
+    producto_id: int,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify product belongs to user's company
+    producto = db.query(Producto).filter(
+        Producto.id == producto_id, 
+        Producto.empresa_id == current_user.empresa_id
+    ).first()
+    
+    if not producto:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    # Get last 60 days
+    fecha_60d = date.today() - timedelta(days=60)
+    
+    ventas = db.query(VentaHistorica).filter(
+        VentaHistorica.producto_id == producto_id,
+        VentaHistorica.fecha_venta >= fecha_60d
+    ).order_by(VentaHistorica.fecha_venta.asc()).all()
+
+    historico = []
+    for v in ventas:
+        inventario_eur = v.stock_disponible * producto.costo_unitario
+        historico.append({
+            "fecha": v.fecha_venta.isoformat(),
+            "ventas_eur": v.ingreso_total,
+            "inventario_eur": inventario_eur
+        })
+
+    return {
+        "producto_id": producto.id,
+        "nombre": producto.nombre,
+        "historico": historico
+    }

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, TrendingUp, BellRing, Truck, Bot, Database, Package, LogOut, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -9,21 +9,20 @@ export const Sidebar = () => {
 
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/inventory', icon: BarChart3, label: 'Inventory Analytics' },
-    { to: '/forecast', icon: TrendingUp, label: 'Demand Forecasting' },
-    { to: '/alerts', icon: BellRing, label: 'Actionable Insights' },
-    { to: '/logistics', icon: Truck, label: 'Logistics & Distribution' },
+    { to: '/inventory', icon: BarChart3, label: 'Intelligence ABC' },
+    { to: '/forecast', icon: TrendingUp, label: 'Predicción Demanda' },
     { to: '/copilot', icon: Bot, label: 'AI Copilot' },
     { to: '/integrations', icon: Database, label: 'Data Engineering' },
+    { to: '/import-guide', icon: FileSpreadsheet, label: 'Guía de Importación' },
   ];
 
   return (
     <aside className="w-64 h-screen bg-white/80 dark:bg-brand-surface/80 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-colors">
       <div className="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
-        <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)]">
-          <Package size={24} className="text-brand-blue dark:text-brand-cyan" />
+        <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)] flex items-center justify-center w-10 h-10">
+          <span className="font-bold text-lg text-brand-blue dark:text-brand-cyan leading-none">5m</span>
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">SupplyChain AI</h1>
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
       </div>
       
       <nav className="flex-1 py-6 px-4 space-y-2">

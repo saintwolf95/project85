@@ -6,16 +6,20 @@ import { DashboardMetrics } from '../components/DashboardMetrics';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { GaugeChart } from '../components/GaugeChart';
 import { ProductModal } from '../components/ProductModal';
+import { InsightModal } from '../components/InsightModal';
 
 export const Home = () => {
   const [loading, setLoading] = useState(true);
   const [kpiData, setKpiData] = useState<DashboardKPIsResponse | null>(null);
   const [inventory, setInventory] = useState<ProductMetrics[]>([]);
   const [insights, setInsights] = useState<AIInsight[]>([]);
+  const [selectedInsight, setSelectedInsight] = useState<AIInsight | null>(null);
 
   // Filters
   const [abcFilter, setAbcFilter] = useState('all');
   const [familyFilter, setFamilyFilter] = useState('all');
+  const [pmFilter, setPmFilter] = useState('all');
+  const [sectionFilter, setSectionFilter] = useState('all');
 
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -37,6 +41,12 @@ export const Home = () => {
         if (familyFilter !== 'all') {
             filteredInv = filteredInv.filter(item => item.familia === familyFilter);
         }
+        if (pmFilter !== 'all') {
+            filteredInv = filteredInv.filter(item => item.product_manager === pmFilter);
+        }
+        if (sectionFilter !== 'all') {
+            filteredInv = filteredInv.filter(item => item.seccion === sectionFilter);
+        }
 
         setKpiData(kpis);
         setInventory(filteredInv);
@@ -48,7 +58,7 @@ export const Home = () => {
       }
     };
     fetchAll();
-  }, [abcFilter, familyFilter]);
+  }, [abcFilter, familyFilter, pmFilter, sectionFilter]);
 
   // Compute Metrics
   const metrics = useMemo(() => {
@@ -116,28 +126,42 @@ export const Home = () => {
   };
 
   const getHealthScore = () => {
-    if (!kpiData) return { score: 100, label: 'Calculando...', color: 'text-slate-400', reasons: [] };
+    if (!kpiData || inventory.length === 0) return { score: 100, label: 'Calculando...', color: 'text-slate-400', reasons: [] };
     let score = 100;
     const reasons = [];
+    const totalItems = inventory.length;
+
     if (kpiData.total_alertas_criticas > 0) {
-        const pts = kpiData.total_alertas_criticas * 5;
-        score -= pts;
-        reasons.push(`-${pts} pts por ${kpiData.total_alertas_criticas} riesgos de rotura detectados.`);
+        const percentage = (kpiData.total_alertas_criticas / totalItems) * 100;
+        const pts = Math.min(60, Math.round(percentage)); 
+        if (pts > 0) {
+            score -= pts;
+            reasons.push(`-${pts} pts (${percentage.toFixed(1)}% del catálogo con riesgo de rotura)`);
+        }
     }
+    
     if (kpiData.salud_stock_clase_a > 0) {
-        const pts = kpiData.salud_stock_clase_a * 15;
-        score -= pts;
-        reasons.push(`-${pts} pts por ${kpiData.salud_stock_clase_a} productos Clase A críticos.`);
+        const totalClaseA = inventory.filter(i => i.matriz_abc?.startsWith('A')).length || 1;
+        const percentageA = (kpiData.salud_stock_clase_a / totalClaseA) * 100;
+        const pts = Math.min(30, Math.round(percentageA * 0.5)); 
+        if (pts > 0) {
+            score -= pts;
+            reasons.push(`-${pts} pts (Penalización severa: ${percentageA.toFixed(1)}% de la Clase A en riesgo)`);
+        }
     }
     
     // Evaluate frozen capital in C class
     const frozenC = inventory.filter(i => i.matriz_abc?.includes('C') && i.unidades_venta_60d === 0);
     if (frozenC.length > 0) {
         const valFrozen = frozenC.reduce((acc, i) => acc + i.valor_inv, 0);
-        if (valFrozen > 1000) {
-            const pts = 10;
-            score -= pts;
-            reasons.push(`-${pts} pts por exceso de capital inmovilizado en Clase C.`);
+        const valTotal = kpiData.valor_total_inventario || 1;
+        const percFrozen = (valFrozen / valTotal) * 100;
+        if (percFrozen > 5) {
+            const pts = Math.min(10, Math.round(percFrozen)); 
+            if (pts > 0) {
+                score -= pts;
+                reasons.push(`-${pts} pts (${percFrozen.toFixed(1)}% del capital inmovilizado en Clase C)`);
+            }
         }
     }
 
@@ -210,6 +234,37 @@ export const Home = () => {
               <option value="Monitores">Monitores</option>
             </select>
           </div>
+          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <select 
+              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+              value={pmFilter}
+              onChange={(e) => setPmFilter(e.target.value)}
+            >
+              <option value="all">Todos los PMs</option>
+              <option value="JAC">JAC</option>
+              <option value="AMI">AMI</option>
+              <option value="LKT">LKT</option>
+              <option value="UCR">UCR</option>
+              <option value="TDS">TDS</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <select 
+              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
+              value={sectionFilter}
+              onChange={(e) => setSectionFilter(e.target.value)}
+            >
+              <option value="all">Todas las Secciones</option>
+              <option value="Informática">Informática</option>
+              <option value="Telefonía">Telefonía</option>
+              <option value="Componentes">Componentes</option>
+              <option value="Audio">Audio</option>
+              <option value="Accesorios">Accesorios</option>
+              <option value="General">General</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -264,7 +319,11 @@ export const Home = () => {
 
             <div className="space-y-4">
               {insights.map((insight, idx) => (
-                <div key={idx} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-5 hover:border-brand-blue/30 dark:hover:border-brand-cyan/30 transition-colors shadow-sm cursor-pointer group">
+                <div 
+                  key={idx} 
+                  onClick={() => setSelectedInsight(insight)}
+                  className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-5 hover:border-brand-blue/30 dark:hover:border-brand-cyan/30 transition-colors shadow-sm cursor-pointer group"
+                >
                   <div className="flex items-start gap-4">
                     {getInsightIcon(insight.icono, insight.tipo)}
                     <div>
@@ -293,6 +352,15 @@ export const Home = () => {
         title={modalTitle} 
         products={modalProducts} 
       />
+
+      {/* Modal de AI Insights */}
+      {selectedInsight && (
+        <InsightModal 
+          insight={selectedInsight} 
+          inventory={inventory} 
+          onClose={() => setSelectedInsight(null)} 
+        />
+      )}
 
     </div>
   );

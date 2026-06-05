@@ -22,6 +22,7 @@ class Usuario(UsuarioBase):
         from_attributes = True
 
 class ProductMetrics(BaseModel):
+    producto_id: int
     fecha: str
     nombre_art: str
     cod_art: str
@@ -31,6 +32,8 @@ class ProductMetrics(BaseModel):
     peso: float
     familia: str
     marca: str
+    product_manager: Optional[str] = None
+    seccion: Optional[str] = None
     precio_unit: float
     unidades: int
     valor_inv: float
@@ -53,3 +56,13 @@ class DashboardKPIsResponse(BaseModel):
     valor_total_inventario: float
     total_alertas_criticas: int
     salud_stock_clase_a: int
+
+class ProductHistoryDaily(BaseModel):
+    fecha: str
+    ventas_eur: float
+    inventario_eur: float
+
+class ProductHistoryResponse(BaseModel):
+    producto_id: int
+    nombre: str
+    historico: List[ProductHistoryDaily]

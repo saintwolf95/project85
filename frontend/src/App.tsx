@@ -7,9 +7,9 @@ import { Home } from './pages/Home';
 import { Intelligence } from './pages/Intelligence';
 import { DemandForecasting } from './pages/DemandForecasting';
 import { ActionableInsights } from './pages/ActionableInsights';
-import { LogisticsDistribution } from './pages/LogisticsDistribution';
 import { AiCopilot } from './pages/AiCopilot';
 import { DataEngineering } from './pages/DataEngineering';
+import { DataImportGuide } from './pages/DataImportGuide';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -31,9 +31,9 @@ function App() {
             <Route path="inventory" element={<Intelligence />} />
             <Route path="forecast" element={<DemandForecasting />} />
             <Route path="alerts" element={<ActionableInsights />} />
-            <Route path="logistics" element={<LogisticsDistribution />} />
             <Route path="copilot" element={<AiCopilot />} />
             <Route path="integrations" element={<DataEngineering />} />
+            <Route path="import-guide" element={<DataImportGuide />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
 from cachetools import cached, TTLCache
-from .models import Producto, Inventario, VentaHistorica
+from .models import Producto, InventarioSnapshot, VentaHistorica
 
 # Caché de 5 minutos (300 segundos) para almacenar métricas por empresa
 metrics_cache = TTLCache(maxsize=10, ttl=300)
@@ -13,23 +13,23 @@ def metrics_cache_key(db: Session, empresa_id: int):
 @cached(metrics_cache, key=metrics_cache_key)
 def calculate_inventory_metrics(db: Session, empresa_id: int):
     # Obtener productos e inventario
-    productos = db.query(Producto, Inventario).join(
-        Inventario, Producto.id == Inventario.producto_id
+    productos = db.query(Producto, InventarioSnapshot).join(
+        InventarioSnapshot, Producto.id == InventarioSnapshot.producto_id
     ).filter(Producto.empresa_id == empresa_id).all()
 
     if not productos:
         return []
 
-    # Fechas para los filtros (60 y 30 días)
+    # Fechas para los filtros (90 días)
     hoy = date.today()
-    fecha_60_dias = hoy - timedelta(days=60)
+    fecha_90_dias = hoy - timedelta(days=90)
     fecha_30_dias = hoy - timedelta(days=30)
 
     # Obtener ventas históricas
     producto_ids = [p.Producto.id for p in productos]
     ventas = db.query(VentaHistorica).filter(
         VentaHistorica.producto_id.in_(producto_ids),
-        VentaHistorica.fecha_venta >= fecha_60_dias
+        VentaHistorica.fecha_venta >= fecha_90_dias
     ).all()
 
     # DataFrames
@@ -47,7 +47,7 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         "marca": p.Producto.marca or "",
         "product_manager": p.Producto.product_manager or "",
         "seccion": p.Producto.seccion or "",
-        "stock_disponible": p.Inventario.stock_disponible
+        "stock_disponible": p.InventarioSnapshot.stock_disponible
     } for p in productos])
 
     df_ventas = pd.DataFrame([{
@@ -78,42 +78,65 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     df["ventas_60d"] = df["ventas_60d"].fillna(0.0)
     df["unidades_venta_60d"] = df["unidades_venta_60d"].fillna(0)
 
-    # 2. Clasificación ABC Doble
+    # 2. Eje ABC (Valor de Inventario)
+    df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
+    df = df.sort_values(by="valor_inv", ascending=False).reset_index(drop=True)
+    df["porcentaje_inv"] = df["valor_inv"] / df["valor_inv"].sum() if df["valor_inv"].sum() > 0 else 0
+    df["acum_inv"] = df["porcentaje_inv"].cumsum()
+
     def clasificar_abc(acumulado):
         if acumulado <= 0.80: return "A"
         if acumulado <= 0.95: return "B"
         return "C"
 
-    # ABC Ventas
-    df = df.sort_values(by="ventas_60d", ascending=False).reset_index(drop=True)
-    df["porcentaje_ventas"] = df["ventas_60d"] / df["ventas_60d"].sum() if df["ventas_60d"].sum() > 0 else 0
-    df["acum_ventas"] = df["porcentaje_ventas"].cumsum()
-    df["abc_ventas"] = df["acum_ventas"].apply(clasificar_abc)
-    if df["ventas_60d"].sum() == 0:
-        df["abc_ventas"] = "C"
-
-    # ABC Inventario
-    df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
-    df = df.sort_values(by="valor_inv", ascending=False).reset_index(drop=True)
-    df["porcentaje_inv"] = df["valor_inv"] / df["valor_inv"].sum() if df["valor_inv"].sum() > 0 else 0
-    df["acum_inv"] = df["porcentaje_inv"].cumsum()
-    df["abc_inventario"] = df["acum_inv"].apply(clasificar_abc)
+    df["abc"] = df["acum_inv"].apply(clasificar_abc)
     if df["valor_inv"].sum() == 0:
-        df["abc_inventario"] = "C"
+        df["abc"] = "C"
 
-    df["matriz_abc"] = df["abc_ventas"] + df["abc_inventario"]
+    # 3. Eje XYZ (Volatilidad de la Demanda)
+    import numpy as np
 
-    # 3. Promedio Diario de Ventas (ADS) últimos 30 días
     if not df_ventas.empty:
-        df_30 = df_ventas[df_ventas["fecha_venta"] >= fecha_30_dias]
-        ventas_30 = df_30.groupby("producto_id")["cantidad_vendida"].sum().reset_index()
-        # Se divide entre 30 días exactos para el promedio diario
-        ventas_30["ads"] = ventas_30["cantidad_vendida"] / 30.0
+        # Agrupar por producto y fecha para tener la demanda diaria exacta
+        ventas_diarias = df_ventas.groupby(["producto_id", "fecha_venta"])["cantidad_vendida"].sum().reset_index()
+        
+        # Generar un grid de los 90 días para todos los productos con ventas
+        dias_completos = pd.date_range(start=fecha_90_dias, end=hoy, freq='D')
+        
+        def calcular_cv(prod_id):
+            vd = ventas_diarias[ventas_diarias["producto_id"] == prod_id]
+            venta_total = vd["cantidad_vendida"].sum()
+            
+            if venta_total == 0:
+                return pd.Series({"cv": np.nan, "xyz": "Z", "ads": 0.0})
+                
+            # Rellenar ceros para los días sin venta
+            vd_completo = vd.set_index("fecha_venta").reindex(dias_completos, fill_value=0)
+            
+            mean = vd_completo["cantidad_vendida"].mean()
+            std = vd_completo["cantidad_vendida"].std(ddof=0)
+            
+            if mean == 0: # Salvaguarda
+                return pd.Series({"cv": np.nan, "xyz": "Z", "ads": 0.0})
+                
+            cv = std / mean
+            if cv <= 0.2:
+                xyz = "X"
+            elif cv <= 0.6:
+                xyz = "Y"
+            else:
+                xyz = "Z"
+                
+            return pd.Series({"cv": cv, "xyz": xyz, "ads": mean})
+            
+        xyz_metrics = df["producto_id"].apply(calcular_cv)
+        df = pd.concat([df, xyz_metrics], axis=1)
     else:
-        ventas_30 = pd.DataFrame({"producto_id": df_prod["producto_id"], "ads": 0.0})
+        df["cv"] = np.nan
+        df["xyz"] = "Z"
+        df["ads"] = 0.0
 
-    df = pd.merge(df, ventas_30[["producto_id", "ads"]], on="producto_id", how="left")
-    df["ads"] = df["ads"].fillna(0.0)
+    df["matriz_abc"] = df["abc"] + df["xyz"]
 
     # 4 & 5. Días de Cobertura y Riesgos Categorizados
     def calcular_riesgos(row):
@@ -163,7 +186,7 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     columnas_finales = [
         "producto_id", "fecha", "nombre_art", "cod_art", "pn", "ean", "costo_unit", "peso", 
         "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d",
-        "abc_ventas", "abc_inventario", "matriz_abc", "ads", "dias_cobertura", "riesgos_categorizados"
+        "abc", "xyz", "cv", "matriz_abc", "ads", "dias_cobertura", "riesgos_categorizados"
     ]
     df_final = df[columnas_finales]
     resultados = df_final.to_dict(orient="records")
@@ -187,7 +210,7 @@ def get_dashboard_kpis(metrics: list) -> dict:
     df["has_rotura"] = df["riesgos_categorizados"].apply(has_rotura)
     alertas_totales = int(df["has_rotura"].sum())
     
-    clase_a = df[df["abc_ventas"] == "A"]
+    clase_a = df[df["abc"] == "A"]
     alertas_clase_a = int(clase_a["has_rotura"].sum()) if not clase_a.empty else 0
 
     return {

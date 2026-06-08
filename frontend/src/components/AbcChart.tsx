@@ -10,17 +10,17 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
 
-    const counts = { A: 0, B: 0, C: 0 };
+    const counts = { X: 0, Y: 0, Z: 0 };
     data.forEach(item => {
-      if (item.abc_ventas === 'A') counts.A++;
-      else if (item.abc_ventas === 'B') counts.B++;
-      else counts.C++;
+      if (item.xyz === 'X') counts.X++;
+      else if (item.xyz === 'Y') counts.Y++;
+      else counts.Z++;
     });
 
     return [
-      { name: 'Clase A', value: counts.A, color: '#00F5FF' }, // brand-cyan
-      { name: 'Clase B', value: counts.B, color: '#2563EB' }, // brand-blue
-      { name: 'Clase C', value: counts.C, color: '#94A3B8' }, // slate
+      { name: 'Clase X (Constante)', value: counts.X, color: '#00F5FF' }, // brand-cyan
+      { name: 'Clase Y (Variable)', value: counts.Y, color: '#2563EB' }, // brand-blue
+      { name: 'Clase Z (Irregular)', value: counts.Z, color: '#94A3B8' }, // slate
     ];
   }, [data]);
 
@@ -41,7 +41,7 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="bg-brand-surface rounded-xl border border-slate-800 p-6 flex flex-col items-center">
-      <h3 className="text-lg font-semibold text-white self-start mb-4">Distribución ABC</h3>
+      <h3 className="text-lg font-semibold text-white self-start mb-4">Distribución XYZ (Volatilidad)</h3>
       <div className="w-full h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>

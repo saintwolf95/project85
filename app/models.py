@@ -15,7 +15,7 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    supabase_uid = Column(String, unique=True, index=True, nullable=False)
     nombre = Column(String, nullable=False)
     rol = Column(String, default="user")
 
@@ -39,14 +39,26 @@ class Producto(Base):
     seccion = Column(String, nullable=True)
     
     empresa = relationship("Empresa", back_populates="productos")
-    inventario = relationship("Inventario", back_populates="producto", uselist=False)
+    inventario = relationship("InventarioSnapshot", back_populates="producto", uselist=False)
 
-class Inventario(Base):
-    __tablename__ = "inventario"
+class InventarioSnapshot(Base):
+    __tablename__ = "inventario_snapshot"
     producto_id = Column(Integer, ForeignKey("productos.id"), primary_key=True)
     stock_disponible = Column(Integer, nullable=False, default=0)
     
     producto = relationship("Producto", back_populates="inventario")
+
+class Registro_PO(Base):
+    __tablename__ = "registro_po"
+    id = Column(Integer, primary_key=True, index=True)
+    producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    fecha_orden = Column(Date, nullable=False)
+    cantidad_sugerida_algoritmo = Column(Integer, nullable=False)
+    cantidad_aprobada_usuario = Column(Integer, nullable=False)
+    motivo_modificacion = Column(String, nullable=True)
+    estado = Column(String, nullable=False, default="Pendiente")
+    
+    producto = relationship("Producto")
 
 class VentaHistorica(Base):
     __tablename__ = "ventas_historicas"
@@ -54,5 +66,6 @@ class VentaHistorica(Base):
     producto_id = Column(Integer, ForeignKey("productos.id"))
     fecha_venta = Column(Date, nullable=False)
     cantidad_vendida = Column(Integer, nullable=False)
+    precio_unitario = Column(Float, nullable=False)
     ingreso_total = Column(Float, nullable=False)
     stock_disponible = Column(Integer, nullable=False, default=0)

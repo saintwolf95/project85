@@ -83,8 +83,8 @@ export const Home = () => {
     // ABC Data
     const abcMap = { A: 0, B: 0, C: 0 };
     inventory.forEach(item => {
-      if (item.abc_ventas === 'A') abcMap.A++;
-      else if (item.abc_ventas === 'B') abcMap.B++;
+      if (item.abc === 'A') abcMap.A++;
+      else if (item.abc === 'B') abcMap.B++;
       else abcMap.C++;
     });
     const abcData = [
@@ -109,9 +109,11 @@ export const Home = () => {
   // Handlers for Interactivity
   const handleAbcClick = (data: any) => {
     if (!data || !data.name) return;
-    const selectedClass = data.name;
-    const filtered = inventory.filter(item => item.abc_ventas === selectedClass);
-    setModalTitle(`Productos Clase ${selectedClass}`);
+    const match = data.name.match(/Clase ([XYZ])/);
+    if (!match) return;
+    const selectedClass = match[1];
+    const filtered = inventory.filter(item => item.xyz === selectedClass);
+    setModalTitle(`Productos Clase ${selectedClass} (Volatilidad)`);
     setModalProducts(filtered);
     setModalOpen(true);
   };

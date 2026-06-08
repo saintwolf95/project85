@@ -121,10 +121,10 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.dias_cobertura >= 999 ? '>999' : item.dias_cobertura.toFixed(0)}</td>
                 <td className="px-4 py-4 text-sm text-center whitespace-nowrap">
                   <span className={`font-bold px-2.5 py-1 rounded-md text-xs shadow-sm ${
-                    item.matriz_abc === 'AA' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30' :
-                    item.matriz_abc === 'CA' ? 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30' :
-                    item.matriz_abc === 'AC' ? 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30' :
-                    item.matriz_abc === 'CC' ? 'bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600' :
+                    item.matriz_abc === 'AZ' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30' :
+                    item.matriz_abc === 'CX' ? 'bg-red-100 text-red-800 border border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-500/30' :
+                    item.matriz_abc === 'AX' ? 'bg-orange-100 text-orange-800 border border-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:border-orange-500/30' :
+                    item.matriz_abc === 'CZ' ? 'bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600' :
                     'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
                   }`}>
                     {item.matriz_abc}

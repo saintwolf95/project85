@@ -39,8 +39,9 @@ class ProductMetrics(BaseModel):
     valor_inv: float
     unidades_venta_60d: float
     ventas_60d: float
-    abc_ventas: str
-    abc_inventario: str
+    abc: str
+    xyz: str
+    cv: float
     matriz_abc: str
     ads: float
     dias_cobertura: float

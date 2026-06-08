@@ -26,7 +26,7 @@ export const InsightModal: React.FC<InsightModalProps> = ({ insight, inventory, 
       return inventory.filter(p => p.riesgos_categorizados?.includes('Riesgo Financiero'));
     }
     if (t.includes('clase a') || insight.tipo === 'success') {
-      return inventory.filter(p => p.abc_ventas === 'A');
+      return inventory.filter(p => p.abc === 'A');
     }
     return [];
   }, [insight, inventory]);

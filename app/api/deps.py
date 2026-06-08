@@ -1,30 +1,44 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
+import urllib.request
+import json
 from ..database import get_db
 from ..models import Usuario
-from ..schemas import TokenData
-from ..core.security import SECRET_KEY, ALGORITHM
+from ..core.security import SUPABASE_JWT_SECRET
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+security = HTTPBearer()
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+# Cargar las llaves publicas de Supabase para soportar firmas asimetricas (ES256)
+try:
+    JWKS_URL = "https://rygviqehzmtsenphncig.supabase.co/auth/v1/.well-known/jwks.json"
+    req = urllib.request.urlopen(JWKS_URL) # nosec B310: URL hardcoded a supabase
+    SUPABASE_JWKS = json.loads(req.read())
+except Exception:
+    SUPABASE_JWKS = SUPABASE_JWT_SECRET
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        payload = jwt.decode(
+            credentials.credentials, 
+            SUPABASE_JWKS, 
+            algorithms=["HS256", "ES256", "RS256"], 
+            audience="authenticated"
+        )
+        sub: str = payload.get("sub")
+        if sub is None:
             raise credentials_exception
-        token_data = TokenData(email=email)
-    except JWTError:
+    except JWTError as e:
+        print("JWTError:", e)
         raise credentials_exception
         
-    user = db.query(Usuario).filter(Usuario.email == token_data.email).first()
+    user = db.query(Usuario).filter(Usuario.supabase_uid == sub).first()
     if user is None:
         raise credentials_exception
     return user

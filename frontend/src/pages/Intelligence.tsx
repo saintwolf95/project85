@@ -76,7 +76,7 @@ export const Intelligence = () => {
     }
 
     if (claseAbc) {
-      result = result.filter(item => item.abc_ventas === claseAbc);
+      result = result.filter(item => item.abc === claseAbc);
     }
 
     if (selectedPM) {
@@ -444,8 +444,8 @@ export const Intelligence = () => {
                               {item.cod_art}
                             </span>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.abc_ventas === 'A' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30'}`}>
-                            Prioridad {item.abc_ventas === 'A' ? 'Alta' : item.abc_ventas === 'B' ? 'Media' : 'Baja'}
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.abc === 'A' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30'}`}>
+                            Prioridad {item.abc === 'A' ? 'Alta' : item.abc === 'B' ? 'Media' : 'Baja'}
                           </span>
                         </div>
                         <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1 line-clamp-1">{item.nombre_art}</h3>
@@ -508,7 +508,7 @@ export const Intelligence = () => {
           products={inventoryData.filter(p => {
             const hasRotura = p.riesgos_categorizados?.includes('Riesgo Rotura') || p.riesgos_categorizados?.includes('Alerta Rotura');
             if (kpiModalType === 'criticas') return hasRotura;
-            return hasRotura && p.abc_ventas === 'A';
+            return hasRotura && p.abc === 'A';
           })}
         />
       )}

@@ -1,16 +1,27 @@
 import os
+import logging
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import HTTPException
 
-# Inicia el cliente de OpenAI. Por defecto buscará OPENAI_API_KEY en el entorno
+# Configuración de Logger de Auditoría
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# Añadir un stream handler si no lo tiene para forzar la salida por consola
+if not logger.handlers:
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
 client = OpenAI()
 
 SCHEMA_PROMPT = """
 Eres un experto en bases de datos y logística. 
 Tu trabajo es responder a la pregunta del usuario generando EXCLUSIVAMENTE una consulta SQL válida para SQLite.
-No incluyas explicaciones, ni etiquetas de markdown como ```sql. Devuelve únicamente el texto de la consulta SQL.
+No incluyas explicaciones, ni etiquetas de markdown. Devuelve únicamente el texto de la consulta SQL.
 
 El esquema de la base de datos es el siguiente:
 
@@ -25,10 +36,10 @@ Tabla `productos`:
 - part_number (VARCHAR)
 - ean (VARCHAR)
 - peso (FLOAT)
-- familia (VARCHAR): Ej. 'Portátiles', 'Móviles', 'Tarjetas Gráficas'
-- marca (VARCHAR): Ej. 'Apple', 'NVIDIA', 'ASUS'
+- familia (VARCHAR)
+- marca (VARCHAR)
 
-Tabla `inventario`:
+Tabla `inventario_snapshot`:
 - producto_id (INTEGER, Primary Key, Foreign Key a productos.id)
 - stock_disponible (INTEGER)
 
@@ -37,22 +48,25 @@ Tabla `ventas_historicas`:
 - producto_id (INTEGER, Foreign Key a productos.id)
 - fecha_venta (DATE)
 - cantidad_vendida (INTEGER)
+- precio_unitario (FLOAT)
 - ingreso_total (FLOAT)
+- stock_disponible (INTEGER)
 
-Ejemplo 1:
-Usuario: "¿Cuántos portátiles tenemos en stock en total?"
-SELECT SUM(i.stock_disponible) FROM productos p JOIN inventario i ON p.id = i.producto_id WHERE p.familia = 'Portátiles';
-
-Ejemplo 2:
-Usuario: "¿Cuál es el valor total del inventario de Apple?"
-SELECT SUM(i.stock_disponible * p.costo_unitario) FROM productos p JOIN inventario i ON p.id = i.producto_id WHERE p.marca = 'Apple';
+Tabla `registro_po`:
+- id (INTEGER, Primary Key)
+- producto_id (INTEGER, Foreign Key a productos.id)
+- fecha_orden (DATE)
+- cantidad_sugerida_algoritmo (INTEGER)
+- cantidad_aprobada_usuario (INTEGER)
+- motivo_modificacion (VARCHAR)
+- estado (VARCHAR)
 """
 
 def generate_sql(pregunta: str, empresa_id: int) -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     
     response = client.chat.completions.create(
-        model="gpt-4o",  # o gpt-3.5-turbo si la cuenta no soporta 4o
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": pregunta}
@@ -62,49 +76,39 @@ def generate_sql(pregunta: str, empresa_id: int) -> str:
     
     sql_query = response.choices[0].message.content.strip()
     
-    # Limpiar markdown si el modelo se niega a obedecer
     if sql_query.startswith("```sql"):
         sql_query = sql_query[6:]
+    if sql_query.startswith("```"):
+        sql_query = sql_query[3:]
     if sql_query.endswith("```"):
         sql_query = sql_query[:-3]
         
     return sql_query.strip()
 
-def is_safe_query(sql_query: str) -> bool:
-    dangerous_keywords = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'TRUNCATE', 'GRANT', 'REVOKE']
-    query_upper = sql_query.upper()
-    for kw in dangerous_keywords:
-        # Check if keyword is in the query (simple safety check)
-        # We add spaces to avoid matching substrings like "UPDATE" inside a string, 
-        # but for a basic check, just checking keywords is a start.
-        if f" {kw} " in f" {query_upper} ":
-            return False
-    return True
-
 def execute_sql(db: Session, sql_query: str):
-    if not is_safe_query(sql_query):
-        raise HTTPException(status_code=400, detail="La consulta generada contiene operaciones no permitidas de modificación de datos.")
-    
+    logger.info(f"[AUDIT SQL] Query generada interceptada: {sql_query}")
     try:
         result = db.execute(text(sql_query))
         rows = result.fetchall()
-        # Convertir a una lista de diccionarios (o string representativo)
         columns = result.keys()
         data = [dict(zip(columns, row)) for row in rows]
-        return data
+        return data, None
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"[AUDIT SQL] Fallo de ejecución: {str(e)}")
+        return None, str(e)
 
-def interpret_results(history: list, sql_query: str, raw_data: any) -> str:
+def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None) -> str:
+    if error:
+        return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
+
     INTERPRET_PROMPT = f"""
-Eres SupplyChain AI, un analista de operaciones y logística de nivel directivo (estilo McKinsey/BCG). Tu objetivo es ayudar al usuario a optimizar su inventario y reducir roturas de stock o capital inmovilizado.
-Reglas de respuesta:
-- NUNCA respondas con una sola línea. Tu respuesta debe ser un mini-informe.
-- Usa formato Markdown: incluye títulos, viñetas (bullet points) y texto en negrita para resaltar los KPIs y el impacto financiero (€/$).
-- Si la base de datos te devuelve datos, analízalos: ¿Es esto bueno o malo? ¿Qué recomendación de acción sugieres? (Ej: 'Sugiero pedir envío express').
-- Actúa de forma proactiva. Si el usuario hace una pregunta abierta, ofrécele métricas adicionales relevantes.
+Eres SupplyChain AI, un analista de operaciones y logística de nivel directivo. 
+Tu objetivo es ayudar al usuario a optimizar su inventario y responder exactamente lo que preguntó basado EN LOS DATOS EXACTOS proporcionados.
+Reglas:
+- NUNCA inventes o deduzcas datos numéricos que no estén en "Resultado bruto de BD".
+- Usa formato Markdown: incluye viñetas y negritas para métricas.
 
-Contexto Técnico Interno:
+Contexto Técnico Interno (No muestres el SQL al usuario, solo los insights):
 Consulta SQL ejecutada: {sql_query}
 Resultado bruto de BD: {raw_data}
     """
@@ -115,8 +119,8 @@ Resultado bruto de BD: {raw_data}
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
-        temperature=0.4,
-        max_tokens=1500
+        temperature=0.2,
+        max_tokens=1000
     )
     
     return response.choices[0].message.content.strip()
@@ -130,10 +134,10 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int) -> str:
     # 1. Generar SQL
     sql_query = generate_sql(user_message, empresa_id)
     
-    # 2. Ejecutar y validar SQL
-    raw_data = execute_sql(db, sql_query)
+    # 2. Ejecutar SQL en la conexión RO
+    raw_data, error = execute_sql(db, sql_query)
     
     # 3. Interpretar
-    final_response = interpret_results(history, sql_query, raw_data)
+    final_response = interpret_results(history, sql_query, raw_data, error)
     
     return final_response

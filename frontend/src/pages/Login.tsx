@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ChevronRight } from 'lucide-react';
 
@@ -8,26 +7,24 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     try {
-      const formData = new URLSearchParams();
-      formData.append('username', email);
-      formData.append('password', password);
-
-      const response = await api.post('/auth/login', formData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
+
+      if (signInError) throw signInError;
       
-      login(response.data.access_token, response.data.rol);
-      navigate('/');
-    } catch (err) {
-      setError('Credenciales inválidas. Inténtalo de nuevo.');
+      if (data.session) {
+        navigate('/');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Credenciales inválidas. Inténtalo de nuevo.');
     }
   };
 

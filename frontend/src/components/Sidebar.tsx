@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
 export const Sidebar = () => {
-  const { logout, rol } = useAuth();
+  const { logout, session } = useAuth();
+  const rol = session?.user?.user_metadata?.rol || 'admin';
   const { theme, toggleTheme } = useTheme();
 
   const links = [

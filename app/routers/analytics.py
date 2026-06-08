@@ -97,7 +97,7 @@ def get_ai_insights(
         })
 
     # Insight 3: Buen rendimiento
-    clase_a = df[df['abc_ventas'] == 'A']
+    clase_a = df[df['abc'] == 'A']
     if not clase_a.empty and len(riesgo_rotura) == 0:
         insights.append({
             "icono": "trending-up",

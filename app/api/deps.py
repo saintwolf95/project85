@@ -10,7 +10,15 @@ from ..core.security import SUPABASE_JWT_SECRET
 
 security = HTTPBearer()
 
-
+# Cargar las llaves publicas de Supabase para soportar firmas asimetricas (ES256)
+try:
+    JWKS_URL = "https://rygviqehzmtsenphncig.supabase.co/auth/v1/.well-known/jwks.json"
+    req = urllib.request.Request(JWKS_URL, headers={'User-Agent': 'Mozilla/5.0'})
+    response = urllib.request.urlopen(req) # nosec B310
+    SUPABASE_JWKS = json.loads(response.read())
+except Exception as e:
+    print(f"Warning: No se pudo cargar JWKS: {e}")
+    SUPABASE_JWKS = None
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -19,10 +27,20 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        header = jwt.get_unverified_header(credentials.credentials)
+        alg = header.get("alg", "HS256")
+        
+        if alg == "HS256":
+            key = SUPABASE_JWT_SECRET
+        else:
+            if not SUPABASE_JWKS:
+                raise JWTError("JWKS no disponible para firma asimétrica")
+            key = SUPABASE_JWKS
+
         payload = jwt.decode(
             credentials.credentials, 
-            SUPABASE_JWT_SECRET, 
-            algorithms=["HS256"], 
+            key, 
+            algorithms=["HS256", "ES256", "RS256"], 
             audience="authenticated"
         )
         sub: str = payload.get("sub")

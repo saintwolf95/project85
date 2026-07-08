@@ -8,3 +8,5 @@ slowapi
 pydantic
 pydantic-settings
 openai
+cachetools
+python-jose[cryptography]

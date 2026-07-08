@@ -44,15 +44,19 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             audience="authenticated"
         )
         sub: str = payload.get("sub")
+        print(f"DEBUG AUTH: JWT decode success. alg={alg}, sub={sub}", flush=True)
         if sub is None:
             raise credentials_exception
-    except JWTError as e:
-        print("JWTError:", e)
+    except Exception as e:
+        print(f"DEBUG AUTH ERROR: {type(e).__name__}: {str(e)}", flush=True)
         raise credentials_exception
         
     user = db.query(Usuario).filter(Usuario.supabase_uid == sub).first()
     if user is None:
+        print(f"DEBUG AUTH: User not found in DB for sub={sub}", flush=True)
         raise credentials_exception
+        
+    print(f"DEBUG AUTH: User matched: {user.email}", flush=True)
     return user
 
 def get_current_active_admin(current_user: Usuario = Depends(get_current_user)):

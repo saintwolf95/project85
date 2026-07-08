@@ -65,6 +65,10 @@ Tabla `registro_po`:
 def generate_sql(pregunta: str, empresa_id: int) -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     
+    client = get_openai_client()
+    if not client:
+        return "SELECT 'Error: API Key de OpenAI no configurada' AS error"
+        
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -115,6 +119,10 @@ Resultado bruto de BD: {raw_data}
     
     messages = [{"role": "system", "content": INTERPRET_PROMPT}]
     messages.extend(history)
+
+    client = get_openai_client()
+    if not client:
+        return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
     response = client.chat.completions.create(
         model="gpt-4o",

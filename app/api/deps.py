@@ -10,13 +10,7 @@ from ..core.security import SUPABASE_JWT_SECRET
 
 security = HTTPBearer()
 
-# Cargar las llaves publicas de Supabase para soportar firmas asimetricas (ES256)
-try:
-    JWKS_URL = "https://rygviqehzmtsenphncig.supabase.co/auth/v1/.well-known/jwks.json"
-    req = urllib.request.urlopen(JWKS_URL) # nosec B310: URL hardcoded a supabase
-    SUPABASE_JWKS = json.loads(req.read())
-except Exception:
-    SUPABASE_JWKS = SUPABASE_JWT_SECRET
+
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -27,8 +21,8 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     try:
         payload = jwt.decode(
             credentials.credentials, 
-            SUPABASE_JWKS, 
-            algorithms=["HS256", "ES256", "RS256"], 
+            SUPABASE_JWT_SECRET, 
+            algorithms=["HS256"], 
             audience="authenticated"
         )
         sub: str = payload.get("sub")

@@ -15,12 +15,21 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     history: List[ChatMessage]
+    model_preference: str = "fast"
 
 class ChatResponse(BaseModel):
     reply: str
 
 @router.post("/chat", response_model=ChatResponse)
-def copilot_chat(request: ChatRequest, current_user: Usuario = Depends(get_current_user), db_ro: Session = Depends(get_db_ro)):
-    history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
-    reply = process_copilot_chat(db_ro, history_dicts, current_user.empresa_id)
-    return ChatResponse(reply=reply)
+def copilot_chat(request: ChatRequest, db: Session = Depends(get_db_ro), current_user: Usuario = Depends(get_current_user)):
+    try:
+        history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
+        reply = process_copilot_chat(
+            db=db, 
+            history=history_dicts, 
+            empresa_id=current_user.empresa_id,
+            model_preference=request.model_preference
+        )
+        return ChatResponse(reply=reply)
+    except Exception as e:
+        return ChatResponse(reply=f"Error en el servidor: {str(e)}")

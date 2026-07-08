@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '../services/api';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -21,6 +21,7 @@ export const AiCopilot = () => {
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [modelPreference, setModelPreference] = useState<'fast' | 'thinking'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -50,7 +51,8 @@ export const AiCopilot = () => {
       }));
 
       const response = await api.post('/copilot/chat', {
-        history: historyPayload
+        history: historyPayload,
+        model_preference: modelPreference
       });
 
       const aiMsg: Message = {
@@ -150,8 +152,26 @@ export const AiCopilot = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Caja de Input */}
+        {/* Controles y Caja de Input */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50">
+          
+          <div className="flex items-center gap-4 mb-3 px-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Modo Analítico:</span>
+            <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg">
+              <button 
+                onClick={() => setModelPreference('fast')}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${modelPreference === 'fast' ? 'bg-white dark:bg-slate-700 text-brand-blue dark:text-brand-cyan shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                <Zap size={14} /> Fast (gpt-4o)
+              </button>
+              <button 
+                onClick={() => setModelPreference('thinking')}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${modelPreference === 'thinking' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                <Brain size={14} /> Thinking (o1)
+              </button>
+            </div>
+          </div>
           <div className="relative flex items-center">
             <input 
               type="text" 

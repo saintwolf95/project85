@@ -62,21 +62,33 @@ Tabla `registro_po`:
 - estado (VARCHAR)
 """
 
-def generate_sql(pregunta: str, empresa_id: int) -> str:
+def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast") -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     
     client = get_openai_client()
     if not client:
         return "SELECT 'Error: API Key de OpenAI no configurada' AS error"
         
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
+    if model_preference == "thinking":
+        model_name = "o1-mini"
+        messages = [
+            {"role": "user", "content": f"Instrucciones del sistema:\n{prompt}\n\nPregunta del usuario:\n{pregunta}"}
+        ]
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages
+        )
+    else:
+        model_name = "gpt-4o"
+        messages = [
             {"role": "system", "content": prompt},
             {"role": "user", "content": pregunta}
-        ],
-        temperature=0.0
-    )
+        ]
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=0.0
+        )
     
     sql_query = response.choices[0].message.content.strip()
     
@@ -101,7 +113,7 @@ def execute_sql(db: Session, sql_query: str):
         logger.error(f"[AUDIT SQL] Fallo de ejecución: {str(e)}")
         return None, str(e)
 
-def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None) -> str:
+def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None, model_preference: str = "fast") -> str:
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
 
@@ -117,35 +129,54 @@ Consulta SQL ejecutada: {sql_query}
 Resultado bruto de BD: {raw_data}
     """
     
-    messages = [{"role": "system", "content": INTERPRET_PROMPT}]
-    messages.extend(history)
-
     client = get_openai_client()
     if not client:
         return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=messages,
-        temperature=0.2,
-        max_tokens=1000
-    )
+    if model_preference == "thinking":
+        model_name = "o1-preview"
+        # Para o1-preview transformamos el system prompt en el primer mensaje de usuario
+        messages = [{"role": "user", "content": INTERPRET_PROMPT}]
+        
+        # history viene con formato {"role": "...", "content": "..."}
+        # o1-preview no soporta "system", asumimos que todo history es user/assistant
+        for msg in history:
+            role = msg["role"]
+            if role == "system":
+                role = "user"
+            messages.append({"role": role, "content": msg["content"]})
+            
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages
+        )
+    else:
+        model_name = "gpt-4o"
+        messages = [{"role": "system", "content": INTERPRET_PROMPT}]
+        messages.extend(history)
+        
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=0.2,
+            max_tokens=1000
+        )
     
     return response.choices[0].message.content.strip()
 
-def process_copilot_chat(db: Session, history: list, empresa_id: int) -> str:
+def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "fast") -> str:
     if not history:
         return "No hay historial de mensajes."
         
     user_message = history[-1]["content"]
     
     # 1. Generar SQL
-    sql_query = generate_sql(user_message, empresa_id)
+    sql_query = generate_sql(user_message, empresa_id, model_preference)
     
     # 2. Ejecutar SQL en la conexión RO
     raw_data, error = execute_sql(db, sql_query)
     
     # 3. Interpretar
-    final_response = interpret_results(history, sql_query, raw_data, error)
+    final_response = interpret_results(history, sql_query, raw_data, error, model_preference)
     
     return final_response

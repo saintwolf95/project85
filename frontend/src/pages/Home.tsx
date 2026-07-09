@@ -32,7 +32,7 @@ export const Home = () => {
         setLoading(true);
         const [kpis, abc, aiData] = await Promise.all([
           getDashboardKpis(abcFilter, familyFilter),
-          getInventoryAbc(1, 1000, undefined, abcFilter === 'all' ? undefined : abcFilter),
+          getInventoryAbc(1, 10000, undefined, abcFilter === 'all' ? undefined : abcFilter),
           getAiInsights(abcFilter, familyFilter)
         ]);
         

@@ -11,6 +11,27 @@ import * as XLSX from 'xlsx';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { ProductModal } from '../components/ProductModal';
 
+const EXPORT_COLUMNS = [
+  { id: 'cod_art', label: 'CodArt' },
+  { id: 'nombre_art', label: 'Nombre' },
+  { id: 'familia', label: 'Familia' },
+  { id: 'seccion', label: 'Sección' },
+  { id: 'marca', label: 'Marca' },
+  { id: 'product_manager', label: 'Product Manager' },
+  { id: 'precio_unit', label: 'Precio Unitario' },
+  { id: 'unidades', label: 'Unidades' },
+  { id: 'valor_inv', label: 'Valor Inventario' },
+  { id: 'ventas_60d', label: 'Ventas 60D' },
+  { id: 'unidades_venta_60d', label: 'Unid. Venta 60D' },
+  { id: 'ads', label: 'ADS' },
+  { id: 'dias_cobertura', label: 'Días Cobertura' },
+  { id: 'abc', label: 'Clase ABC' },
+  { id: 'xyz', label: 'Clase XYZ' },
+  { id: 'cv', label: 'CV' },
+  { id: 'matriz_abc', label: 'Matriz ABC' },
+  { id: 'riesgos_categorizados', label: 'Riesgos' }
+];
+
 export const Intelligence = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +73,12 @@ export const Intelligence = () => {
   const [selectedPM, setSelectedPM] = useState<string>('');
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [selectedRisk, setSelectedRisk] = useState<string>('');
+  
+  const [minDays, setMinDays] = useState<number | ''>('');
+  const [maxDays, setMaxDays] = useState<number | ''>('');
+
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(EXPORT_COLUMNS.map(c => c.id));
 
   // Debounce logic
   useEffect(() => {
@@ -99,8 +126,15 @@ export const Intelligence = () => {
       }
     }
 
+    if (minDays !== '') {
+      result = result.filter(item => item.dias_cobertura >= Number(minDays));
+    }
+    if (maxDays !== '') {
+      result = result.filter(item => item.dias_cobertura <= Number(maxDays));
+    }
+
     setFilteredData(result);
-  }, [inventoryData, debouncedSearch, claseAbc, selectedPM, selectedSection, selectedRisk, activeTab]);
+  }, [inventoryData, debouncedSearch, claseAbc, selectedPM, selectedSection, selectedRisk, activeTab, minDays, maxDays]);
 
   const fetchKpis = async () => {
     try {
@@ -135,22 +169,32 @@ export const Intelligence = () => {
     setCellProducts(inventoryData.filter(p => p.matriz_abc === cell));
   };
 
-  const exportCatalogToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(inventoryData.map(p => ({
-      'CodArt': p.cod_art,
-      'Nombre': p.nombre_art,
-      'Familia': p.familia,
-      'Marca': p.marca,
-      'Precio Unitario': p.precio_unit,
-      'Unidades': p.unidades,
-      'Valor Inventario': p.valor_inv,
-      'Ventas 60D': p.ventas_60d,
-      'Clase ABC': p.matriz_abc,
-      'Riesgos': p.riesgos_categorizados?.join(', ') || 'Sano'
-    })));
+  const toggleColumn = (colId: string) => {
+    setSelectedColumns(prev => 
+      prev.includes(colId) ? prev.filter(c => c !== colId) : [...prev, colId]
+    );
+  };
+
+  const executeExport = () => {
+    const dataToExport = inventoryData.map(p => {
+      const row: any = {};
+      EXPORT_COLUMNS.forEach(col => {
+        if (selectedColumns.includes(col.id)) {
+          if (col.id === 'riesgos_categorizados') {
+            row[col.label] = p.riesgos_categorizados?.join(', ') || 'Sano';
+          } else {
+            row[col.label] = (p as any)[col.id];
+          }
+        }
+      });
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
     XLSX.writeFile(wb, `Catalogo_Inventario.xlsx`);
+    setExportModalOpen(false);
   };
 
   useEffect(() => {
@@ -321,11 +365,28 @@ export const Intelligence = () => {
                   <option value="Riesgo Comercial">Riesgo Comercial</option>
                 </select>
               </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="Mín. Días"
+                  value={minDays}
+                  onChange={(e) => { setMinDays(e.target.value === '' ? '' : Number(e.target.value)); setCurrentPage(1); }}
+                  className="w-24 px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none text-sm"
+                />
+                <span className="text-slate-400">-</span>
+                <input
+                  type="number"
+                  placeholder="Máx. Días"
+                  value={maxDays}
+                  onChange={(e) => { setMaxDays(e.target.value === '' ? '' : Number(e.target.value)); setCurrentPage(1); }}
+                  className="w-24 px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none text-sm"
+                />
+              </div>
             </div>
             <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
               <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Artículos: {totalRecords}</span>
               <button
-                onClick={exportCatalogToExcel}
+                onClick={() => setExportModalOpen(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
               >
                 <Download size={16} />
@@ -511,6 +572,57 @@ export const Intelligence = () => {
             return hasRotura && p.abc === 'A';
           })}
         />
+      )}
+
+      {/* Export Modal */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Exportar a Excel</h3>
+              <button 
+                onClick={() => setExportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Selecciona las columnas que deseas incluir en tu exportación:</p>
+              
+              <div className="flex flex-col gap-2">
+                {EXPORT_COLUMNS.map(col => (
+                  <label key={col.id} className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.includes(col.id)}
+                      onChange={() => toggleColumn(col.id)}
+                      className="w-4 h-4 text-brand-blue bg-slate-100 border-slate-300 rounded focus:ring-brand-blue dark:focus:ring-brand-cyan dark:ring-offset-slate-900 dark:bg-slate-800 dark:border-slate-700"
+                    />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end bg-slate-50 dark:bg-slate-900/50">
+              <button
+                onClick={() => setExportModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={executeExport}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+              >
+                <Download size={16} />
+                Descargar ({selectedColumns.length} columnas)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

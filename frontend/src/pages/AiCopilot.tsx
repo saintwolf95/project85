@@ -169,7 +169,7 @@ export const AiCopilot = () => {
                 onClick={() => setModelPreference('thinking')}
                 className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${modelPreference === 'thinking' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
               >
-                <Brain size={14} /> Thinking (o1)
+                <Brain size={14} /> Thinking (o3-mini)
               </button>
             </div>
           </div>

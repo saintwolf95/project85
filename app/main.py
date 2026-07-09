@@ -33,11 +33,11 @@ async def lifespan(app: FastAPI):
             seed_data.crear_datos_demo(db)
             print("[STARTUP] Seed completado exitosamente.", flush=True)
         else:
-            # Reparar UIDs incorrectos (ej: "00000000..." del seed anterior sin ADMIN_SUPABASE_UID)
+            # Reparar UIDs incorrectos
             import os
-            correct_uid = os.getenv("ADMIN_SUPABASE_UID", "34cf496c-0ca3-41db-bb63-b39078963a24")
+            correct_uid = os.getenv("ADMIN_SUPABASE_UID")
             admin = db.query(models.Usuario).filter(models.Usuario.email == "admin@demo.com").first()
-            if admin and admin.supabase_uid != correct_uid:
+            if admin and correct_uid and admin.supabase_uid != correct_uid:
                 print(f"[STARTUP] Reparando UID admin: {admin.supabase_uid} -> {correct_uid}", flush=True)
                 admin.supabase_uid = correct_uid
                 db.commit()
@@ -60,7 +60,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:4000", "http://localhost:5173"],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://fivemin(-[a-z0-9]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,32 +85,30 @@ app.include_router(inventory.router, prefix="/api/v1")
 
 @app.post("/api/v1/seed", status_code=status.HTTP_201_CREATED)
 @limiter.limit("1/minute")
-def seed_database(request: Request, db: Session = Depends(get_db)):
-    """
-    Endpoint para inicializar datos de demostración.
-    Simula empresas, productos, inventario y ventas históricas.
-    """
+def seed_database(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_active_admin)
+):
+    """Rellena la base de datos con datos de demostración si está vacía."""
+    from . import seed_data
     try:
-        # Validar si ya existen empresas para no duplicar en múltiples llamadas
-        empresa_existente = db.query(models.Empresa).first()
-        if empresa_existente:
-            return {"message": "La base de datos ya contiene datos (Empresa encontrada)."}
-
+        if db.query(models.Producto).count() > 0:
+            return {"message": "La base de datos ya contiene datos. Usa otro endpoint para limpiar si es necesario."}
+        
         seed_data.crear_datos_demo(db)
-        return {"message": "Datos de demostración generados exitosamente"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generando datos: {str(e)}"
-        )
+        return {"message": "Datos de demostración generados con éxito."}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno durante la generación de datos.")
 
-@app.get("/api/v1/empresas")
-def get_empresas(db: Session = Depends(get_db)):
-    """
-    Endpoint de prueba para verificar que se cargaron las empresas.
-    """
+@app.get("/api/v1/empresas", response_model=List[dict])
+def get_empresas(
+    db: Session = Depends(get_db),
+    current_user: models.Usuario = Depends(get_current_active_admin)
+):
     empresas = db.query(models.Empresa).all()
-    return {"empresas": empresas}
+    return [{"id": e.id, "nombre": e.nombre} for e in empresas]
 
 if __name__ == "__main__":
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080, reload=True) # nosec B104
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8080) # nosec B104

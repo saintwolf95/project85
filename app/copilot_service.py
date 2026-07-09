@@ -16,8 +16,14 @@ if not logger.handlers:
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-client = OpenAI()
-
+def get_openai_client():
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    try:
+        return OpenAI(api_key=api_key)
+    except Exception:
+        return None
 SCHEMA_PROMPT = """
 Eres un experto en bases de datos y logística. 
 Tu trabajo es responder a la pregunta del usuario generando EXCLUSIVAMENTE una consulta SQL válida para SQLite.
@@ -103,7 +109,23 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast")
 
 def execute_sql(db: Session, sql_query: str):
     logger.info(f"[AUDIT SQL] Query generada interceptada: {sql_query}")
+    
+    # C1: SQL Injection Protection - ONLY allow SELECT
+    sql_upper = sql_query.upper().strip()
+    if not sql_upper.startswith("SELECT"):
+        logger.error("[AUDIT SQL] Abortado: La query no comienza con SELECT")
+        return None, "Error de seguridad: Solo se permiten operaciones de lectura (SELECT)."
+    
+    # Reject dangerous keywords even if it starts with SELECT
+    dangerous_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "CREATE", "GRANT", "REVOKE", "EXEC", "CALL"]
+    for word in dangerous_keywords:
+        if f" {word} " in f" {sql_upper} ":
+            logger.error(f"[AUDIT SQL] Abortado: Palabra prohibida detectada ({word})")
+            return None, "Error de seguridad: La consulta contiene palabras reservadas no permitidas."
+
     try:
+        # Añadir un timeout simple a nivel de base de datos si es postgres (opcional pero recomendado)
+        # SQLite no soporta set_statement_timeout fácilmente desde sqlalchemy text(), pero protegemos contra inyección destructiva.
         result = db.execute(text(sql_query))
         rows = result.fetchall()
         columns = result.keys()
@@ -111,7 +133,8 @@ def execute_sql(db: Session, sql_query: str):
         return data, None
     except Exception as e:
         logger.error(f"[AUDIT SQL] Fallo de ejecución: {str(e)}")
-        return None, str(e)
+        # M2: Do not expose raw exception string to the client
+        return None, "La consulta SQL no pudo ejecutarse. Verifica que los nombres de las tablas y columnas sean correctos."
 
 def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None, model_preference: str = "fast") -> str:
     if error:

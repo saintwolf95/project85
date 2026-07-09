@@ -1,14 +1,53 @@
 import { useState, useEffect } from 'react';
 import { getAgentSettings, updateAgentSettings, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
 import type { AgentSettings, AgentInsight } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2 } from 'lucide-react';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+
+interface AgentInfo {
+  id: string;
+  name: string;
+  role: string;
+  formula: string;
+}
+
+const AGENTS_INFO: Record<string, AgentInfo> = {
+  maria: {
+    id: 'maria',
+    name: 'María',
+    role: 'Inventario',
+    formula: `**1. Quiebre inminente:** Busca productos con \`dias_cobertura <= 5\` y stock positivo.\n\n**2. Sobre-stock:** Busca productos inmovilizados con \`dias_cobertura > 120\` y más de $500 en valor.`
+  },
+  lucia: {
+    id: 'lucia',
+    name: 'Lucía',
+    role: 'Ventas',
+    formula: `**1. Caída de Demanda (Dead-Stock preventivo):** Filtra productos que NO sean clase Z (\`xyz != 'Z'\`) pero que lleven estancados \`dias_cobertura > 90\`.`
+  },
+  mattia: {
+    id: 'mattia',
+    name: 'Mattia',
+    role: 'Finanzas',
+    formula: `**1. Margen Negativo:** Alerta si \`precio_venta <= costo_unitario\`.\n\n**2. Capital Estancado Severo:** Busca productos clase Z (\`xyz = 'Z'\`) con un valor de inventario bloqueado mayor a $1000.`
+  }
+};
 
 export const AiControlPanel = () => {
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
   const [insight, setInsight] = useState<AgentInsight | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+
+  const getAgentAlerts = (agentName: string) => {
+    if (!insight || !insight.fase1_raw_json) return [];
+    try {
+      const rawAlerts: string[] = JSON.parse(insight.fase1_raw_json);
+      return rawAlerts.filter(a => a.startsWith(agentName));
+    } catch (e) {
+      return [];
+    }
+  };
 
   useEffect(() => {
     Promise.all([getAgentSettings(), getLatestAgentInsight()])
@@ -89,30 +128,33 @@ export const AiControlPanel = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Agent 1 */}
-            <AgentDesk 
-              title="María (Inventario)" 
-              icon={<Bot size={16} />}
-              isActive={settings.fase1_active}
-              workingImg="/assets/agents/maria_work.png"
-              sleepingImg="/assets/agents/maria_sleep.png"
-            />
-            {/* Agent 2 */}
-            <AgentDesk 
-              title="Lucía (Ventas)" 
-              icon={<TrendingUp size={16} />}
-              isActive={settings.fase1_active}
-              workingImg="/assets/agents/lucia_work.png"
-              sleepingImg="/assets/agents/lucia_sleep.png"
-            />
-            {/* Agent 3 */}
-            <AgentDesk 
-              title="Mattia (Finanzas)" 
-              icon={<DollarSign size={16} />}
-              isActive={settings.fase1_active}
-              workingImg="/assets/agents/fin_work.png"
-              sleepingImg="/assets/agents/fin_sleep.png"
-            />
+            <div onClick={() => setSelectedAgent('maria')} className="cursor-pointer transform hover:scale-[1.02] transition-transform">
+              <AgentDesk 
+                title="María (Inventario)" 
+                icon={<Bot size={16} />}
+                isActive={settings.fase1_active}
+                workingImg="/assets/agents/maria_work.png"
+                sleepingImg="/assets/agents/maria_sleep.png"
+              />
+            </div>
+            <div onClick={() => setSelectedAgent('lucia')} className="cursor-pointer transform hover:scale-[1.02] transition-transform">
+              <AgentDesk 
+                title="Lucía (Ventas)" 
+                icon={<TrendingUp size={16} />}
+                isActive={settings.fase1_active}
+                workingImg="/assets/agents/lucia_work.png"
+                sleepingImg="/assets/agents/lucia_sleep.png"
+              />
+            </div>
+            <div onClick={() => setSelectedAgent('mattia')} className="cursor-pointer transform hover:scale-[1.02] transition-transform">
+              <AgentDesk 
+                title="Mattia (Finanzas)" 
+                icon={<DollarSign size={16} />}
+                isActive={settings.fase1_active}
+                workingImg="/assets/agents/fin_work.png"
+                sleepingImg="/assets/agents/fin_sleep.png"
+              />
+            </div>
           </div>
         </div>
 
@@ -205,6 +247,63 @@ export const AiControlPanel = () => {
         </div>
 
       </div>
+
+      {/* Agent Modal */}
+      {selectedAgent && AGENTS_INFO[selectedAgent] && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                Expediente: {AGENTS_INFO[selectedAgent].name} ({AGENTS_INFO[selectedAgent].role})
+              </h2>
+              <button 
+                onClick={() => setSelectedAgent(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Code2 size={16} className="text-brand-blue dark:text-brand-cyan" />
+                  Algoritmo de Búsqueda
+                </h3>
+                <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400">
+                  <ReactMarkdown>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Activity size={16} className="text-emerald-500" />
+                  Hallazgos de Hoy
+                </h3>
+                {insight ? (
+                  getAgentAlerts(AGENTS_INFO[selectedAgent].name).length > 0 ? (
+                    <div className="space-y-2">
+                      {getAgentAlerts(AGENTS_INFO[selectedAgent].name).map((alert, idx) => (
+                        <div key={idx} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300">
+                          {alert}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center p-6 text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
+                      {AGENTS_INFO[selectedAgent].name} no encontró anomalías hoy.
+                    </div>
+                  )
+                ) : (
+                  <div className="text-center p-6 text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
+                    Ejecuta la inspección para ver resultados en vivo.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

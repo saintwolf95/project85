@@ -76,7 +76,7 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast")
         return "SELECT 'Error: API Key de OpenAI no configurada' AS error"
         
     if model_preference == "thinking":
-        model_name = "o1-mini"
+        model_name = "o3-mini"
         messages = [
             {"role": "user", "content": f"Instrucciones del sistema:\n{prompt}\n\nPregunta del usuario:\n{pregunta}"}
         ]
@@ -168,8 +168,8 @@ Resultado bruto de BD: {raw_data}
         return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
     if model_preference == "thinking":
-        model_name = "o1-preview"
-        # Para o1-preview transformamos el system prompt en el primer mensaje de usuario
+        model_name = "o3-mini"
+        # Para o3-mini transformamos el system prompt en el primer mensaje de usuario
         messages = [{"role": "user", "content": INTERPRET_PROMPT}]
         
         # history viene con formato {"role": "...", "content": "..."}

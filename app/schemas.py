@@ -82,3 +82,15 @@ class ProductHistoryResponse(BaseModel):
     producto_id: int
     nombre: str
     historico: List[ProductHistoryDaily]
+
+class AgentSettingsUpdate(BaseModel):
+    fase1_active: bool
+    fase2_active: bool
+
+class AgentSettingsResponse(BaseModel):
+    empresa_id: int
+    fase1_active: bool
+    fase2_active: bool
+    
+    class Config:
+        from_attributes = True

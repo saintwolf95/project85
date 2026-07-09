@@ -8,6 +8,7 @@ from ..copilot_service import process_copilot_chat, cleanup_old_chats
 from ..models import Usuario, CopilotChat, CopilotMessage
 from ..api.deps import get_current_user
 from ..core.rate_limit import limiter
+from .. import models
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 

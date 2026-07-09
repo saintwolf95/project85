@@ -25,9 +25,14 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     fecha_90_dias = hoy - timedelta(days=90)
     fecha_30_dias = hoy - timedelta(days=30)
 
-    # Obtener ventas históricas
+    # Obtener ventas históricas usando solo las columnas necesarias (evita OOM)
     producto_ids = [p.Producto.id for p in productos]
-    ventas = db.query(VentaHistorica).filter(
+    ventas = db.query(
+        VentaHistorica.producto_id,
+        VentaHistorica.ingreso_total,
+        VentaHistorica.cantidad_vendida,
+        VentaHistorica.fecha_venta
+    ).filter(
         VentaHistorica.producto_id.in_(producto_ids),
         VentaHistorica.fecha_venta >= fecha_90_dias
     ).all()
@@ -50,12 +55,10 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         "stock_disponible": p.InventarioSnapshot.stock_disponible
     } for p in productos])
 
-    df_ventas = pd.DataFrame([{
-        "producto_id": v.producto_id,
-        "ingreso_total": v.ingreso_total,
-        "cantidad_vendida": v.cantidad_vendida,
-        "fecha_venta": v.fecha_venta
-    } for v in ventas]) if ventas else pd.DataFrame(columns=["producto_id", "ingreso_total", "cantidad_vendida", "fecha_venta"])
+    if ventas:
+        df_ventas = pd.DataFrame(ventas, columns=["producto_id", "ingreso_total", "cantidad_vendida", "fecha_venta"])
+    else:
+        df_ventas = pd.DataFrame(columns=["producto_id", "ingreso_total", "cantidad_vendida", "fecha_venta"])
 
     # 1. Ventas totales y Unidades vendidas últimos 60 días
     if not df_ventas.empty:

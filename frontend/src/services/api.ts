@@ -67,7 +67,7 @@ export interface ProductHistoryResponse {
 }
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1',
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://fivemin-7hq5.onrender.com/api/v1' : 'http://localhost:8080/api/v1'),
 });
 
 api.interceptors.request.use(async (config) => {

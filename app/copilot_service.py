@@ -90,11 +90,14 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast")
             {"role": "system", "content": prompt},
             {"role": "user", "content": pregunta}
         ]
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=0.0
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.0
+            )
+        except Exception as e:
+            return f"SELECT 'Error API OpenAI (SQL): {str(e).replace('\'', '')}' AS error"
     
     sql_query = response.choices[0].message.content.strip()
     
@@ -178,12 +181,15 @@ Resultado bruto de BD: {raw_data}
         messages = [{"role": "system", "content": INTERPRET_PROMPT}]
         messages.extend(history)
         
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=0.2,
-            max_tokens=1000
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=1000
+            )
+        except Exception as e:
+            return f"⚠️ **Error en la API de OpenAI (Interpretación):** {str(e)}"
     
     return response.choices[0].message.content.strip()
 

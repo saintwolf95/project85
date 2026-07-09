@@ -33,5 +33,6 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
             model_preference=payload.model_preference
         )
         return {"reply": reply}
-    except Exception:
-        return {"reply": "⚠️ Error interno del servidor al procesar la respuesta."}
+    except Exception as e:
+        import traceback
+        return {"reply": f"⚠️ Error interno del servidor: {str(e)}\n\n```\n{traceback.format_exc()}\n```"}

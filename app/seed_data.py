@@ -157,12 +157,15 @@ def crear_datos_demo(db: Session):
     fecha_fin   = date.today()
     fecha_inicio = fecha_fin - timedelta(days=DIAS)
 
-    ventas_bulk   = []
+    ventas_bulk = []
     snapshot_bulk = []
-    po_bulk       = []
+    po_bulk = []
 
     print("[seed] Generando histórico de ventas (bulk)...")
 
+    total_raw_sales = 0.0
+
+    # Prmera pasada: Generar datos crudos (en tuplas ligeras para no ahogar la RAM)
     for p_info in productos_info:
         prod       = p_info["orm"]
         familia    = p_info["familia"]
@@ -174,6 +177,7 @@ def crear_datos_demo(db: Session):
         xyz_profile = p_info["xyz_profile"]
 
         total_ud_90d = 0
+        p_info["ventas_diarias"] = []
 
         for dia in range(DIAS):
             fecha_actual = fecha_inicio + timedelta(days=dia)
@@ -191,17 +195,14 @@ def crear_datos_demo(db: Session):
                 cantidad = 0 if random.random() < 0.88 else 1
             else:
                 if xyz_profile == 'X':
-                    # X: Demanda estable (poco CV)
                     prob_sale = 0.98
                     base_qty = max(1, (vmin + vmax) // 2)
-                    varianza = max(1, int(base_qty * 0.1)) # Solo 10% varianza
+                    varianza = max(1, int(base_qty * 0.1))
                 elif xyz_profile == 'Y':
-                    # Y: Demanda variable
                     prob_sale = 0.70
                     base_qty = max(1, (vmin + vmax) // 2)
-                    varianza = max(1, int(base_qty * 0.4)) # 40% varianza
+                    varianza = max(1, int(base_qty * 0.4))
                 else:
-                    # Z: Demanda muy errática
                     prob_sale = 0.25
                     base_qty = vmax
                     varianza = vmax
@@ -216,88 +217,94 @@ def crear_datos_demo(db: Session):
             total_ud_90d += cantidad
 
             if cantidad > 0:
-                ventas_bulk.append({
-                    "producto_id":     prod.id,
-                    "fecha_venta":     fecha_actual,
-                    "cantidad_vendida": cantidad,
-                    "precio_unitario": round(precio_act, 2),
-                    "ingreso_total":   round(cantidad * precio_act, 2),
-                    "stock_disponible": 0,
-                })
+                p_info["ventas_diarias"].append((dia, cantidad, precio_act))
+                total_raw_sales += cantidad * precio_act
 
-        # ─── Snapshot de inventario ───
+        # ─── Snapshot de inventario (raw) ───
         ads = total_ud_90d / DIAS
         if is_az:
-            stock_final = random.randint(300, 800)  # sobrestock tóxico
+            stock_final = random.randint(300, 800)
         else:
             safety = random.randint(5, 30)
             stock_final = max(0, int(ads * lead_time) + safety)
 
-        snapshot_bulk.append({
-            "producto_id":    prod.id,
-            "stock_disponible": stock_final,
-            "is_az": is_az, # guardamos esto temporalmente
-        })
+        p_info["stock_final_raw"] = stock_final
 
     # === ESCALADO FINANCIERO ===
     print("[seed] Aplicando escalado financiero para cumplir con los límites de 29M-30M/mes y <20M inventario...")
     
     # 1. Escalar Ventas
-    total_raw_sales = sum(v["ingreso_total"] for v in ventas_bulk)
     if total_raw_sales > 0:
         target_sales_90d = random.uniform(87000000, 90000000)
         sales_factor = target_sales_90d / total_raw_sales
     else:
         sales_factor = 1.0
 
-    # Actualizar DB y listas con el factor de ventas
+    total_inv_escalado = 0
+    # Aplicar factor de ventas y calcular coste escalado para el inventario
     for p_info in productos_info:
         prod = p_info["orm"]
         prod.precio_venta = round(prod.precio_venta * sales_factor, 2)
         prod.costo_unitario = round(prod.costo_unitario * sales_factor, 2)
         p_info["costo_escalado"] = prod.costo_unitario
-
-    for v in ventas_bulk:
-        v["precio_unitario"] = round(v["precio_unitario"] * sales_factor, 2)
-        v["ingreso_total"] = round(v["ingreso_total"] * sales_factor, 2)
+        total_inv_escalado += p_info["stock_final_raw"] * prod.costo_unitario
 
     # 2. Escalar Inventario
-    total_inv_escalado = 0
-    # Create a quick map for costo_escalado
-    costo_map = {p["orm"].id: p["costo_escalado"] for p in productos_info}
-    
-    for s in snapshot_bulk:
-        total_inv_escalado += s["stock_disponible"] * costo_map[s["producto_id"]]
-
     if total_inv_escalado > 19999000:
         inv_factor = 19999000 / total_inv_escalado
     else:
         inv_factor = 1.0
 
-    for s in snapshot_bulk:
-        s["stock_disponible"] = max(0, int(s["stock_disponible"] * inv_factor))
+    print("[seed] Generando dicts finales e insertando en lotes (batch)...")
+    
+    total_ventas_insertadas = 0
 
-    # 3. Generar Registro_PO basado en el stock final REAL
-    for s in snapshot_bulk:
-        prod_id = s["producto_id"]
-        stock_final = s["stock_disponible"]
+    # 3. Generar dicts finales y aplicar Bulk Insert por Lotes
+    for p_info in productos_info:
+        prod = p_info["orm"]
+        stock_final = max(0, int(p_info["stock_final_raw"] * inv_factor))
+        
+        snapshot_bulk.append({
+            "producto_id": prod.id,
+            "stock_disponible": stock_final,
+        })
+        
+        # Registro PO
         qs = max(1, stock_final // 2)
         delta = random.randint(-max(1, qs // 10), max(1, qs // 10))
         po_bulk.append({
-            "producto_id":                prod_id,
+            "producto_id":                prod.id,
             "fecha_orden":                fecha_fin - timedelta(days=random.randint(3, 15)),
             "cantidad_sugerida_algoritmo": qs,
             "cantidad_aprobada_usuario":   max(1, qs + delta),
             "motivo_modificacion":         None,
             "estado":                      "Aprobado",
         })
-        
-        # Limpiar is_az del dict para que no rompa el bulk_insert
-        del s["is_az"]
 
-    # ─── Bulk inserts ───
-    print(f"[seed] Insertando {len(ventas_bulk):,} filas de VentaHistorica...")
-    db.bulk_insert_mappings(VentaHistorica, ventas_bulk)
+        for dia, cantidad, precio_act in p_info["ventas_diarias"]:
+            fecha_actual = fecha_inicio + timedelta(days=dia)
+            precio_unit_esc = round(precio_act * sales_factor, 2)
+            
+            ventas_bulk.append({
+                "producto_id":     prod.id,
+                "fecha_venta":     fecha_actual,
+                "cantidad_vendida": cantidad,
+                "precio_unitario": precio_unit_esc,
+                "ingreso_total":   round(cantidad * precio_unit_esc, 2),
+                "stock_disponible": 0,
+            })
+            
+        # Bulk Insert VentaHistorica por lotes para no saturar la RAM (OOM)
+        if len(ventas_bulk) >= 50000:
+            db.bulk_insert_mappings(VentaHistorica, ventas_bulk)
+            total_ventas_insertadas += len(ventas_bulk)
+            ventas_bulk.clear()
+
+    # Insertar el resto de ventas
+    if ventas_bulk:
+        db.bulk_insert_mappings(VentaHistorica, ventas_bulk)
+        total_ventas_insertadas += len(ventas_bulk)
+        ventas_bulk.clear()
 
     print(f"[seed] Insertando {len(snapshot_bulk):,} snapshots de inventario...")
     db.bulk_insert_mappings(InventarioSnapshot, snapshot_bulk)
@@ -306,7 +313,7 @@ def crear_datos_demo(db: Session):
     db.bulk_insert_mappings(Registro_PO, po_bulk)
 
     db.commit()
-    print(f"[seed] OK Completado: {TOTAL_SKUS} SKUs | {len(ventas_bulk):,} ventas | {len(snapshot_bulk):,} snapshots | {len(po_bulk):,} POs")
+    print(f"[seed] OK Completado: {TOTAL_SKUS} SKUs | {total_ventas_insertadas:,} ventas | {len(snapshot_bulk):,} snapshots | {len(po_bulk):,} POs")
 
 
 if __name__ == "__main__":

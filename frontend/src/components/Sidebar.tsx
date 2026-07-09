@@ -35,14 +35,17 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
       <aside className={`w-64 h-screen bg-white/90 dark:bg-brand-surface/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-transform duration-300 z-50 shadow-2xl md:shadow-none md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)] flex items-center justify-center w-10 h-10">
-              <span className="font-bold text-lg text-brand-blue dark:text-brand-cyan leading-none">5m</span>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-brand-cyan/20 rounded-xl flex items-center justify-center border border-brand-cyan/30">
+              <span className="text-brand-cyan font-bold font-orbitron text-lg">5m</span>
             </div>
-            <div className="flex items-baseline gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
-              <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.33</span>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-wide">five-</h1>
+              <h1 className="text-xl font-bold text-white tracking-wide leading-none">minutes</h1>
             </div>
+            <span className="text-xs font-medium text-brand-cyan/80 bg-brand-cyan/10 px-2 py-0.5 rounded-full ml-auto">
+              v.1.40
+            </span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
             <X size={24} />

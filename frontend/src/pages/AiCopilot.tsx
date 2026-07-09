@@ -3,6 +3,7 @@ import { api } from '../services/api';
 import { Send, Bot, User, Zap, Brain } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 
 
 interface Message {
@@ -121,7 +122,7 @@ export const AiCopilot = () => {
                     msg.content
                   ) : (
                     <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-100 dark:prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-200 dark:prose-pre:border-slate-700 prose-a:text-brand-blue dark:prose-a:text-brand-cyan">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
                         {msg.content}
                       </ReactMarkdown>
                     </div>

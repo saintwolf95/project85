@@ -10,3 +10,6 @@ pydantic-settings
 openai
 cachetools
 python-jose[cryptography]
+python-multipart
+pypdf
+python-docx

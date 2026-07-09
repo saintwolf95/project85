@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
@@ -39,6 +39,50 @@ def update_context(payload: ContextoRequest, db: Session = Depends(get_db), curr
         empresa.contexto_negocio = payload.contexto_negocio
         db.commit()
     return {"success": True}
+
+@router.post("/context/upload")
+async def upload_context_document(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    # 1MB limit check
+    if file.size and file.size > 1048576:
+        raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido de 1MB.")
+        
+    content = await file.read()
+    if len(content) > 1048576:
+        raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido de 1MB.")
+        
+    filename = file.filename.lower()
+    text_content = ""
+    
+    try:
+        if filename.endswith(".txt") or filename.endswith(".csv"):
+            text_content = content.decode("utf-8")
+        elif filename.endswith(".pdf"):
+            from pypdf import PdfReader
+            import io
+            reader = PdfReader(io.BytesIO(content))
+            for page in reader.pages:
+                text_content += page.extract_text() + "\n"
+        elif filename.endswith(".doc") or filename.endswith(".docx"):
+            from docx import Document
+            import io
+            doc = Document(io.BytesIO(content))
+            for para in doc.paragraphs:
+                text_content += para.text + "\n"
+        else:
+            raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Usa .txt, .csv, .pdf o .docx")
+            
+        empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
+        if empresa:
+            current_context = empresa.contexto_negocio or ""
+            new_context = current_context + f"\n\n--- Contenido de {file.filename} ---\n{text_content}"
+            empresa.contexto_negocio = new_context
+            db.commit()
+            
+        return {"success": True, "extracted_text": text_content, "full_context": new_context}
+    except Exception as e:
+        import logging
+        logging.error(f"[COPILOT UPLOAD] Error processing file {file.filename}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error procesando el archivo. Comprueba que el formato sea correcto.")
 
 @router.get("/chats")
 def get_chats(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):

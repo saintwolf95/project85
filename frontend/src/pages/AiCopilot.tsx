@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext } from '../services/api';
+import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument } from '../services/api';
 import type { CopilotChat } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -23,6 +23,8 @@ export const AiCopilot = () => {
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
   const [businessContext, setBusinessContext] = useState('');
   const [isSavingContext, setIsSavingContext] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -186,6 +188,31 @@ export const AiCopilot = () => {
       alert("Hubo un error guardando el contexto del negocio.");
     } finally {
       setIsSavingContext(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1048576) {
+      alert("El archivo excede el límite máximo de 1MB.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const response = await uploadBusinessDocument(file);
+      if (response.success) {
+        setBusinessContext(response.full_context);
+      }
+    } catch (error: any) {
+      console.error("Error subiendo archivo:", error);
+      alert(error.response?.data?.detail || "Error subiendo el archivo. Asegúrate de que es un formato soportado (.txt, .pdf, .docx, .csv).");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -407,13 +434,32 @@ export const AiCopilot = () => {
             </div>
             
             <div className="p-5 flex-1">
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                Redacta aquí las reglas de tu empresa, KPIs objetivo, excepciones por familias o instrucciones específicas de análisis. El Copilot leerá este documento antes de cada respuesta para ofrecerte recomendaciones como un verdadero analista interno.
-              </p>
+              <div className="flex justify-between items-end mb-4">
+                <p className="text-sm text-slate-600 dark:text-slate-300">
+                  Redacta aquí las reglas de tu empresa, o adjunta un documento. El Copilot siempre leerá este texto.
+                </p>
+                <div>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept=".txt,.csv,.pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                  />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading || isSavingContext}
+                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+                    {isUploading ? 'Procesando...' : 'Adjuntar Documento'}
+                  </button>
+                </div>
+              </div>
               <textarea
                 value={businessContext}
                 onChange={(e) => setBusinessContext(e.target.value)}
-                placeholder="Ejemplo: Nuestro objetivo es no tener más de 15 días de cobertura global. La familia 'Monitores' puede llegar hasta 30 días. Si detectas riesgo de rotura en un producto clase A, recomiéndame realizar una compra de emergencia (Air Freight). Nombra siempre nuestra marca favorita 'LogisticaCorp'."
+                placeholder="Ejemplo: Nuestro objetivo es no tener más de 15 días de cobertura global..."
                 className="w-full h-64 p-4 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan text-slate-800 dark:text-slate-200 resize-none custom-scrollbar"
               />
             </div>

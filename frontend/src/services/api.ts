@@ -159,3 +159,15 @@ export const updateBusinessContext = async (contexto_negocio: string): Promise<{
   const response = await api.put('/copilot/context', { contexto_negocio });
   return response.data;
 };
+
+export const uploadBusinessDocument = async (file: File): Promise<{ success: boolean, extracted_text: string, full_context: string }> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await api.post('/copilot/context/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};

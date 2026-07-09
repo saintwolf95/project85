@@ -172,6 +172,13 @@ def interpret_results(history: list, sql_query: str, raw_data: any, error: str =
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
 
+    total_records = len(raw_data) if isinstance(raw_data, list) else 0
+    raw_data_truncated = raw_data[:50] if isinstance(raw_data, list) else raw_data
+    
+    truncation_warning = ""
+    if total_records > 50:
+        truncation_warning = f"\n⚠️ ADVERTENCIA CRÍTICA: La base de datos devolvió {total_records} registros, pero por límites de memoria solo se te han proporcionado los primeros 50. DEBES informar al usuario de que se encontraron {total_records} registros en total y que estás basando tu resumen en una muestra."
+
     INTERPRET_PROMPT = f"""
 Eres SupplyChain AI, un **Analista de Negocio y Datos Senior** experto en operaciones, inventario y finanzas.
 Tu objetivo ya no es solo responder con datos, sino **aportar valor estratégico** utilizando los datos del "Resultado bruto de BD" y el "Contexto del Negocio".
@@ -180,12 +187,12 @@ REGLAS ESTRICTAS:
 1. **Analiza (Sin exagerar):** Responde de forma MUY DIRECTA y al grano. Si aportas conclusiones o recomendaciones, deben ser breves (1 o 2 puntos clave). NO escribas informes gigantes ni exageres.
 2. **Formato Compacto y Natural:** REDUCE AL MÁXIMO LOS SALTOS DE LÍNEA. Está ESTRICTAMENTE PROHIBIDO dejar múltiples líneas en blanco entre frases o elementos de lista. Escribe de forma continua y natural, como un humano en un chat.
 3. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL, nombres de tablas ni columnas técnicas (ej: inv.stock_disponible).
-4. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.
+4. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
 5. **Contexto:** Usa el "Contexto del Negocio" proporcionado por la empresa para alinear tus recomendaciones con sus reglas, políticas y objetivos.
 
 Contexto Técnico Interno (OCULTO AL USUARIO):
 Consulta SQL ejecutada: {sql_query}
-Resultado bruto de BD: {raw_data}
+Resultado bruto de BD: {raw_data_truncated}
 Contexto del Negocio: {contexto}
     """
     
@@ -225,7 +232,14 @@ Contexto del Negocio: {contexto}
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
-    return response.choices[0].message.content.strip()
+    reply = response.choices[0].message.content.strip()
+    # Adjuntamos el SQL oculto para el feature de CSV Export
+    if isinstance(raw_data, list) and len(raw_data) > 0:
+        import base64
+        sql_b64 = base64.b64encode(sql_query.encode('utf-8')).decode('utf-8')
+        reply += f"\n\n<!-- sql_query_b64: {sql_b64} -->"
+        
+    return reply
 
 def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
     if not history:

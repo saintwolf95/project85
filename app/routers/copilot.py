@@ -179,6 +179,64 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
 
         return {"reply": reply, "chat_id": chat_id}
     except Exception as e:
-        import logging
-        logging.error(f"[COPILOT] Error no controlado: {str(e)}", exc_info=True)
-        return {"reply": "⚠️ Error interno del servidor al procesar la respuesta. Por favor, verifica los logs o contacta con soporte.", "chat_id": payload.chat_id or 0}
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/chat/message/{message_id}/csv")
+def download_message_csv(
+    message_id: int,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    import re
+    import base64
+    import io
+    import csv
+    from fastapi.responses import StreamingResponse
+    from ..database import SessionLocal
+    from ..copilot_service import execute_sql
+    
+    # 1. Recuperar el mensaje asegurando que pertenece a un chat del usuario
+    msg = db.query(CopilotMessage).join(CopilotChat).filter(
+        CopilotMessage.id == message_id,
+        CopilotChat.empresa_id == current_user.empresa_id
+    ).first()
+    
+    if not msg:
+        raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+        
+    # 2. Extraer el SQL codificado
+    match = re.search(r"<!-- sql_query_b64: (.*?) -->", msg.contenido)
+    if not match:
+        raise HTTPException(status_code=400, detail="Este mensaje no contiene datos exportables.")
+        
+    sql_b64 = match.group(1)
+    try:
+        sql_query = base64.b64decode(sql_b64).decode('utf-8')
+    except Exception:
+        raise HTTPException(status_code=400, detail="Error decodificando la consulta original.")
+        
+    # 3. Re-ejecutar SQL en read-only
+    db_ro = SessionLocal()
+    try:
+        raw_data, error = execute_sql(db_ro, sql_query)
+        if error or not raw_data:
+            raise HTTPException(status_code=500, detail="Error ejecutando la consulta original o sin datos.")
+            
+        # 4. Generar CSV en memoria
+        output = io.StringIO()
+        if len(raw_data) > 0:
+            writer = csv.DictWriter(output, fieldnames=raw_data[0].keys())
+            writer.writeheader()
+            for row in raw_data:
+                writer.writerow(row)
+                
+        output.seek(0)
+        
+        return StreamingResponse(
+            output, 
+            media_type="text/csv", 
+            headers={"Content-Disposition": f"attachment; filename=exportacion_ia_{message_id}.csv"}
+        )
+    finally:
+        db_ro.close()

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument } from '../services/api';
 import type { CopilotChat } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -166,6 +166,24 @@ export const AiCopilot = () => {
       setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const downloadCsv = async (messageId: string) => {
+    try {
+      const response = await api.get(`/copilot/chat/message/${messageId}/csv`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `exportacion_ia_${messageId}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (e) {
+      console.error("Error downloading CSV", e);
+      alert("Error al descargar el CSV. Asegúrate de que el mensaje contiene datos.");
     }
   };
 
@@ -362,8 +380,19 @@ export const AiCopilot = () => {
                           }
                         }}
                       >
-                        {msg.content}
+                        {msg.content.split('<!-- sql_query_b64:')[0]}
                       </ReactMarkdown>
+                      {msg.content.includes('<!-- sql_query_b64:') && (
+                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                          <button
+                            onClick={() => downloadCsv(msg.id)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm"
+                          >
+                            <Download size={16} />
+                            Descargar Datos Completos (CSV)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

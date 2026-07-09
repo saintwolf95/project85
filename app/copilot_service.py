@@ -24,6 +24,20 @@ def get_openai_client():
         return OpenAI(api_key=api_key)
     except Exception:
         return None
+
+def cleanup_old_chats(db: Session, usuario_id: int):
+    from datetime import datetime, timedelta
+    from .models import CopilotChat
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    try:
+        db.query(CopilotChat).filter(
+            CopilotChat.usuario_id == usuario_id,
+            CopilotChat.actualizado_en < thirty_days_ago
+        ).delete()
+        db.commit()
+    except Exception as e:
+        logger.error(f"Error limpiando chats antiguos: {e}")
+        db.rollback()
 SCHEMA_PROMPT = """
 Eres un experto en bases de datos y logística. 
 Tu trabajo es responder a la pregunta del usuario generando EXCLUSIVAMENTE una consulta SQL válida para SQLite.

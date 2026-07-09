@@ -114,3 +114,38 @@ export const getAiInsights = async (abcClass: string = 'all', familia: string = 
   const response = await api.get('/analytics/insights', { params });
   return response.data;
 };
+
+// --- Copilot API ---
+
+export interface CopilotChat {
+  id: number;
+  titulo: string;
+  actualizado_en: string;
+}
+
+export interface CopilotMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
+  creado_en: string;
+}
+
+export const getCopilotChats = async (): Promise<CopilotChat[]> => {
+  const response = await api.get('/copilot/chats');
+  return response.data;
+};
+
+export const createCopilotChat = async (): Promise<CopilotChat> => {
+  const response = await api.post('/copilot/chats');
+  return response.data;
+};
+
+export const getCopilotChatHistory = async (chatId: number): Promise<CopilotMessage[]> => {
+  const response = await api.get(`/copilot/chats/${chatId}`);
+  return response.data;
+};
+
+export const deleteCopilotChat = async (chatId: number): Promise<{ success: boolean }> => {
+  const response = await api.delete(`/copilot/chats/${chatId}`);
+  return response.data;
+};

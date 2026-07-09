@@ -69,3 +69,24 @@ class VentaHistorica(Base):
     precio_unitario = Column(Float, nullable=False)
     ingreso_total = Column(Float, nullable=False)
     stock_disponible = Column(Integer, nullable=False, default=0)
+
+class CopilotChat(Base):
+    __tablename__ = "copilot_chats"
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    titulo = Column(String, nullable=False, default="Nuevo Chat")
+    creado_en = Column(DateTime, default=datetime.utcnow)
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    usuario = relationship("Usuario")
+    mensajes = relationship("CopilotMessage", back_populates="chat", cascade="all, delete-orphan")
+
+class CopilotMessage(Base):
+    __tablename__ = "copilot_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("copilot_chats.id"), nullable=False)
+    rol = Column(String, nullable=False) # 'user' o 'assistant'
+    contenido = Column(String, nullable=False)
+    creado_en = Column(DateTime, default=datetime.utcnow)
+
+    chat = relationship("CopilotChat", back_populates="mensajes")

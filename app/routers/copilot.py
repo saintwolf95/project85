@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
+from datetime import datetime
 from ..database import get_db, get_db_ro
-from ..copilot_service import process_copilot_chat
-from ..models import Usuario
+from ..copilot_service import process_copilot_chat, cleanup_old_chats
+from ..models import Usuario, CopilotChat, CopilotMessage
 from ..api.deps import get_current_user
 from ..core.rate_limit import limiter
 
@@ -15,25 +16,103 @@ class ChatMessage(BaseModel):
     content: str = Field(..., max_length=2000)
 
 class ChatRequest(BaseModel):
+    chat_id: Optional[int] = None
     history: List[ChatMessage] = Field(..., max_length=20)
     model_preference: Literal["fast", "thinking"] = "fast"
 
 class ChatResponse(BaseModel):
     reply: str
+    chat_id: int
+
+@router.get("/chats")
+def get_chats(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    cleanup_old_chats(db, current_user.id)
+    chats = db.query(CopilotChat).filter(CopilotChat.usuario_id == current_user.id).order_by(CopilotChat.actualizado_en.desc()).all()
+    return [{"id": c.id, "titulo": c.titulo, "actualizado_en": c.actualizado_en} for c in chats]
+
+@router.post("/chats")
+def create_chat(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    new_chat = CopilotChat(usuario_id=current_user.id, titulo="Nuevo Chat")
+    db.add(new_chat)
+    db.commit()
+    db.refresh(new_chat)
+    return {"id": new_chat.id, "titulo": new_chat.titulo, "actualizado_en": new_chat.actualizado_en}
+
+@router.get("/chats/{chat_id}")
+def get_chat_history(chat_id: int, db: Session = Depends(get_db_ro), current_user: Usuario = Depends(get_current_user)):
+    chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
+    if not chat:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Chat no encontrado")
+    mensajes = db.query(CopilotMessage).filter(CopilotMessage.chat_id == chat_id).order_by(CopilotMessage.creado_en.asc()).all()
+    return [{"id": m.id, "role": m.rol, "content": m.contenido, "creado_en": m.creado_en} for m in mensajes]
+
+@router.delete("/chats/{chat_id}")
+def delete_chat(chat_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
+    if chat:
+        db.delete(chat)
+        db.commit()
+    return {"success": True}
 
 @router.post("/chat")
 @limiter.limit("5/minute")
-def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(get_db_ro), current_user: Usuario = Depends(get_current_user)):
+def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     try:
-        history_dicts = [{"role": m.role, "content": m.content} for m in payload.history]
-        reply = process_copilot_chat(
-            db=db, 
-            history=history_dicts, 
-            empresa_id=current_user.empresa_id,
-            model_preference=payload.model_preference
-        )
-        return {"reply": reply}
+        # Si no hay chat_id, se crea uno
+        if not payload.chat_id:
+            chat = CopilotChat(usuario_id=current_user.id, titulo=payload.history[-1].content[:30] + "...")
+            db.add(chat)
+            db.commit()
+            db.refresh(chat)
+            chat_id = chat.id
+        else:
+            chat_id = payload.chat_id
+            chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
+            if chat and len(payload.history) == 1:
+                chat.titulo = payload.history[-1].content[:30] + "..."
+            if chat:
+                chat.actualizado_en = datetime.utcnow()
+                db.commit()
+
+        # Extraer el historial para procesar (formato para process_copilot_chat)
+        # Podríamos usar el de la BD, pero process_copilot_chat requiere history de dicts
+        # Reconstruimos la historia completa desde la BBDD + el nuevo mensaje
+        mensajes_previos = db.query(CopilotMessage).filter(CopilotMessage.chat_id == chat_id).order_by(CopilotMessage.creado_en.asc()).all()
+        
+        # El payload.history normalmente trae solo el nuevo mensaje si el frontend está bien diseñado, 
+        # pero si envía todo el historial, guardamos solo el último para evitar duplicados.
+        nuevo_mensaje = payload.history[-1]
+        
+        # Guardar la pregunta del usuario
+        user_msg_db = CopilotMessage(chat_id=chat_id, rol=nuevo_mensaje.role, contenido=nuevo_mensaje.content)
+        db.add(user_msg_db)
+        db.commit()
+
+        # Reconstruir history para la IA
+        history_dicts = [{"role": m.rol, "content": m.contenido} for m in mensajes_previos]
+        history_dicts.append({"role": nuevo_mensaje.role, "content": nuevo_mensaje.content})
+
+        # DB RO para queries analíticas de la IA
+        from ..database import SessionLocal
+        db_ro = SessionLocal()
+        try:
+            reply = process_copilot_chat(
+                db=db_ro, 
+                history=history_dicts, 
+                empresa_id=current_user.empresa_id,
+                model_preference=payload.model_preference
+            )
+        finally:
+            db_ro.close()
+            
+        # Guardar respuesta IA
+        assistant_msg_db = CopilotMessage(chat_id=chat_id, rol="assistant", contenido=reply)
+        db.add(assistant_msg_db)
+        db.commit()
+
+        return {"reply": reply, "chat_id": chat_id}
     except Exception as e:
         import logging
         logging.error(f"[COPILOT] Error no controlado: {str(e)}", exc_info=True)
-        return {"reply": "⚠️ Error interno del servidor al procesar la respuesta. Por favor, verifica los logs o contacta con soporte."}
+        return {"reply": "⚠️ Error interno del servidor al procesar la respuesta. Por favor, verifica los logs o contacta con soporte.", "chat_id": payload.chat_id or 0}

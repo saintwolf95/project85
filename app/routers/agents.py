@@ -8,7 +8,7 @@ from app.agents_service import execute_agents_workflow
 
 router = APIRouter()
 
-@router.post("/agents/run", response_model=AgentInsightResponse)
+@router.post("/agents/run")
 def run_agents(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         settings = db.query(AgentSettings).filter(AgentSettings.empresa_id == current_user.empresa_id).first()
@@ -23,7 +23,8 @@ def run_agents(current_user: Usuario = Depends(get_current_user), db: Session = 
     except Exception as e:
         import traceback
         error_msg = str(e) + "\n" + traceback.format_exc()
-        raise HTTPException(status_code=500, detail=error_msg)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=400, content={"detail": error_msg})
 
 @router.get("/agents/insights", response_model=AgentInsightResponse)
 def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):

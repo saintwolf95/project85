@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, CopilotChat, CopilotMessage as ApiCopilotMessage } from '../services/api';
+import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat } from '../services/api';
+import type { CopilotChat } from '../services/api';
 import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -105,11 +106,9 @@ export const AiCopilot = () => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    // Extraer el texto ingresado
     const userText = input.trim();
     setInput('');
-    
-    // Si es un chat nuevo que solo tiene el saludo, quitamos el saludo visualmente de la BD a enviar.
-    const currentMessages = messages[0]?.id === 'greeting' ? [] : messages;
     
     const newUserMsg: Message = { id: Date.now().toString(), role: 'user', content: userText };
     const newMessages = [...messages, newUserMsg];

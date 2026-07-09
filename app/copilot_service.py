@@ -80,10 +80,17 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast")
         messages = [
             {"role": "user", "content": f"Instrucciones del sistema:\n{prompt}\n\nPregunta del usuario:\n{pregunta}"}
         ]
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "model_not_found" in error_msg or "does not exist" in error_msg:
+                return "SELECT '⚠️ Tu clave de OpenAI no tiene nivel (Tier) suficiente para usar los modelos o1 (Thinking). Por favor, cambia a modo Fast (gpt-4o).' AS error"
+            logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL Thinking): {error_msg}", exc_info=True)
+            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     else:
         model_name = "gpt-4o"
         messages = [
@@ -173,10 +180,17 @@ Resultado bruto de BD: {raw_data}
                 role = "user"
             messages.append({"role": role, "content": msg["content"]})
             
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages
-        )
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=messages
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "model_not_found" in error_msg or "does not exist" in error_msg:
+                return "⚠️ **Nivel de API Insuficiente:** Tu clave de OpenAI no tiene permisos para acceder a los modelos avanzados de razonamiento (`o1-preview` o `o1-mini`). Por favor, cambia al modo **Fast (gpt-4o)** en la barra inferior."
+            logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación Thinking): {error_msg}", exc_info=True)
+            return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     else:
         model_name = "gpt-4o"
         messages = [{"role": "system", "content": INTERPRET_PROMPT}]

@@ -226,6 +226,7 @@ def download_message_csv(
             
         # 4. Generar CSV en memoria
         output = io.StringIO()
+        output.write('\ufeff') # BOM (Byte Order Mark) para que Excel lea UTF-8 correctamente (tildes/ñ)
         if len(raw_data) > 0:
             writer = csv.DictWriter(output, fieldnames=raw_data[0].keys())
             writer.writeheader()

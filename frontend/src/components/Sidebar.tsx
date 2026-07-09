@@ -40,7 +40,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </div>
             <div className="flex items-baseline gap-2">
               <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
-              <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.28</span>
+              <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.29</span>
             </div>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

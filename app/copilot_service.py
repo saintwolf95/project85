@@ -179,6 +179,10 @@ def interpret_results(history: list, sql_query: str, raw_data: any, error: str =
     if total_records > 50:
         truncation_warning = f"\n⚠️ ADVERTENCIA CRÍTICA: La base de datos devolvió {total_records} registros, pero por límites de memoria solo se te han proporcionado los primeros 50. DEBES informar al usuario de que se encontraron {total_records} registros en total y que estás basando tu resumen en una muestra."
 
+    client = get_openai_client()
+    if not client:
+        return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
+
     if model_preference in ["thinking", "ultra_thinking"]:
         INTERPRET_PROMPT = f"""
 Eres SupplyChain AI, un **Analista de Negocio y Científico de Datos Senior** experto en operaciones, cadena de suministro y finanzas corporativas.
@@ -190,16 +194,16 @@ REGLAS ESTRICTAS PARA MODO AVANZADO:
 3. **Consultoría y Predicción:** Aporta recomendaciones estratégicas y proyecciones. Justifica matemáticamente tus conclusiones basándote estrictamente en los datos devueltos.
 4. **Gráficos Dinámicos:** TIENES LA CAPACIDAD DE RENDERIZAR GRÁFICOS REALES. Si el usuario pide un gráfico o si el contexto analítico lo pide, INYECTA al final de tu mensaje un bloque de código estrictamente JSON con la siguiente estructura (elige entre 'bar', 'line', 'pie'):
 ```json
-{
-  "chartConfig": {
+{{
+  "chartConfig": {{
     "type": "bar",
     "title": "Título del Gráfico",
-    "data": [{"name": "A", "value": 10}, {"name": "B", "value": 20}],
+    "data": [{{"name": "A", "value": 10}}, {{"name": "B", "value": 20}}],
     "xKey": "name",
     "yKey": "value",
     "color": "#0ea5e9"
-  }
-}
+  }}
+}}
 ```
 5. **Lenguaje SQL Prohibido:** NUNCA muestres código SQL ni nombres de tablas/columnas técnicas al usuario.
 6. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
@@ -235,9 +239,9 @@ REGLAS ESTRICTAS PARA MODO RÁPIDO:
 2. **Formato Compacto:** REDUCE AL MÁXIMO LOS SALTOS DE LÍNEA. No dejes líneas en blanco innecesarias.
 3. **Gráficos Dinámicos:** TIENES LA CAPACIDAD DE RENDERIZAR GRÁFICOS. Si la pregunta requiere visualizar tendencias o comparativas, añade al final de tu respuesta un bloque de código JSON con este formato exacto:
 ```json
-{
-  "chartConfig": { "type": "bar", "title": "...", "data": [{"name": "A", "value": 10}], "xKey": "name", "yKey": "value", "color": "#0ea5e9" }
-}
+{{
+  "chartConfig": {{ "type": "bar", "title": "...", "data": [{{"name": "A", "value": 10}}], "xKey": "name", "yKey": "value", "color": "#0ea5e9" }}
+}}
 ```
 4. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL ni nombres de tablas/columnas técnicas.
 5. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -18,6 +18,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/inventory', icon: BarChart3, label: 'Intelligence ABC' },
     { to: '/forecast', icon: TrendingUp, label: 'Predicción Demanda' },
     { to: '/copilot', icon: Bot, label: 'AI Copilot' },
+    { to: '/ai-control', icon: Power, label: 'Control IA' },
     { to: '/integrations', icon: Database, label: 'Data Engineering' },
     { to: '/import-guide', icon: FileSpreadsheet, label: 'Guía de Importación' },
   ];

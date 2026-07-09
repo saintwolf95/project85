@@ -102,6 +102,17 @@ class ProductoMetricas(Base):
     
     producto = relationship("Producto")
 
+class EmpresaConfiguracion(Base):
+    __tablename__ = "empresa_configuraciones"
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)
+    contexto_negocio = Column(String, default="")
+    
+class AgentSettings(Base):
+    __tablename__ = "agent_settings"
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)
+    fase1_active = Column(Boolean, default=False)
+    fase2_active = Column(Boolean, default=False)
+
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"
     empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)

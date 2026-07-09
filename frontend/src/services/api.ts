@@ -177,3 +177,19 @@ export const uploadBusinessDocument = async (file: File): Promise<{ success: boo
   });
   return response.data;
 };
+
+// --- Agent Settings ---
+export interface AgentSettings {
+  fase1_active: boolean;
+  fase2_active: boolean;
+}
+
+export const getAgentSettings = async (): Promise<AgentSettings> => {
+  const response = await api.get('/agent-settings');
+  return response.data;
+};
+
+export const updateAgentSettings = async (settings: AgentSettings): Promise<AgentSettings> => {
+  const response = await api.post('/agent-settings', settings);
+  return response.data;
+};

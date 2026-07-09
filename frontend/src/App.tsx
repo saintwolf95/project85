@@ -8,6 +8,7 @@ import { Intelligence } from './pages/Intelligence';
 import { DemandForecasting } from './pages/DemandForecasting';
 import { ActionableInsights } from './pages/ActionableInsights';
 import { AiCopilot } from './pages/AiCopilot';
+import { AiControlPanel } from './pages/AiControlPanel';
 import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
 
@@ -32,6 +33,7 @@ function App() {
             <Route path="forecast" element={<DemandForecasting />} />
             <Route path="alerts" element={<ActionableInsights />} />
             <Route path="copilot" element={<AiCopilot />} />
+            <Route path="ai-control" element={<AiControlPanel />} />
             <Route path="integrations" element={<DataEngineering />} />
             <Route path="import-guide" element={<DataImportGuide />} />
             <Route path="*" element={<Navigate to="/" replace />} />

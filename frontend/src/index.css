@@ -21,4 +21,33 @@
   .title-corporate {
     @apply font-inter uppercase tracking-wider font-medium text-slate-700 dark:text-slate-300;
   }
+
+  .animate-typing-bop {
+    animation: typing-bop 0.6s infinite alternate ease-in-out;
+  }
+  
+  .animate-breathing {
+    animation: breathing 3s infinite ease-in-out;
+  }
+
+  .animate-zzz-1 { animation: float-zzz 3s infinite ease-in; animation-delay: 0s; }
+  .animate-zzz-2 { animation: float-zzz 3s infinite ease-in; animation-delay: 1s; }
+  .animate-zzz-3 { animation: float-zzz 3s infinite ease-in; animation-delay: 2s; }
+}
+
+@keyframes typing-bop {
+  0% { transform: translateY(0px) scale(1.05); }
+  100% { transform: translateY(-4px) scale(1.05); }
+}
+
+@keyframes breathing {
+  0%, 100% { transform: scale(1) translateY(0); filter: grayscale(20%) brightness(0.8); }
+  50% { transform: scale(1.02) translateY(-2px); filter: grayscale(20%) brightness(0.9); }
+}
+
+@keyframes float-zzz {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  20% { opacity: 1; transform: translate(5px, -10px) scale(0.8); }
+  80% { opacity: 0.8; transform: translate(15px, -30px) scale(1.2); }
+  100% { opacity: 0; transform: translate(20px, -40px) scale(1.5); }
 }

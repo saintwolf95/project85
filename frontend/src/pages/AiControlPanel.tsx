@@ -227,10 +227,17 @@ const AgentDesk = ({ title, icon, isActive, workingImg, sleepingImg, isBig = fal
       </div>
 
       <div className={`relative mt-8 transition-all duration-500 ${isBig ? 'h-64' : 'h-48'} w-full flex justify-center items-center`}>
+        {!isActive && (
+          <div className="absolute top-0 right-1/4 md:right-1/3 z-20 font-bold text-slate-400 font-orbitron select-none pointer-events-none">
+            <div className="absolute animate-zzz-1 text-sm">Z</div>
+            <div className="absolute animate-zzz-2 text-base">z</div>
+            <div className="absolute animate-zzz-3 text-lg">z</div>
+          </div>
+        )}
         <img 
           src={isActive ? workingImg : sleepingImg} 
           alt={title}
-          className={`absolute max-h-full max-w-full object-contain drop-shadow-xl transition-all duration-500 ${isActive ? 'scale-105 opacity-100' : 'scale-100 opacity-80 grayscale-[20%]'}`}
+          className={`absolute max-h-full max-w-full object-contain drop-shadow-xl transition-all duration-500 ${isActive ? 'opacity-100 animate-typing-bop' : 'animate-breathing'}`}
         />
       </div>
       

@@ -25,7 +25,7 @@ export const Sidebar = () => {
         </div>
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
-          <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.21</span>
+          <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.22</span>
         </div>
       </div>
       

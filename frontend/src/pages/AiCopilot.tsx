@@ -133,7 +133,7 @@ export const AiCopilot = () => {
       });
 
       const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: response.data.message_id ? response.data.message_id.toString() : (Date.now() + 1).toString(),
         role: 'ai',
         content: response.data.reply
       };

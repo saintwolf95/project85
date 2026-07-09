@@ -24,6 +24,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     chat_id: int
+    message_id: int
 
 class ContextoRequest(BaseModel):
     contexto_negocio: str
@@ -177,7 +178,7 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         db.add(assistant_msg_db)
         db.commit()
 
-        return {"reply": reply, "chat_id": chat_id}
+        return {"reply": reply, "chat_id": chat_id, "message_id": assistant_msg_db.id}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

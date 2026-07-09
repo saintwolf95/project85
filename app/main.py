@@ -81,15 +81,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:4000", "http://localhost:5173"],
-    allow_origin_regex=r"https://fivemin(-[a-z0-9]+)?\.vercel\.app",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -102,6 +93,20 @@ async def add_security_headers(request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:4000", 
+        "http://localhost:5173",
+        "https://fivemin-xi.vercel.app"
+    ],
+    allow_origin_regex=r"https://fivemin(-[a-z0-9]+)?\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")

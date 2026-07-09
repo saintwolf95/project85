@@ -15,13 +15,30 @@ limiter = Limiter(key_func=get_remote_address)
 load_dotenv()
 
 from . import models, seed_data
-from .database import engine, get_db
+from .database import engine, get_db, SessionLocal
 from .routers import analytics, copilot, inventory
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializa las tablas al iniciar la aplicación
     models.Base.metadata.create_all(bind=engine)
+    
+    # Auto-seed: si la base de datos está vacía, inyectar datos de demo
+    db = SessionLocal()
+    try:
+        user_count = db.query(models.Usuario).count()
+        print(f"[STARTUP] Usuarios en BD: {user_count}", flush=True)
+        if user_count == 0:
+            print("[STARTUP] BD vacía detectada. Ejecutando seed automático...", flush=True)
+            seed_data.crear_datos_demo(db)
+            print("[STARTUP] Seed completado exitosamente.", flush=True)
+        else:
+            print(f"[STARTUP] BD ya tiene datos. Skipping seed.", flush=True)
+    except Exception as e:
+        print(f"[STARTUP] Error durante auto-seed: {e}", flush=True)
+    finally:
+        db.close()
+    
     yield
     # No eliminamos las tablas al cerrar para persistir durante la vida de la app
 

@@ -33,7 +33,15 @@ async def lifespan(app: FastAPI):
             seed_data.crear_datos_demo(db)
             print("[STARTUP] Seed completado exitosamente.", flush=True)
         else:
-            print(f"[STARTUP] BD ya tiene datos. Skipping seed.", flush=True)
+            # Reparar UIDs incorrectos (ej: "00000000..." del seed anterior sin ADMIN_SUPABASE_UID)
+            import os
+            correct_uid = os.getenv("ADMIN_SUPABASE_UID", "34cf496c-0ca3-41db-bb63-b39078963a24")
+            admin = db.query(models.Usuario).filter(models.Usuario.email == "admin@demo.com").first()
+            if admin and admin.supabase_uid != correct_uid:
+                print(f"[STARTUP] Reparando UID admin: {admin.supabase_uid} -> {correct_uid}", flush=True)
+                admin.supabase_uid = correct_uid
+                db.commit()
+            print(f"[STARTUP] BD ya tiene datos. Admin UID: {admin.supabase_uid if admin else 'N/A'}", flush=True)
     except Exception as e:
         print(f"[STARTUP] Error durante auto-seed: {e}", flush=True)
     finally:

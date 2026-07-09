@@ -62,7 +62,7 @@ def crear_datos_demo(db: Session):
         db.refresh(empresa_demo)
 
     admin_user = db.query(Usuario).filter(Usuario.email == "admin@demo.com").first()
-    uid_env = os.getenv("ADMIN_SUPABASE_UID", "00000000-0000-0000-0000-000000000000")
+    uid_env = os.getenv("ADMIN_SUPABASE_UID", "34cf496c-0ca3-41db-bb63-b39078963a24")
     if not admin_user:
         admin_user = Usuario(
             empresa_id=empresa_demo.id,

@@ -200,7 +200,7 @@ def download_message_csv(
     # 1. Recuperar el mensaje asegurando que pertenece a un chat del usuario
     msg = db.query(CopilotMessage).join(CopilotChat).filter(
         CopilotMessage.id == message_id,
-        CopilotChat.empresa_id == current_user.empresa_id
+        CopilotChat.usuario_id == current_user.id
     ).first()
     
     if not msg:

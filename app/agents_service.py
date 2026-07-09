@@ -9,71 +9,216 @@ logger = logging.getLogger(__name__)
 
 def run_maria_agent(db: Session, empresa_id: int):
     """
-    Agente de Inventario (María)
-    Busca:
-    1. Quiebre Inminente (dias_cobertura <= 5 y ventas > 0)
-    2. Sobre-stock (dias_cobertura > 120 y valor_inv > 500)
-    3. Alerta Crítica ABC (Clase A con riesgo_rotura)
+    Agente de Inventario (María) con 3 niveles de gravedad (ABC/XYZ).
     """
     alertas = []
     
-    # 1. Quiebre inminente
-    sql_quiebre = """
-        SELECT p.nombre, p.marca, pm.dias_cobertura, i.stock_disponible
+    # NIVEL 3: GRAVEDAD CRÍTICA 🔴
+    # 3.1 Quiebre Inminente en Clase A
+    sql_n3_quiebre = """
+        SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.dias_cobertura <= 5
         AND i.stock_disponible > 0
+        AND pm.abc = 'A'
         LIMIT 10
     """
-    result_quiebre = db.execute(text(sql_quiebre), {"empresa_id": empresa_id}).fetchall()
-    for row in result_quiebre:
-        alertas.append(f"María (Inventario): Producto '{row[0]}' ({row[1]}) se quedará sin stock en {row[2]} días. Quedan solo {row[3]} unidades.")
-        
-    # 2. Sobre-stock
-    sql_sobrestock = """
+    for row in db.execute(text(sql_n3_quiebre), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡ALERTA CRÍTICA! El producto estrella '{row[0]}' (Clase A) se quedará sin stock en {row[1]} días. Quedan solo {row[2]} unidades.")
+
+    # 3.2 Capital Muerto Severo
+    sql_n3_sobrestock = """
         SELECT p.nombre, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
-        AND pm.dias_cobertura > 120
-        AND (i.stock_disponible * p.costo_unitario) > 500
+        AND pm.dias_cobertura > 180
+        AND pm.xyz = 'Z'
+        AND (i.stock_disponible * p.costo_unitario) > 1000
         LIMIT 10
     """
-    result_sobrestock = db.execute(text(sql_sobrestock), {"empresa_id": empresa_id}).fetchall()
-    for row in result_sobrestock:
-        alertas.append(f"María (Inventario): Producto '{row[0]}' lleva inmovilizado {row[1]} días ocupando ${row[2]:.2f} en capital.")
-        
-    return alertas
+    for row in db.execute(text(sql_n3_sobrestock), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡CAPITAL MUERTO! Producto '{row[0]}' (Clase Z) inmovilizado {row[1]} días, reteniendo ${row[2]:.2f}.")
 
-def run_lucia_agent(db: Session, empresa_id: int):
-    """
-    Agente de Ventas (Lucía)
-    Busca:
-    1. Caída de demanda (ventas_60d muy bajas)
-    2. Picos inesperados (Clase C con alto ADS)
-    """
-    alertas = []
-    
-    # 1. Caída de demanda (Dead Stock en proceso)
-    sql_caida = """
-        SELECT p.nombre, pm.xyz, i.stock_disponible
+    # NIVEL 2: ADVERTENCIA 🟡
+    # 2.1 Quiebre Inminente en Clase B
+    sql_n2_quiebre_b = """
+        SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
-        AND pm.xyz != 'Z'
+        AND pm.dias_cobertura <= 5
+        AND i.stock_disponible > 0
+        AND pm.abc = 'B'
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n2_quiebre_b), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟡 Nivel 2] María (Inventario): Advertencia de quiebre. Producto '{row[0]}' (Clase B) sin stock en {row[1]} días ({row[2]} unds).")
+
+    # 2.2 Riesgo Cercano en Clase A
+    sql_n2_riesgo_a = """
+        SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.dias_cobertura > 5 AND pm.dias_cobertura <= 15
+        AND i.stock_disponible > 0
+        AND pm.abc = 'A'
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n2_riesgo_a), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟡 Nivel 2] María (Inventario): Riesgo cercano. Producto clave '{row[0]}' (Clase A) bajando a {row[1]} días de cobertura.")
+
+    # 2.3 Sobre-stock Moderado
+    sql_n2_sobrestock = """
+        SELECT p.nombre, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.dias_cobertura > 120 AND pm.dias_cobertura <= 180
+        AND (i.stock_disponible * p.costo_unitario) > 500
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n2_sobrestock), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟡 Nivel 2] María (Inventario): Sobre-stock moderado. Producto '{row[0]}' con {row[1]} días de inventario (${row[2]:.2f}).")
+
+    # NIVEL 1: OPORTUNIDAD 🟢
+    # 1.1 Exceso en Productos Dinámicos (A/B)
+    sql_n1_exceso = """
+        SELECT p.nombre, pm.abc, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc IN ('A', 'B')
+        AND pm.dias_cobertura > 90 AND pm.dias_cobertura <= 120
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n1_exceso), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟢 Nivel 1] María (Inventario): Oportunidad de optimización. Producto '{row[0]}' (Clase {row[1]}) sano pero con demasiado stock ({row[2]} días).")
+
+    # 1.2 Quiebre en Clase C
+    sql_n1_quiebre_c = """
+        SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.dias_cobertura <= 5
+        AND i.stock_disponible > 0
+        AND pm.abc = 'C'
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n1_quiebre_c), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟢 Nivel 1] María (Inventario): Producto secundario '{row[0]}' (Clase C) próximo a quiebre en {row[1]} días.")
+
+    return alertas
+
+def run_lucia_agent(db: Session, empresa_id: int):
+    """
+    Agente de Ventas (Lucía) con 3 niveles de gravedad (ABC/XYZ).
+    """
+    alertas = []
+    
+    # NIVEL 3: GRAVEDAD CRÍTICA 🔴
+    # 3.1 Estrellas Estancadas
+    sql_n3_estancadas = """
+        SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'A'
+        AND pm.dias_cobertura > 60
+        AND i.stock_disponible > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n3_estancadas), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🔴 Nivel 3] Lucía (Ventas): ¡ALERTA COMERCIAL! Producto estrella '{row[0]}' (Clase A) estancado con {row[1]} días de cobertura. Urge promoción.")
+
+    # 3.2 Ventas Perdidas HOY
+    sql_n3_stockout = """
+        SELECT p.nombre, p.marca
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'A'
+        AND i.stock_disponible = 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n3_stockout), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🔴 Nivel 3] Lucía (Ventas): ¡VENTAS PERDIDAS! Producto estrella '{row[0]}' ({row[1]}) está en CERO. Estamos perdiendo dinero hoy.")
+
+    # NIVEL 2: ADVERTENCIA 🟡
+    # 2.1 Potencial Desperdiciado
+    sql_n2_potencial = """
+        SELECT p.nombre, p.precio_venta, p.costo_unitario
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'B'
+        AND pm.xyz = 'Z'
+        AND p.precio_venta > (p.costo_unitario * 1.5)
+        AND i.stock_disponible > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n2_potencial), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟡 Nivel 2] Lucía (Ventas): Potencial desperdiciado. '{row[0]}' (Clase B) tiene demanda errática pero deja excelente margen (${row[1]} vs ${row[2]}). ¡Hagamos publicidad!")
+
+    # 2.2 Acumulación Silenciosa
+    sql_n2_acumulacion = """
+        SELECT p.nombre, pm.dias_cobertura
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'B'
         AND pm.dias_cobertura > 90
         AND i.stock_disponible > 0
         LIMIT 10
     """
-    result_caida = db.execute(text(sql_caida), {"empresa_id": empresa_id}).fetchall()
-    for row in result_caida:
-        alertas.append(f"Lucía (Ventas): Producto '{row[0]}' (Histórico {row[1]}) no ha tenido ventas recientes o tiene demasiados días de cobertura. Posible dead-stock.")
-        
+    for row in db.execute(text(sql_n2_acumulacion), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟡 Nivel 2] Lucía (Ventas): Acumulación. Producto '{row[0]}' (Clase B) cayendo en ventas ({row[1]} días de stock). Sugiero leve descuento.")
+
+    # NIVEL 1: OPORTUNIDAD 🟢
+    # 1.1 Gemas Ocultas
+    sql_n1_gemas = """
+        SELECT p.nombre, pm.dias_cobertura
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'C'
+        AND pm.dias_cobertura < 15
+        AND i.stock_disponible > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n1_gemas), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): ¡Gema Oculta! Producto '{row[0]}' (Clase C) rotando muy rápido ({row[1]} días). Destácalo en la tienda.")
+
+    # 1.2 Candidatos para Combos
+    sql_n1_combos = """
+        SELECT p.nombre, pm.dias_cobertura
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.dias_cobertura > 150
+        AND i.stock_disponible > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_n1_combos), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): Oportunidad de Cross-Selling. Arma un combo con '{row[0]}' para liberar sus {row[1]} días de stock.")
+
     return alertas
 
 def run_mattia_agent(db: Session, empresa_id: int):

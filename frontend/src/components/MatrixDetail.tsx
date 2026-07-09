@@ -13,6 +13,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
   const [sortConfig, setSortConfig] = React.useState<{ key: keyof ProductMetrics | null, direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
 
   const totalVentas = products.reduce((acc, p) => acc + p.ventas_60d, 0);
+  const totalInventario = products.reduce((acc, p) => acc + p.valor_inv, 0);
   const totalUnidades = products.reduce((acc, p) => acc + p.unidades, 0);
 
   const handleSort = (key: keyof ProductMetrics) => {
@@ -89,6 +90,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>Nombre <SortIcon columnKey="nombre_art" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Categoría <SortIcon columnKey="familia" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_60d')}>Ventas 60D <SortIcon columnKey="ventas_60d" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>Inv. (€) <SortIcon columnKey="valor_inv" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades <SortIcon columnKey="unidades" /></th>
             </tr>
           </thead>
@@ -100,12 +102,13 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-[150px] truncate" title={p.nombre_art}>{p.nombre_art}</td>
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{p.familia}</td>
                 <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_60d)}</td>
+                <td className="px-4 py-3 text-sm text-emerald-600 dark:text-emerald-500 text-right font-medium">{formatEUR(p.valor_inv)}</td>
                 <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 text-right">{p.unidades.toLocaleString('es-ES')}</td>
               </tr>
             ))}
             {products.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">No hay productos en esta selección.</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-500">No hay productos en esta selección.</td>
               </tr>
             )}
           </tbody>
@@ -115,6 +118,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
         <span className="text-slate-700 dark:text-white">TOTALES</span>
         <div className="flex gap-8">
           <span className="text-brand-blue dark:text-brand-cyan">Ventas: {formatEUR(totalVentas)}</span>
+          <span className="text-emerald-600 dark:text-emerald-500">Inv: {formatEUR(totalInventario)}</span>
           <span className="text-slate-900 dark:text-white">Unidades: {totalUnidades.toLocaleString('es-ES')}</span>
         </div>
       </div>

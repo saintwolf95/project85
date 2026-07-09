@@ -183,9 +183,10 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/chat/message/{message_id}/csv")
-def download_message_csv(
+@router.get("/chat/message/{message_id}/export")
+def download_message_export(
     message_id: int,
+    format: str = "csv",
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -224,21 +225,35 @@ def download_message_csv(
         if error or not raw_data:
             raise HTTPException(status_code=500, detail="Error ejecutando la consulta original o sin datos.")
             
-        # 4. Generar CSV en memoria
-        output = io.StringIO()
-        output.write('\ufeff') # BOM (Byte Order Mark) para que Excel lea UTF-8 correctamente (tildes/ñ)
-        if len(raw_data) > 0:
-            writer = csv.DictWriter(output, fieldnames=raw_data[0].keys())
-            writer.writeheader()
-            for row in raw_data:
-                writer.writerow(row)
-                
-        output.seek(0)
-        
-        return StreamingResponse(
-            output, 
-            media_type="text/csv", 
-            headers={"Content-Disposition": f"attachment; filename=exportacion_ia_{message_id}.csv"}
-        )
+        if format == "xlsx":
+            import pandas as pd
+            
+            output = io.BytesIO()
+            if len(raw_data) > 0:
+                df = pd.DataFrame(raw_data)
+                df.to_excel(output, index=False, engine='openpyxl')
+            
+            output.seek(0)
+            return StreamingResponse(
+                output, 
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                headers={"Content-Disposition": f"attachment; filename=exportacion_ia_{message_id}.xlsx"}
+            )
+        else:
+            # Default to CSV
+            output = io.StringIO()
+            output.write('\ufeff') # BOM (Byte Order Mark) para que Excel lea UTF-8 correctamente (tildes/ñ)
+            if len(raw_data) > 0:
+                writer = csv.DictWriter(output, fieldnames=raw_data[0].keys())
+                writer.writeheader()
+                for row in raw_data:
+                    writer.writerow(row)
+                    
+            output.seek(0)
+            return StreamingResponse(
+                output, 
+                media_type="text/csv", 
+                headers={"Content-Disposition": f"attachment; filename=exportacion_ia_{message_id}.csv"}
+            )
     finally:
         db_ro.close()

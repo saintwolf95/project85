@@ -169,21 +169,21 @@ export const AiCopilot = () => {
     }
   };
 
-  const downloadCsv = async (messageId: string) => {
+  const downloadExport = async (messageId: string, format: 'csv' | 'xlsx') => {
     try {
-      const response = await api.get(`/copilot/chat/message/${messageId}/csv`, {
+      const response = await api.get(`/copilot/chat/message/${messageId}/export?format=${format}`, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `exportacion_ia_${messageId}.csv`);
+      link.setAttribute('download', `exportacion_ia_${messageId}.${format}`);
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
-    } catch (e) {
-      console.error("Error downloading CSV", e);
-      alert("Error al descargar el CSV. Asegúrate de que el mensaje contiene datos.");
+    } catch (error) {
+      console.error("Error descargando archivo:", error);
+      alert("Hubo un error al intentar descargar el archivo.");
     }
   };
 
@@ -391,13 +391,20 @@ export const AiCopilot = () => {
                         {msg.content.split('<!-- sql_query_b64:')[0]}
                       </ReactMarkdown>
                       {msg.content.includes('<!-- sql_query_b64:') && (
-                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex flex-wrap gap-3">
                           <button
-                            onClick={() => downloadCsv(msg.id)}
+                            onClick={() => downloadExport(msg.id, 'csv')}
                             className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm"
                           >
                             <Download size={16} />
-                            Descargar Datos Completos (CSV)
+                            Descargar Datos (CSV)
+                          </button>
+                          <button
+                            onClick={() => downloadExport(msg.id, 'xlsx')}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-medium transition-colors border border-emerald-200 dark:border-emerald-500/30 shadow-sm"
+                          >
+                            <Download size={16} />
+                            Descargar Excel (.xlsx)
                           </button>
                         </div>
                       )}

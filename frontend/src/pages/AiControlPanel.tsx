@@ -67,7 +67,7 @@ export const AiControlPanel = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Agent 1 */}
             <AgentDesk 
-              title="Inventario" 
+              title="María (Inventario)" 
               icon={<Bot size={16} />}
               isActive={settings.fase1_active}
               workingImg="/assets/agents/inv_work.png"
@@ -75,7 +75,7 @@ export const AiControlPanel = () => {
             />
             {/* Agent 2 */}
             <AgentDesk 
-              title="Ventas" 
+              title="Lucía (Ventas)" 
               icon={<TrendingUp size={16} />}
               isActive={settings.fase1_active}
               workingImg="/assets/agents/sale_work.png"
@@ -83,7 +83,7 @@ export const AiControlPanel = () => {
             />
             {/* Agent 3 */}
             <AgentDesk 
-              title="Finanzas" 
+              title="Mattia (Finanzas)" 
               icon={<DollarSign size={16} />}
               isActive={settings.fase1_active}
               workingImg="/assets/agents/fin_work.png"

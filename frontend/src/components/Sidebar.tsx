@@ -43,8 +43,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               <h1 className="text-xl font-bold text-white tracking-wide">five-</h1>
               <h1 className="text-xl font-bold text-white tracking-wide leading-none">minutes</h1>
             </div>
-            <span className="text-xs font-medium text-brand-cyan/80 bg-brand-cyan/10 px-2 py-0.5 rounded-full ml-auto">
-              v.1.40
+            <span className="ml-2 mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
+              v.1.44
             </span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

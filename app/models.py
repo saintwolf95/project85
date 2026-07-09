@@ -113,6 +113,14 @@ class AgentSettings(Base):
     fase1_active = Column(Boolean, default=False)
     fase2_active = Column(Boolean, default=False)
 
+class AgentInsights(Base):
+    __tablename__ = "agent_insights"
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow)
+    fase1_raw_json = Column(String, nullable=True) # JSON con las alertas de los 3 agentes
+    fase2_ceo_markdown = Column(String, nullable=True) # Informe final del CEO
+
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"
     empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)

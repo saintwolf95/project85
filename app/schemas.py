@@ -21,6 +21,15 @@ class Usuario(UsuarioBase):
     class Config:
         from_attributes = True
 
+class AgentInsightResponse(BaseModel):
+    id: int
+    fecha: datetime
+    fase1_raw_json: Optional[str] = None
+    fase2_ceo_markdown: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
 class ProductMetrics(BaseModel):
     producto_id: int
     fecha: str

@@ -54,9 +54,15 @@ class InventoryAnalyticsResponse(BaseModel):
     current_page: int
 
 class DashboardKPIsResponse(BaseModel):
+    total_skus: int
+    volumen_total: int
+    costo_promedio: float
+    familia_top: Optional[str] = None
     valor_total_inventario: float
     total_alertas_criticas: int
     salud_stock_clase_a: int
+    abc_data: list
+    family_data: list
 
 class ProductHistoryDaily(BaseModel):
     fecha: str

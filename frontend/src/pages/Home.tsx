@@ -32,7 +32,7 @@ export const Home = () => {
         setLoading(true);
         const [kpis, abc, aiData] = await Promise.all([
           getDashboardKpis(abcFilter, familyFilter),
-          getInventoryAbc(1, 10000, undefined, abcFilter === 'all' ? undefined : abcFilter),
+          getInventoryAbc(1, 500, undefined, abcFilter === 'all' ? undefined : abcFilter),
           getAiInsights(abcFilter, familyFilter)
         ]);
         
@@ -62,49 +62,23 @@ export const Home = () => {
 
   // Compute Metrics
   const metrics = useMemo(() => {
-    if (!inventory.length) return { totalSkus: 0, totalUnidades: 0, promedioCosto: 0, familiaTop: '' };
-
-    const totalSkus = inventory.length;
-    const totalUnidades = inventory.reduce((sum, item) => sum + item.unidades, 0);
-    const promedioCosto = inventory.reduce((sum, item) => sum + item.costo_unit, 0) / totalSkus;
-
-    // Familia Top (Por Valor de Inventario)
-    const famMap: Record<string, number> = {};
-    inventory.forEach(item => {
-      famMap[item.familia] = (famMap[item.familia] || 0) + item.valor_inv;
-    });
-    const familiaTop = Object.keys(famMap).sort((a, b) => famMap[b] - famMap[a])[0];
-
-    return { totalSkus, totalUnidades, promedioCosto, familiaTop };
-  }, [inventory]);
+    if (!kpiData) return { totalSkus: 0, totalUnidades: 0, promedioCosto: 0, familiaTop: '' };
+    return {
+      totalSkus: kpiData.total_skus,
+      totalUnidades: kpiData.volumen_total,
+      promedioCosto: kpiData.costo_promedio,
+      familiaTop: kpiData.familia_top || 'N/A'
+    };
+  }, [kpiData]);
 
   // Compute Chart Data
   const chartData = useMemo(() => {
-    // ABC Data
-    const abcMap = { A: 0, B: 0, C: 0 };
-    inventory.forEach(item => {
-      if (item.abc === 'A') abcMap.A++;
-      else if (item.abc === 'B') abcMap.B++;
-      else abcMap.C++;
-    });
-    const abcData = [
-      { name: 'A', value: abcMap.A },
-      { name: 'B', value: abcMap.B },
-      { name: 'C', value: abcMap.C }
-    ];
-
-    // Family Data (Sum of ValorInv)
-    const famMap: Record<string, number> = {};
-    inventory.forEach(item => {
-      famMap[item.familia] = (famMap[item.familia] || 0) + item.valor_inv;
-    });
-    const familyData = Object.keys(famMap).map(key => ({
-      name: key,
-      value: famMap[key]
-    })).sort((a, b) => b.value - a.value); // Sort desc
-
-    return { abcData, familyData };
-  }, [inventory]);
+    if (!kpiData) return { abcData: [], familyData: [] };
+    return {
+      abcData: kpiData.abc_data || [],
+      familyData: kpiData.family_data || []
+    };
+  }, [kpiData]);
 
   // Handlers for Interactivity
   const handleAbcClick = (data: any) => {
@@ -128,10 +102,10 @@ export const Home = () => {
   };
 
   const getHealthScore = () => {
-    if (!kpiData || inventory.length === 0) return { score: 100, label: 'Calculando...', color: 'text-slate-400', reasons: [] };
+    if (!kpiData) return { score: 100, label: 'Calculando...', color: 'text-slate-400', reasons: [] };
     let score = 100;
     const reasons = [];
-    const totalItems = inventory.length;
+    const totalItems = kpiData.total_skus || 1;
 
     if (kpiData.total_alertas_criticas > 0) {
         const percentage = (kpiData.total_alertas_criticas / totalItems) * 100;

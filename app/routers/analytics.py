@@ -122,18 +122,69 @@ def get_dashboard_kpis(
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    from ..models import EmpresaEstadisticas
+    import json
+    
+    is_filtered = False
+    if abc_class and abc_class != "all":
+        is_filtered = True
+    if familia and familia != "all":
+        is_filtered = True
+
+    # Si NO hay filtros, devolvemos las estadísticas precalculadas (O(1))
+    if not is_filtered:
+        stats = db.query(EmpresaEstadisticas).filter(EmpresaEstadisticas.empresa_id == current_user.empresa_id).first()
+        if stats:
+            return {
+                "total_skus": stats.total_skus,
+                "volumen_total": stats.volumen_total,
+                "costo_promedio": stats.costo_promedio,
+                "familia_top": stats.familia_top,
+                "valor_total_inventario": stats.valor_total_inventario,
+                "total_alertas_criticas": stats.total_alertas_criticas,
+                "salud_stock_clase_a": stats.salud_stock_clase_a,
+                "abc_data": json.loads(stats.abc_data or "[]"),
+                "family_data": json.loads(stats.family_data or "[]")
+            }
+
+    # Si hay filtros (o no hay stats aún), calculamos al vuelo en el backend
     metrics = services.calculate_inventory_metrics(db, current_user.empresa_id)
     
-    # Aplicar filtros si existen (nota: 'all' es el valor por defecto que enviaremos desde el frontend)
     if abc_class and abc_class != "all":
-        # Filtramos por abc_class de ventas o de inventario, o coincidencia exacta con la celda
         metrics = [m for m in metrics if m.get("matriz_abc", "").startswith(abc_class) or m.get("matriz_abc", "").endswith(abc_class)]
     
     if familia and familia != "all":
         metrics = [m for m in metrics if str(m.get("familia", "")).upper() == familia.upper()]
 
     kpis = services.get_dashboard_kpis(metrics)
-    return kpis
+    
+    total_skus = len(metrics)
+    volumen_total = sum([m.get("unidades", 0) for m in metrics])
+    costo_promedio = sum([m.get("costo_unit", 0) for m in metrics]) / total_skus if total_skus > 0 else 0
+    
+    fam_map = {}
+    abc_map = {"A": 0, "B": 0, "C": 0}
+    for m in metrics:
+        fam_map[m.get("familia", "")] = fam_map.get(m.get("familia", ""), 0) + m.get("valor_inv", 0)
+        if m.get("abc") in abc_map:
+            abc_map[m.get("abc")] += 1
+            
+    familia_top = sorted(fam_map.keys(), key=lambda k: fam_map[k], reverse=True)[0] if fam_map else ""
+    abc_data = [{"name": k, "value": v} for k, v in abc_map.items()]
+    family_data = [{"name": k, "value": v} for k, v in fam_map.items()]
+    family_data = sorted(family_data, key=lambda x: x["value"], reverse=True)
+
+    return {
+        "total_skus": total_skus,
+        "volumen_total": volumen_total,
+        "costo_promedio": costo_promedio,
+        "familia_top": familia_top,
+        "valor_total_inventario": kpis["valor_total_inventario"],
+        "total_alertas_criticas": kpis["total_alertas_criticas"],
+        "salud_stock_clase_a": kpis["salud_stock_clase_a"],
+        "abc_data": abc_data,
+        "family_data": family_data
+    }
 
 from datetime import date, timedelta
 from ..models import Producto, VentaHistorica

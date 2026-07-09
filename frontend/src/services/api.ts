@@ -36,9 +36,15 @@ export interface InventoryAnalyticsResponse {
 }
 
 export interface DashboardKPIsResponse {
+  total_skus: number;
+  volumen_total: number;
+  costo_promedio: number;
+  familia_top: string;
   valor_total_inventario: number;
   total_alertas_criticas: number;
   salud_stock_clase_a: number;
+  abc_data: {name: string, value: number}[];
+  family_data: {name: string, value: number}[];
 }
 
 export interface AIInsight {

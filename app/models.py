@@ -101,3 +101,19 @@ class ProductoMetricas(Base):
     riesgo_rotura = Column(Boolean, default=False)
     
     producto = relationship("Producto")
+
+class EmpresaEstadisticas(Base):
+    __tablename__ = "empresa_estadisticas"
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)
+    total_skus = Column(Integer, default=0)
+    volumen_total = Column(Integer, default=0)
+    costo_promedio = Column(Float, default=0.0)
+    familia_top = Column(String, nullable=True)
+    valor_total_inventario = Column(Float, default=0.0)
+    total_alertas_criticas = Column(Integer, default=0)
+    salud_stock_clase_a = Column(Integer, default=0)
+    abc_data = Column(String, nullable=True) # JSON array serialized
+    family_data = Column(String, nullable=True) # JSON array serialized
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    empresa = relationship("Empresa")

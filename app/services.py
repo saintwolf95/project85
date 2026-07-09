@@ -256,8 +256,48 @@ def sync_metrics_to_db(db: Session, empresa_id: int):
             records.append(pm)
         
         db.bulk_save_objects(records)
+        
+        # Calcular y guardar Estadísticas de Dashboard
+        from .models import EmpresaEstadisticas
+        import json
+        
+        total_skus = len(metrics)
+        volumen_total = sum([m.get("unidades", 0) for m in metrics])
+        costo_promedio = sum([m.get("costo_unit", 0) for m in metrics]) / total_skus if total_skus > 0 else 0
+        
+        fam_map = {}
+        for m in metrics:
+            fam_map[m.get("familia", "")] = fam_map.get(m.get("familia", ""), 0) + m.get("valor_inv", 0)
+        familia_top = sorted(fam_map.keys(), key=lambda k: fam_map[k], reverse=True)[0] if fam_map else ""
+        
+        kpis = get_dashboard_kpis(metrics)
+        
+        abc_map = {"A": 0, "B": 0, "C": 0}
+        for m in metrics:
+            if m.get("abc") in abc_map:
+                abc_map[m.get("abc")] += 1
+        abc_data = [{"name": k, "value": v} for k, v in abc_map.items()]
+        
+        family_data = [{"name": k, "value": v} for k, v in fam_map.items()]
+        family_data = sorted(family_data, key=lambda x: x["value"], reverse=True)
+        
+        stats = db.query(EmpresaEstadisticas).filter(EmpresaEstadisticas.empresa_id == empresa_id).first()
+        if not stats:
+            stats = EmpresaEstadisticas(empresa_id=empresa_id)
+            db.add(stats)
+            
+        stats.total_skus = total_skus
+        stats.volumen_total = volumen_total
+        stats.costo_promedio = costo_promedio
+        stats.familia_top = familia_top
+        stats.valor_total_inventario = kpis["valor_total_inventario"]
+        stats.total_alertas_criticas = kpis["total_alertas_criticas"]
+        stats.salud_stock_clase_a = kpis["salud_stock_clase_a"]
+        stats.abc_data = json.dumps(abc_data)
+        stats.family_data = json.dumps(family_data)
+        
         db.commit()
-        logger.info(f"Sincronización completada. {len(records)} productos actualizados.")
+        logger.info(f"Sincronización completada. {len(records)} productos actualizados y estadísticas guardadas.")
     except Exception as e:
         logger.error(f"Error sincronizando métricas: {e}")
         db.rollback()

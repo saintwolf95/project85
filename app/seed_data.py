@@ -126,11 +126,22 @@ def crear_datos_demo(db: Session):
             seccion=random.choice(SECCIONES),
         )
         db.add(prod)
+        
+        # Asignar perfil XYZ forzado para balancear (30% X, 40% Y, 30% Z)
+        rand_xyz = random.random()
+        if rand_xyz < 0.3:
+            xyz_profile = 'X'
+        elif rand_xyz < 0.7:
+            xyz_profile = 'Y'
+        else:
+            xyz_profile = 'Z'
+            
         productos_info.append({
             "idx": i,
             "orm": prod,
             "familia": familia,
             "is_az": i in az_targets,
+            "xyz_profile": xyz_profile,
             "precio_base": precio,
             "costo": costo,
             "lead_time": lead_time,
@@ -160,6 +171,7 @@ def crear_datos_demo(db: Session):
         vmin       = p_info["vmin"]
         vmax       = p_info["vmax"]
         lead_time  = p_info["lead_time"]
+        xyz_profile = p_info["xyz_profile"]
 
         total_ud_90d = 0
 
@@ -178,10 +190,26 @@ def crear_datos_demo(db: Session):
             if is_az and dia >= (DIAS - 30):
                 cantidad = 0 if random.random() < 0.88 else 1
             else:
-                if random.random() < 0.78:  # 78% días con venta
-                    cantidad = random.randint(vmin, vmax)
-                    if es_fin_mes:
-                        cantidad = int(cantidad * random.uniform(1.3, 1.6))
+                if xyz_profile == 'X':
+                    # X: Demanda estable (poco CV)
+                    prob_sale = 0.98
+                    base_qty = max(1, (vmin + vmax) // 2)
+                    varianza = max(1, int(base_qty * 0.1)) # Solo 10% varianza
+                elif xyz_profile == 'Y':
+                    # Y: Demanda variable
+                    prob_sale = 0.70
+                    base_qty = max(1, (vmin + vmax) // 2)
+                    varianza = max(1, int(base_qty * 0.4)) # 40% varianza
+                else:
+                    # Z: Demanda muy errática
+                    prob_sale = 0.25
+                    base_qty = vmax
+                    varianza = vmax
+
+                if random.random() < prob_sale:
+                    cantidad = random.randint(max(1, base_qty - varianza), base_qty + varianza)
+                    if es_fin_mes and xyz_profile != 'X':
+                        cantidad = int(cantidad * random.uniform(1.3, 1.8))
                 else:
                     cantidad = 0
 

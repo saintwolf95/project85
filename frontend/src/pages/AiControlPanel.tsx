@@ -41,9 +41,10 @@ export const AiControlPanel = () => {
     try {
       const data = await runAgentAnalysis();
       setInsight(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Hubo un error al ejecutar el análisis.");
+      const detail = error.response?.data?.detail || error.message || "Desconocido";
+      alert("Hubo un error al ejecutar el análisis:\n" + detail);
     } finally {
       setIsRunning(false);
     }

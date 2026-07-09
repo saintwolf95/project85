@@ -100,7 +100,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-[150px] truncate" title={p.nombre_art}>{p.nombre_art}</td>
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{p.familia}</td>
                 <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_60d)}</td>
-                <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 text-right">{p.unidades}</td>
+                <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 text-right">{p.unidades.toLocaleString('es-ES')}</td>
               </tr>
             ))}
             {products.length === 0 && (
@@ -115,7 +115,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
         <span className="text-slate-700 dark:text-white">TOTALES</span>
         <div className="flex gap-8">
           <span className="text-brand-blue dark:text-brand-cyan">Ventas: {formatEUR(totalVentas)}</span>
-          <span className="text-slate-900 dark:text-white">Unidades: {totalUnidades}</span>
+          <span className="text-slate-900 dark:text-white">Unidades: {totalUnidades.toLocaleString('es-ES')}</span>
         </div>
       </div>
     </div>

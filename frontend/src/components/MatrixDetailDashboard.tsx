@@ -210,7 +210,7 @@ export const MatrixDetailDashboard: React.FC<MatrixDetailDashboardProps> = ({ ac
             </div>
             <div>
               <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Artículos</p>
-              <p className="text-xl font-bold text-slate-900 dark:text-white">{data.length}</p>
+              <p className="text-xl font-bold text-slate-900 dark:text-white">{data.length.toLocaleString('es-ES')}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">

@@ -69,7 +69,7 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
                 ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
                 ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
               `}>
-              <span className="text-lg font-bold leading-none">{counts[cell as keyof typeof counts]}</span>
+              <span className="text-lg font-bold leading-none">{counts[cell as keyof typeof counts].toLocaleString('es-ES')}</span>
               <span className="text-[10px] font-medium uppercase mt-0.5 opacity-80">{cell}</span>
               <span className="text-[9px] text-center opacity-60 leading-tight hidden sm:block">{getCellLabel(cell)}</span>
             </div>

@@ -85,7 +85,7 @@ def crear_datos_demo(db: Session):
     db.commit()
 
     # ─── 3. Generar 1000 SKUs ───
-    TOTAL_SKUS = 1000
+    TOTAL_SKUS = 6000
     familia_lista = list(FAMILIAS)
 
     # Inyección AZ: ~5% de GPUs/Portátiles con sobrestock tóxico
@@ -236,19 +236,64 @@ def crear_datos_demo(db: Session):
         snapshot_bulk.append({
             "producto_id":    prod.id,
             "stock_disponible": stock_final,
+            "is_az": is_az, # guardamos esto temporalmente
         })
 
-        # ─── Registro_PO ficticio inicial ───
+    # === ESCALADO FINANCIERO ===
+    print("[seed] Aplicando escalado financiero para cumplir con los límites de 29M-30M/mes y <20M inventario...")
+    
+    # 1. Escalar Ventas
+    total_raw_sales = sum(v["ingreso_total"] for v in ventas_bulk)
+    if total_raw_sales > 0:
+        target_sales_90d = random.uniform(87000000, 90000000)
+        sales_factor = target_sales_90d / total_raw_sales
+    else:
+        sales_factor = 1.0
+
+    # Actualizar DB y listas con el factor de ventas
+    for p_info in productos_info:
+        prod = p_info["orm"]
+        prod.precio_venta = round(prod.precio_venta * sales_factor, 2)
+        prod.costo_unitario = round(prod.costo_unitario * sales_factor, 2)
+        p_info["costo_escalado"] = prod.costo_unitario
+
+    for v in ventas_bulk:
+        v["precio_unitario"] = round(v["precio_unitario"] * sales_factor, 2)
+        v["ingreso_total"] = round(v["ingreso_total"] * sales_factor, 2)
+
+    # 2. Escalar Inventario
+    total_inv_escalado = 0
+    # Create a quick map for costo_escalado
+    costo_map = {p["orm"].id: p["costo_escalado"] for p in productos_info}
+    
+    for s in snapshot_bulk:
+        total_inv_escalado += s["stock_disponible"] * costo_map[s["producto_id"]]
+
+    if total_inv_escalado > 19999000:
+        inv_factor = 19999000 / total_inv_escalado
+    else:
+        inv_factor = 1.0
+
+    for s in snapshot_bulk:
+        s["stock_disponible"] = max(0, int(s["stock_disponible"] * inv_factor))
+
+    # 3. Generar Registro_PO basado en el stock final REAL
+    for s in snapshot_bulk:
+        prod_id = s["producto_id"]
+        stock_final = s["stock_disponible"]
         qs = max(1, stock_final // 2)
         delta = random.randint(-max(1, qs // 10), max(1, qs // 10))
         po_bulk.append({
-            "producto_id":                prod.id,
+            "producto_id":                prod_id,
             "fecha_orden":                fecha_fin - timedelta(days=random.randint(3, 15)),
             "cantidad_sugerida_algoritmo": qs,
             "cantidad_aprobada_usuario":   max(1, qs + delta),
             "motivo_modificacion":         None,
             "estado":                      "Aprobado",
         })
+        
+        # Limpiar is_az del dict para que no rompa el bulk_insert
+        del s["is_az"]
 
     # ─── Bulk inserts ───
     print(f"[seed] Insertando {len(ventas_bulk):,} filas de VentaHistorica...")

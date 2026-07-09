@@ -23,7 +23,10 @@ export const Sidebar = () => {
         <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)] flex items-center justify-center w-10 h-10">
           <span className="font-bold text-lg text-brand-blue dark:text-brand-cyan leading-none">5m</span>
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
+          <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.01</span>
+        </div>
       </div>
       
       <nav className="flex-1 py-6 px-4 space-y-2">

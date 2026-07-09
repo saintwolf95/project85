@@ -34,5 +34,6 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         )
         return {"reply": reply}
     except Exception as e:
-        import traceback
-        return {"reply": f"⚠️ Error interno del servidor: {str(e)}\n\n```\n{traceback.format_exc()}\n```"}
+        import logging
+        logging.error(f"[COPILOT] Error no controlado: {str(e)}", exc_info=True)
+        return {"reply": "⚠️ Error interno del servidor al procesar la respuesta. Por favor, verifica los logs o contacta con soporte."}

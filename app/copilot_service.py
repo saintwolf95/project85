@@ -97,7 +97,8 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast")
                 temperature=0.0
             )
         except Exception as e:
-            return f"SELECT 'Error API OpenAI (SQL): {str(e).replace('\'', '')}' AS error"
+            logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL): {str(e)}", exc_info=True)
+            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     
     sql_query = response.choices[0].message.content.strip()
     
@@ -189,7 +190,8 @@ Resultado bruto de BD: {raw_data}
                 max_tokens=1000
             )
         except Exception as e:
-            return f"⚠️ **Error en la API de OpenAI (Interpretación):** {str(e)}"
+            logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
+            return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
     return response.choices[0].message.content.strip()
 

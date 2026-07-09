@@ -5,6 +5,55 @@ import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
+
+const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
+const CopilotChartRenderer = ({ config }: { config: any }) => {
+  if (!config || !config.type || !config.data) return null;
+  
+  const { type, title, data, xKey, yKey, color } = config;
+  const baseColor = color || COLORS[0];
+
+  return (
+    <div className="my-6 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-sm w-full">
+      {title && <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-4 text-center">{title}</h4>}
+      <div className="h-72 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {type === 'bar' ? (
+            <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
+              <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
+              <YAxis stroke="#64748b" fontSize={12} />
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+              <Bar dataKey={yKey} fill={baseColor} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          ) : type === 'line' ? (
+            <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
+              <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
+              <YAxis stroke="#64748b" fontSize={12} />
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+            </LineChart>
+          ) : type === 'pie' ? (
+            <PieChart>
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+              <Legend />
+              <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={80} fill={baseColor} label>
+                {data.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+            </PieChart>
+          ) : (
+            <div className="flex items-center justify-center h-full text-slate-500">Tipo de gráfico no soportado ({type})</div>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
 
 interface Message {
   id: string;
@@ -384,6 +433,32 @@ export const AiCopilot = () => {
                               >
                                 {children}
                               </a>
+                            );
+                          },
+                          code(props) {
+                            const { children, className, node, ...rest } = props;
+                            const match = /language-(\w+)/.exec(className || '');
+                            const isInline = !match;
+                            
+                            if (!isInline && match && match[1] === 'json') {
+                              try {
+                                const parsed = JSON.parse(String(children));
+                                if (parsed && parsed.chartConfig) {
+                                  return <CopilotChartRenderer config={parsed.chartConfig} />;
+                                }
+                              } catch (e) {
+                                // Si no es JSON de gráfico, continuar renderizando normal
+                              }
+                            }
+                            
+                            return isInline ? (
+                              <code className={className} {...rest}>
+                                {children}
+                              </code>
+                            ) : (
+                              <pre className={className}>
+                                <code {...rest}>{children}</code>
+                              </pre>
                             );
                           }
                         }}

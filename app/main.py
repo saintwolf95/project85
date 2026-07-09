@@ -44,6 +44,19 @@ async def lifespan(app: FastAPI):
                 db.commit()
             print(f"[STARTUP] BD ya tiene datos. Admin UID: {admin.supabase_uid if admin else 'N/A'}", flush=True)
             
+        # Migración manual: Asegurar que exista la columna contexto_negocio (por si no se creó de cero)
+        from sqlalchemy import text
+        try:
+            db.execute(text("SELECT contexto_negocio FROM empresas LIMIT 1"))
+        except Exception:
+            db.rollback()
+            try:
+                db.execute(text("ALTER TABLE empresas ADD COLUMN contexto_negocio VARCHAR"))
+                db.commit()
+                print("[STARTUP] Migración: Columna contexto_negocio añadida a empresas.", flush=True)
+            except Exception as e:
+                db.rollback()
+                print(f"[STARTUP] Error añadiendo columna contexto_negocio: {e}", flush=True)
         # Sincronizar métricas ABC/XYZ para el Copilot
         from .services import sync_metrics_to_db
         print("[STARTUP] Sincronizando métricas ABC/XYZ (Data Mart)...", flush=True)

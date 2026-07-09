@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from .api.deps import get_current_active_admin
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import uvicorn

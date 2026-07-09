@@ -31,7 +31,7 @@ export const AiCopilot = () => {
   const defaultGreeting: Message = {
     id: 'greeting',
     role: 'ai',
-    content: '¡Hola! Soy tu AI Copilot. Estoy conectado a tu base de datos de inventario. Puedes preguntarme cosas como:\n- ¿Cuántos iPhones tenemos en stock?\n- ¿Cuál es la familia de productos con mayor valor inmovilizado?\n- ¿Qué productos de clase A tienen menos de 10 días de cobertura?'
+    content: '¡Hola! Soy tu AI Copilot. Estoy conectado a tu base de datos de inventario. Puedes preguntarme cosas como:\n\n- [¿Cuántos iPhones tenemos en stock?](#prompt:¿Cuántos%20iPhones%20tenemos%20en%20stock%3F)\n- [¿Cuál es la familia de productos con mayor valor inmovilizado?](#prompt:¿Cuál%20es%20la%20familia%20de%20productos%20con%20mayor%20valor%20inmovilizado%3F)\n- [¿Qué productos de clase A tienen menos de 10 días de cobertura?](#prompt:¿Qué%20productos%20de%20clase%20A%20tienen%20menos%20de%2010%20días%20de%20cobertura%3F)\n- [Actúa como un reportero y hazme un resumen general de lo que sucede hoy en el inventario](#prompt:Actúa%20como%20un%20reportero%20y%20hazme%20un%20resumen%20general%20de%20lo%20que%20sucede%20hoy%20en%20el%20inventario)'
   };
 
   const scrollToBottom = () => {
@@ -111,12 +111,11 @@ export const AiCopilot = () => {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (textOverride?: string) => {
+    const userText = (typeof textOverride === 'string' ? textOverride : input).trim();
+    if (!userText || isLoading) return;
 
-    // Extraer el texto ingresado
-    const userText = input.trim();
-    setInput('');
+    if (typeof textOverride !== 'string') setInput('');
     
     const newUserMsg: Message = { id: Date.now().toString(), role: 'user', content: userText };
     const newMessages = [...messages, newUserMsg];
@@ -329,7 +328,40 @@ export const AiCopilot = () => {
                     msg.content
                   ) : (
                     <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-100 dark:prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-200 dark:prose-pre:border-slate-700 prose-a:text-brand-blue dark:prose-a:text-brand-cyan">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+                      <ReactMarkdown 
+                        remarkPlugins={[remarkGfm]} 
+                        rehypePlugins={[rehypeSanitize]}
+                        components={{
+                          a({ node, className, children, href, ...props }) {
+                            if (href?.startsWith('#prompt:')) {
+                              const promptText = decodeURIComponent(href.replace('#prompt:', ''));
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    handleSend(promptText);
+                                  }}
+                                  disabled={isLoading}
+                                  className="inline-flex items-center mt-2 mr-2 px-4 py-2 bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-full text-sm font-medium transition-colors text-left border border-brand-blue/20 dark:border-brand-cyan/20 cursor-pointer disabled:opacity-50"
+                                >
+                                  {children}
+                                </button>
+                              );
+                            }
+                            return (
+                              <a 
+                                href={href} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-brand-blue dark:text-brand-cyan hover:underline" 
+                                {...props}
+                              >
+                                {children}
+                              </a>
+                            );
+                          }
+                        }}
+                      >
                         {msg.content}
                       </ReactMarkdown>
                     </div>

@@ -20,7 +20,7 @@ export const AiCopilot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [modelPreference, setModelPreference] = useState<'fast' | 'thinking'>('fast');
+  const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const defaultGreeting: Message = {
@@ -325,6 +325,12 @@ export const AiCopilot = () => {
                 className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${modelPreference === 'thinking' ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
               >
                 <Brain size={14} /> Thinking (o3-mini)
+              </button>
+              <button 
+                onClick={() => setModelPreference('ultra_thinking')}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${modelPreference === 'ultra_thinking' ? 'bg-white dark:bg-slate-700 text-rose-500 dark:text-rose-400 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+              >
+                <Brain size={14} /> Ultra Thinking (o1)
               </button>
             </div>
           </div>

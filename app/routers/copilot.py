@@ -18,7 +18,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     chat_id: Optional[int] = None
     history: List[ChatMessage] = Field(..., max_length=20)
-    model_preference: Literal["fast", "thinking"] = "fast"
+    model_preference: Literal["fast", "thinking", "ultra_thinking"] = "fast"
 
 class ChatResponse(BaseModel):
     reply: str

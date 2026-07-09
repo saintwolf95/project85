@@ -103,37 +103,40 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         # Agrupar por producto y fecha para tener la demanda diaria exacta
         ventas_diarias = df_ventas.groupby(["producto_id", "fecha_venta"])["cantidad_vendida"].sum().reset_index()
         
-        # Generar un grid de los 90 días para todos los productos con ventas
-        dias_completos = pd.date_range(start=fecha_90_dias, end=hoy, freq='D')
+        # Crear tabla pivote: filas = producto_id, columnas = fecha_venta
+        vd_pivot = ventas_diarias.pivot(index='producto_id', columns='fecha_venta', values='cantidad_vendida').fillna(0)
         
-        def calcular_cv(prod_id):
-            vd = ventas_diarias[ventas_diarias["producto_id"] == prod_id]
-            venta_total = vd["cantidad_vendida"].sum()
+        # Asegurar que todos los 90 días estén en las columnas
+        dias_completos = pd.date_range(start=fecha_90_dias, end=hoy, freq='D')
+        # Filter dias_completos to only those with dtype datetime64[ns]
+        vd_pivot.columns = pd.to_datetime(vd_pivot.columns)
+        vd_pivot = vd_pivot.reindex(columns=dias_completos, fill_value=0)
+        
+        # Calcular media y desviación estándar de forma vectorizada (muy rápido, nada de OOM)
+        means = vd_pivot.mean(axis=1)
+        stds = vd_pivot.std(axis=1, ddof=0)
+        
+        # Ignorar warning de división por cero
+        with np.errstate(divide='ignore', invalid='ignore'):
+            cvs = stds / means
+        
+        xyz_df = pd.DataFrame({
+            "producto_id": vd_pivot.index,
+            "cv": cvs.values,
+            "ads": means.values
+        })
+        
+        def assign_xyz(cv):
+            if pd.isna(cv) or cv == np.inf: return "Z"
+            if cv <= 0.2: return "X"
+            elif cv <= 0.6: return "Y"
+            else: return "Z"
             
-            if venta_total == 0:
-                return pd.Series({"cv": np.nan, "xyz": "Z", "ads": 0.0})
-                
-            # Rellenar ceros para los días sin venta
-            vd_completo = vd.set_index("fecha_venta").reindex(dias_completos, fill_value=0)
-            
-            mean = vd_completo["cantidad_vendida"].mean()
-            std = vd_completo["cantidad_vendida"].std(ddof=0)
-            
-            if mean == 0: # Salvaguarda
-                return pd.Series({"cv": np.nan, "xyz": "Z", "ads": 0.0})
-                
-            cv = std / mean
-            if cv <= 0.2:
-                xyz = "X"
-            elif cv <= 0.6:
-                xyz = "Y"
-            else:
-                xyz = "Z"
-                
-            return pd.Series({"cv": cv, "xyz": xyz, "ads": mean})
-            
-        xyz_metrics = df["producto_id"].apply(calcular_cv)
-        df = pd.concat([df, xyz_metrics], axis=1)
+        xyz_df["xyz"] = xyz_df["cv"].apply(assign_xyz)
+        
+        df = pd.merge(df, xyz_df, on="producto_id", how="left")
+        df["xyz"] = df["xyz"].fillna("Z")
+        df["ads"] = df["ads"].fillna(0.0)
     else:
         df["cv"] = np.nan
         df["xyz"] = "Z"

@@ -90,7 +90,7 @@ Tabla `producto_metricas`:
 - riesgo_rotura (BOOLEAN)
 """
 
-def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
+def generate_sql(history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     if contexto:
         prompt += f"\n\nContexto y Reglas de Negocio de la Empresa:\n{contexto}"
@@ -101,9 +101,8 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast",
         
     if model_preference in ["thinking", "ultra_thinking"]:
         model_name = "o3-mini" if model_preference == "thinking" else "o1"
-        messages = [
-            {"role": "user", "content": f"Instrucciones del sistema:\n{prompt}\n\nPregunta del usuario:\n{pregunta}"}
-        ]
+        messages = [{"role": "developer", "content": prompt}]
+        messages.extend(history)
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -117,10 +116,8 @@ def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast",
             return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     else:
         model_name = "gpt-4o"
-        messages = [
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": pregunta}
-        ]
+        messages = [{"role": "system", "content": prompt}]
+        messages.extend(history)
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -198,17 +195,9 @@ Contexto del Negocio: {contexto}
 
     if model_preference in ["thinking", "ultra_thinking"]:
         model_name = "o3-mini" if model_preference == "thinking" else "o1"
-        # Para o3-mini/o1 transformamos el system prompt en el primer mensaje de usuario
-        messages = [{"role": "user", "content": INTERPRET_PROMPT}]
+        messages = [{"role": "developer", "content": INTERPRET_PROMPT}]
+        messages.extend(history)
         
-        # history viene con formato {"role": "...", "content": "..."}
-        # o1-preview no soporta "system", asumimos que todo history es user/assistant
-        for msg in history:
-            role = msg["role"]
-            if role == "system":
-                role = "user"
-            messages.append({"role": role, "content": msg["content"]})
-            
         try:
             response = client.chat.completions.create(
                 model=model_name,
@@ -245,7 +234,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     user_message = history[-1]["content"]
     
     # 1. Generar SQL
-    sql_query = generate_sql(user_message, empresa_id, model_preference, contexto)
+    sql_query = generate_sql(history, empresa_id, model_preference, contexto)
     
     # 2. Ejecutar SQL en la conexión RO
     raw_data, error = execute_sql(db, sql_query)

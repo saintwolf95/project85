@@ -155,21 +155,21 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         riesgos = []
 
         if stock <= 1:
-            dias_cobertura = 0.0 if stock == 0 else (stock / ads if ads > 0 else 999.0)
+            dias_cobertura = 0 if stock == 0 else int(stock / ads if ads > 0 else 999)
             riesgos.append("Alerta Rotura")
         elif ads == 0:
-            dias_cobertura = 999.0
+            dias_cobertura = 999
             riesgos.append("Riesgo Comercial")
             if stock > 0:
                 riesgos.append("Riesgo Financiero") # Si no vende y hay stock
         else:
-            dias_cobertura = stock / ads
+            dias_cobertura = int(stock / ads)
             if dias_cobertura <= lead_time:
                 riesgos.append("Riesgo Rotura")
             if dias_cobertura > 120:
                 riesgos.append("Riesgo Financiero")
 
-        return pd.Series({"dias_cobertura": float(dias_cobertura), "riesgos_categorizados": riesgos})
+        return pd.Series({"dias_cobertura": int(dias_cobertura), "riesgos_categorizados": riesgos})
 
     riesgos_df = df.apply(calcular_riesgos, axis=1)
     df = pd.concat([df, riesgos_df], axis=1)

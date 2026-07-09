@@ -97,7 +97,7 @@ class ProductoMetricas(Base):
     abc = Column(String)
     xyz = Column(String)
     matriz_abc = Column(String)
-    dias_cobertura = Column(Float)
+    dias_cobertura = Column(Integer)
     riesgo_rotura = Column(Boolean, default=False)
     
     producto = relationship("Producto")

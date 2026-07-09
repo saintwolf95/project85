@@ -44,7 +44,7 @@ class ProductMetrics(BaseModel):
     cv: float
     matriz_abc: str
     ads: float
-    dias_cobertura: float
+    dias_cobertura: int
     riesgos_categorizados: List[str]
 
 class InventoryAnalyticsResponse(BaseModel):

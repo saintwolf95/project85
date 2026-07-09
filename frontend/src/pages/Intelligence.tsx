@@ -182,6 +182,8 @@ export const Intelligence = () => {
         if (selectedColumns.includes(col.id)) {
           if (col.id === 'riesgos_categorizados') {
             row[col.label] = p.riesgos_categorizados?.join(', ') || 'Sano';
+          } else if (col.id === 'dias_cobertura') {
+            row[col.label] = Math.round(p.dias_cobertura);
           } else {
             row[col.label] = (p as any)[col.id];
           }

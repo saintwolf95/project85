@@ -179,8 +179,8 @@ export const Home = () => {
           <h1 className="title-corporate text-3xl mb-2">Dashboard Ejecutivo</h1>
           <p className="text-slate-600 dark:text-slate-400 text-lg">Resumen global e inteligencia de inventario interactiva.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+        <div className="flex flex-row flex-wrap sm:flex-nowrap gap-3">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
             <Filter className="w-4 h-4 text-slate-500" />
             <select 
               className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
@@ -193,7 +193,7 @@ export const Home = () => {
               <option value="C">Solo Clase C (CA, CB, CC)</option>
             </select>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
             <Filter className="w-4 h-4 text-slate-500" />
             <select 
               className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
@@ -210,7 +210,7 @@ export const Home = () => {
               <option value="Monitores">Monitores</option>
             </select>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
             <Filter className="w-4 h-4 text-slate-500" />
             <select 
               className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"

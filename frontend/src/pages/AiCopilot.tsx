@@ -246,8 +246,16 @@ export const AiCopilot = () => {
         </button>
       </div>
 
+      {/* Backdrop para móvil */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-10 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar Historial */}
-      <div className={`absolute lg:relative z-20 h-full w-72 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-lg transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`}>
+      <div className={`absolute lg:relative z-20 h-full w-72 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-2xl lg:shadow-lg transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`}>
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
           <button 
             onClick={startNewChat}

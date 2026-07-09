@@ -214,7 +214,7 @@ export const Intelligence = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl w-fit border border-slate-200 dark:border-slate-800 shrink-0">
+      <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl w-full md:w-fit border border-slate-200 dark:border-slate-800 shrink-0 overflow-x-auto custom-scrollbar">
         <button
           onClick={() => { setActiveTab('general'); setCurrentPage(1); }}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'general' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
@@ -287,8 +287,8 @@ export const Intelligence = () => {
       {activeTab === 'catalog' && (
         <div className="flex flex-col flex-1 min-h-0 gap-4 animate-in fade-in">
           {/* Barra de filtros */}
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-100 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
-            <div className="flex gap-4 w-full md:w-auto">
+          <div className="flex flex-col gap-4 justify-between items-start md:items-center bg-slate-100 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
+            <div className="flex flex-row flex-wrap gap-4 w-full">
               <div className="relative w-full md:w-96">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-slate-400 dark:text-slate-500" />
@@ -367,7 +367,7 @@ export const Intelligence = () => {
                   <option value="Riesgo Comercial">Riesgo Comercial</option>
                 </select>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full md:w-auto">
                 <input
                   type="number"
                   placeholder="Mín. Días"

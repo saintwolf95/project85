@@ -1,9 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
-export const Sidebar = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { logout, session } = useAuth();
   const rol = session?.user?.user_metadata?.rol || 'admin';
   const { theme, toggleTheme } = useTheme();
@@ -18,22 +23,41 @@ export const Sidebar = () => {
   ];
 
   return (
-    <aside className="w-64 h-screen bg-white/80 dark:bg-brand-surface/80 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-colors">
-      <div className="p-6 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
-        <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)] flex items-center justify-center w-10 h-10">
-          <span className="font-bold text-lg text-brand-blue dark:text-brand-cyan leading-none">5m</span>
+    <>
+      {/* Backdrop para móviles */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden animate-in fade-in"
+          onClick={onClose}
+        />
+      )}
+
+      <aside className={`w-64 h-screen bg-white/90 dark:bg-brand-surface/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-transform duration-300 z-50 shadow-2xl md:shadow-none md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/20 dark:border-brand-cyan/50 shadow-none dark:shadow-[0_0_10px_var(--color-brand-cyan)] flex items-center justify-center w-10 h-10">
+              <span className="font-bold text-lg text-brand-blue dark:text-brand-cyan leading-none">5m</span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
+              <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.28</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <X size={24} />
+          </button>
         </div>
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">five-minutes</h1>
-          <span className="text-xs font-bold text-brand-blue dark:text-brand-cyan opacity-80">v.1.27</span>
-        </div>
-      </div>
       
       <nav className="flex-1 py-6 px-4 space-y-2">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
+            onClick={() => {
+              if (window.innerWidth < 768) {
+                onClose();
+              }
+            }}
             className={({ isActive }) =>
               `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 isActive
@@ -75,5 +99,6 @@ export const Sidebar = () => {
         </button>
       </div>
     </aside>
+    </>
   );
 };

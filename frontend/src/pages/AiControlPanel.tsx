@@ -1,17 +1,23 @@
 import { useState, useEffect } from 'react';
-import { getAgentSettings, updateAgentSettings } from '../services/api';
-import type { AgentSettings } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain } from 'lucide-react';
+import { getAgentSettings, updateAgentSettings, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
+import type { AgentSettings, AgentInsight } from '../services/api';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 export const AiControlPanel = () => {
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
+  const [insight, setInsight] = useState<AgentInsight | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
-    getAgentSettings().then((data) => {
-      setSettings(data);
-      setIsLoading(false);
-    }).catch(console.error);
+    Promise.all([getAgentSettings(), getLatestAgentInsight()])
+      .then(([settingsData, insightData]) => {
+        setSettings(settingsData);
+        setInsight(insightData);
+        setIsLoading(false);
+      })
+      .catch(console.error);
   }, []);
 
   const handleToggle = async (key: keyof AgentSettings) => {
@@ -23,6 +29,23 @@ export const AiControlPanel = () => {
       console.error(e);
       // Revert if error
       setSettings(settings);
+    }
+  };
+
+  const handleRunAnalysis = async () => {
+    if (!settings.fase1_active && !settings.fase2_active) {
+      alert("Debes encender al menos una fase para ejecutar el análisis.");
+      return;
+    }
+    setIsRunning(true);
+    try {
+      const data = await runAgentAnalysis();
+      setInsight(data);
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al ejecutar el análisis.");
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -70,16 +93,16 @@ export const AiControlPanel = () => {
               title="María (Inventario)" 
               icon={<Bot size={16} />}
               isActive={settings.fase1_active}
-              workingImg="/assets/agents/inv_work.png"
-              sleepingImg="/assets/agents/inv_sleep.png"
+              workingImg="/assets/agents/maria_work.png"
+              sleepingImg="/assets/agents/maria_sleep.png"
             />
             {/* Agent 2 */}
             <AgentDesk 
               title="Lucía (Ventas)" 
               icon={<TrendingUp size={16} />}
               isActive={settings.fase1_active}
-              workingImg="/assets/agents/sale_work.png"
-              sleepingImg="/assets/agents/sale_sleep.png"
+              workingImg="/assets/agents/lucia_work.png"
+              sleepingImg="/assets/agents/lucia_sleep.png"
             />
             {/* Agent 3 */}
             <AgentDesk 
@@ -124,6 +147,59 @@ export const AiControlPanel = () => {
                 isBig
               />
             </div>
+          </div>
+        </div>
+
+        {/* Inbox / Results */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 relative overflow-hidden">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-emerald-500" />
+                Bandeja de Entrada del CEO
+              </h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Aquí recibirás el reporte diario generado por los agentes encendidos.
+              </p>
+            </div>
+            <button 
+              onClick={handleRunAnalysis}
+              disabled={isRunning || (!settings.fase1_active && !settings.fase2_active)}
+              className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors shadow-sm"
+            >
+              {isRunning ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
+              {isRunning ? 'Ejecutando Inspección...' : 'Ejecutar Inspección Diaria'}
+            </button>
+          </div>
+
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 min-h-[300px] border border-slate-200 dark:border-slate-700">
+            {insight ? (
+              <div className="space-y-6">
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-4">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Reporte del {new Date(insight.fecha).toLocaleString()}
+                </div>
+                
+                {insight.fase2_ceo_markdown ? (
+                  <div className="prose dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
+                    <ReactMarkdown>{insight.fase2_ceo_markdown}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Alertas Crudas (Detectives Fase 1)</h3>
+                    <div className="bg-slate-900 text-emerald-400 p-4 rounded-lg font-mono text-sm overflow-auto">
+                      <pre>{insight.fase1_raw_json || '[]'}</pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+                <FileText className="w-12 h-12 mb-4 opacity-20" />
+                <p>La bandeja está vacía.</p>
+                <p className="text-sm">Enciende a los agentes y pulsa Ejecutar Inspección.</p>
+              </div>
+            )}
           </div>
         </div>
 

@@ -193,3 +193,25 @@ export const updateAgentSettings = async (settings: AgentSettings): Promise<Agen
   const response = await api.post('/agent-settings', settings);
   return response.data;
 };
+
+export interface AgentInsight {
+  id: number;
+  fecha: string;
+  fase1_raw_json?: string;
+  fase2_ceo_markdown?: string;
+}
+
+export const getLatestAgentInsight = async (): Promise<AgentInsight | null> => {
+  try {
+    const response = await api.get('/agents/insights');
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 404) return null;
+    throw error;
+  }
+};
+
+export const runAgentAnalysis = async (): Promise<AgentInsight> => {
+  const response = await api.post('/agents/run');
+  return response.data;
+};

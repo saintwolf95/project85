@@ -90,8 +90,10 @@ Tabla `producto_metricas`:
 - riesgo_rotura (BOOLEAN)
 """
 
-def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast") -> str:
+def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
+    if contexto:
+        prompt += f"\n\nContexto y Reglas de Negocio de la Empresa:\n{contexto}"
     
     client = get_openai_client()
     if not client:
@@ -169,23 +171,25 @@ def execute_sql(db: Session, sql_query: str):
         # M2: Do not expose raw exception string to the client
         return None, "La consulta SQL no pudo ejecutarse. Verifica que los nombres de las tablas y columnas sean correctos."
 
-def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None, model_preference: str = "fast") -> str:
+def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None, model_preference: str = "fast", contexto: str = "") -> str:
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
 
     INTERPRET_PROMPT = f"""
-Eres SupplyChain AI, un asistente experto y amigable en operaciones y logística de nivel directivo. 
-Tu objetivo es ayudar al usuario respondiendo a su pregunta usando EN EXCLUSIVA los datos del "Resultado bruto de BD".
+Eres SupplyChain AI, un **Analista de Negocio y Datos Senior** experto en operaciones, inventario y finanzas.
+Tu objetivo ya no es solo responder con datos, sino **aportar valor estratégico** utilizando los datos del "Resultado bruto de BD" y el "Contexto del Negocio".
 
 REGLAS ESTRICTAS:
-1. Responde de forma muy natural, conversacional y directa (ej: "Actualmente tienes 0 iPhones en stock").
-2. NUNCA muestres nombres de columnas (como inv.stock_disponible), nombres de tablas, ni sintaxis SQL o nombres de funciones agregadas (como SUM, COUNT, etc.).
-3. NUNCA inventes o deduzcas datos que no estén en el resultado bruto.
-4. Usa formato Markdown, viñetas y negritas si es necesario para resaltar datos.
+1. **Analiza y Recomienda:** No te limites a exponer los datos. Ofrece breves conclusiones y propone soluciones o recomendaciones accionables basadas en el Contexto del Negocio.
+2. **Natural y Ejecutivo:** Responde de forma natural, estructurada y muy clara (usa markdown, negritas y viñetas).
+3. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL, nombres de tablas ni columnas técnicas (ej: inv.stock_disponible).
+4. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.
+5. **Contexto:** Usa el "Contexto del Negocio" proporcionado por la empresa para alinear tus recomendaciones con sus reglas, políticas y objetivos.
 
-Contexto Técnico Interno (OCULTO AL USUARIO - SOLO PARA TI):
+Contexto Técnico Interno (OCULTO AL USUARIO):
 Consulta SQL ejecutada: {sql_query}
 Resultado bruto de BD: {raw_data}
+Contexto del Negocio: {contexto}
     """
     
     client = get_openai_client()
@@ -234,19 +238,19 @@ Resultado bruto de BD: {raw_data}
     
     return response.choices[0].message.content.strip()
 
-def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "fast") -> str:
+def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
     if not history:
         return "No hay historial de mensajes."
         
     user_message = history[-1]["content"]
     
     # 1. Generar SQL
-    sql_query = generate_sql(user_message, empresa_id, model_preference)
+    sql_query = generate_sql(user_message, empresa_id, model_preference, contexto)
     
     # 2. Ejecutar SQL en la conexión RO
     raw_data, error = execute_sql(db, sql_query)
     
     # 3. Interpretar
-    final_response = interpret_results(history, sql_query, raw_data, error, model_preference)
+    final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto)
     
     return final_response

@@ -149,3 +149,13 @@ export const deleteCopilotChat = async (chatId: number): Promise<{ success: bool
   const response = await api.delete(`/copilot/chats/${chatId}`);
   return response.data;
 };
+
+export const getBusinessContext = async (): Promise<string> => {
+  const response = await api.get('/copilot/context');
+  return response.data.contexto_negocio;
+};
+
+export const updateBusinessContext = async (contexto_negocio: string): Promise<{ success: boolean }> => {
+  const response = await api.put('/copilot/context', { contexto_negocio });
+  return response.data;
+};

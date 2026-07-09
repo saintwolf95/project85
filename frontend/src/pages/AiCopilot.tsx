@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat } from '../services/api';
+import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext } from '../services/api';
 import type { CopilotChat } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -20,6 +20,9 @@ export const AiCopilot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isContextModalOpen, setIsContextModalOpen] = useState(false);
+  const [businessContext, setBusinessContext] = useState('');
+  const [isSavingContext, setIsSavingContext] = useState(false);
   const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +54,9 @@ export const AiCopilot = () => {
       } else if (data.length === 0) {
         setMessages([defaultGreeting]);
       }
+      // Cargar el contexto del negocio
+      const ctx = await getBusinessContext();
+      setBusinessContext(ctx);
     } catch (error) {
       console.error("Error cargando chats", error);
     } finally {
@@ -170,6 +176,19 @@ export const AiCopilot = () => {
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
+  const handleSaveContext = async () => {
+    try {
+      setIsSavingContext(true);
+      await updateBusinessContext(businessContext);
+      setIsContextModalOpen(false);
+    } catch (error) {
+      console.error("Error guardando contexto:", error);
+      alert("Hubo un error guardando el contexto del negocio.");
+    } finally {
+      setIsSavingContext(false);
+    }
+  };
+
   return (
     <div className="animate-in fade-in duration-500 h-[calc(100vh-6rem)] flex flex-col md:flex-row relative gap-4">
       
@@ -246,6 +265,12 @@ export const AiCopilot = () => {
             </h1>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Historial persistente (30 días de retención)</p>
           </div>
+          <button 
+            onClick={() => setIsContextModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-blue dark:text-brand-cyan bg-brand-blue/10 dark:bg-brand-cyan/10 hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-lg transition-colors border border-brand-blue/20 dark:border-brand-cyan/20 shadow-sm"
+          >
+            <BookOpen size={16} /> Cerebro del Negocio
+          </button>
         </div>
 
         {/* Feed de mensajes */}
@@ -353,11 +378,66 @@ export const AiCopilot = () => {
             </button>
           </div>
           <p className="text-center text-slate-500 text-[10px] md:text-xs mt-2">
-            SupplyChain Copilot genera consultas SQL seguras en tiempo real limitadas a tu entorno.
+            SupplyChain Copilot actúa como Analista Senior y genera consultas seguras limitadas a tu entorno.
           </p>
         </div>
 
       </div>
+
+      {/* Modal de Cerebro del Negocio */}
+      {isContextModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-brand-surface w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-brand-cyan/20">
+            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-brand-dark/50">
+              <div className="flex items-center gap-3">
+                <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg text-brand-blue dark:text-brand-cyan">
+                  <BookOpen size={20} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Cerebro del Negocio</h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Contexto e instrucciones globales para la IA</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsContextModalOpen(false)}
+                className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-5 flex-1">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                Redacta aquí las reglas de tu empresa, KPIs objetivo, excepciones por familias o instrucciones específicas de análisis. El Copilot leerá este documento antes de cada respuesta para ofrecerte recomendaciones como un verdadero analista interno.
+              </p>
+              <textarea
+                value={businessContext}
+                onChange={(e) => setBusinessContext(e.target.value)}
+                placeholder="Ejemplo: Nuestro objetivo es no tener más de 15 días de cobertura global. La familia 'Monitores' puede llegar hasta 30 días. Si detectas riesgo de rotura en un producto clase A, recomiéndame realizar una compra de emergencia (Air Freight). Nombra siempre nuestra marca favorita 'LogisticaCorp'."
+                className="w-full h-64 p-4 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan text-slate-800 dark:text-slate-200 resize-none custom-scrollbar"
+              />
+            </div>
+            
+            <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsContextModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                disabled={isSavingContext}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSaveContext}
+                disabled={isSavingContext}
+                className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed shadow-md dark:shadow-[0_0_10px_var(--color-brand-cyan)]"
+              >
+                {isSavingContext ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {isSavingContext ? 'Guardando...' : 'Guardar Contexto'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

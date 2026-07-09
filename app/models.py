@@ -8,6 +8,7 @@ class Empresa(Base):
     __tablename__ = "empresas"
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
+    contexto_negocio = Column(String, nullable=True)
     productos = relationship("Producto", back_populates="empresa")
 
 class Usuario(Base):

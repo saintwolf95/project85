@@ -24,6 +24,22 @@ class ChatResponse(BaseModel):
     reply: str
     chat_id: int
 
+class ContextoRequest(BaseModel):
+    contexto_negocio: str
+
+@router.get("/context")
+def get_context(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
+    return {"contexto_negocio": empresa.contexto_negocio or ""}
+
+@router.put("/context")
+def update_context(payload: ContextoRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
+    if empresa:
+        empresa.contexto_negocio = payload.contexto_negocio
+        db.commit()
+    return {"success": True}
+
 @router.get("/chats")
 def get_chats(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     cleanup_old_chats(db, current_user.id)
@@ -93,6 +109,10 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         history_dicts = [{"role": m.rol, "content": m.contenido} for m in mensajes_previos]
         history_dicts.append({"role": nuevo_mensaje.role, "content": nuevo_mensaje.content})
 
+        # Obtener contexto de negocio
+        empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
+        contexto_negocio = empresa.contexto_negocio if empresa else ""
+
         # DB RO para queries analíticas de la IA
         from ..database import SessionLocal
         db_ro = SessionLocal()
@@ -101,7 +121,8 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
                 db=db_ro, 
                 history=history_dicts, 
                 empresa_id=current_user.empresa_id,
-                model_preference=payload.model_preference
+                model_preference=payload.model_preference,
+                contexto=contexto_negocio
             )
         finally:
             db_ro.close()

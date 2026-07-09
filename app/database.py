@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Determinar si usamos Postgres o SQLite
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres.rygviqehzmtsenphncig:Ve:]Ru9F<4b&04<Uz:1!aT42h_(ly509<=VD@aws-1-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true")
 
 if DATABASE_URL and (DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")):
     # Fix for newer SQLAlchemy versions that expect postgresql:// instead of postgres://

@@ -227,3 +227,37 @@ def get_dashboard_kpis(metrics: list) -> dict:
         "total_alertas_criticas": alertas_totales,
         "salud_stock_clase_a": alertas_clase_a
     }
+
+def sync_metrics_to_db(db: Session, empresa_id: int):
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Iniciando sincronización de métricas ABC/XYZ a la base de datos...")
+    try:
+        from .models import ProductoMetricas
+        metrics = calculate_inventory_metrics(db, empresa_id)
+        
+        # Limpiar métricas anteriores
+        db.query(ProductoMetricas).delete()
+        
+        # Insertar nuevas métricas
+        records = []
+        for m in metrics:
+            riesgos = m.get("riesgos_categorizados", [])
+            riesgo_rotura = "Riesgo Rotura" in riesgos or "Alerta Rotura" in riesgos
+            
+            pm = ProductoMetricas(
+                producto_id=m["producto_id"],
+                abc=m["abc"],
+                xyz=m["xyz"],
+                matriz_abc=m["matriz_abc"],
+                dias_cobertura=m["dias_cobertura"],
+                riesgo_rotura=riesgo_rotura
+            )
+            records.append(pm)
+        
+        db.bulk_save_objects(records)
+        db.commit()
+        logger.info(f"Sincronización completada. {len(records)} productos actualizados.")
+    except Exception as e:
+        logger.error(f"Error sincronizando métricas: {e}")
+        db.rollback()

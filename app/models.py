@@ -88,5 +88,15 @@ class CopilotMessage(Base):
     rol = Column(String, nullable=False) # 'user' o 'assistant'
     contenido = Column(String, nullable=False)
     creado_en = Column(DateTime, default=datetime.utcnow)
-
     chat = relationship("CopilotChat", back_populates="mensajes")
+
+class ProductoMetricas(Base):
+    __tablename__ = "producto_metricas"
+    producto_id = Column(Integer, ForeignKey("productos.id"), primary_key=True)
+    abc = Column(String)
+    xyz = Column(String)
+    matriz_abc = Column(String)
+    dias_cobertura = Column(Float)
+    riesgo_rotura = Column(Boolean, default=False)
+    
+    producto = relationship("Producto")

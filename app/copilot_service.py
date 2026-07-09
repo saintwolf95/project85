@@ -80,6 +80,14 @@ Tabla `registro_po`:
 - cantidad_aprobada_usuario (INTEGER)
 - motivo_modificacion (VARCHAR)
 - estado (VARCHAR)
+
+Tabla `producto_metricas`:
+- producto_id (INTEGER, Primary Key, Foreign Key a productos.id)
+- abc (VARCHAR) -- Clasificación Pareto por Ventas (A, B, C)
+- xyz (VARCHAR) -- Clasificación Pareto por Inventario (X, Y, Z)
+- matriz_abc (VARCHAR) -- Cuadrante de Doble Análisis (ej: AX, BY, CZ)
+- dias_cobertura (FLOAT)
+- riesgo_rotura (BOOLEAN)
 """
 
 def generate_sql(pregunta: str, empresa_id: int, model_preference: str = "fast") -> str:

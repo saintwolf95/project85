@@ -43,6 +43,16 @@ async def lifespan(app: FastAPI):
                 admin.supabase_uid = correct_uid
                 db.commit()
             print(f"[STARTUP] BD ya tiene datos. Admin UID: {admin.supabase_uid if admin else 'N/A'}", flush=True)
+            
+        # Sincronizar métricas ABC/XYZ para el Copilot
+        from .services import sync_metrics_to_db
+        print("[STARTUP] Sincronizando métricas ABC/XYZ (Data Mart)...", flush=True)
+        # Obtenemos la primera empresa (demo)
+        empresa = db.query(models.Empresa).first()
+        if empresa:
+            sync_metrics_to_db(db, empresa.id)
+            print("[STARTUP] Sincronización completada.", flush=True)
+            
     except Exception as e:
         print(f"[STARTUP] Error durante auto-seed: {e}", flush=True)
     finally:

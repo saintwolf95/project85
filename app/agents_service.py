@@ -19,13 +19,13 @@ def run_maria_agent(db: Session, empresa_id: int):
     
     # 1. Quiebre inminente
     sql_quiebre = """
-        SELECT p.nombre, p.marca, pm.dias_cobertura, i.unidades
+        SELECT p.nombre, p.marca, pm.dias_cobertura, i.stock_disponible
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
-        JOIN inventario i ON i.producto_id = p.id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.dias_cobertura <= 5
-        AND i.ventas_60d > 0
+        AND i.stock_disponible > 0
         LIMIT 10
     """
     result_quiebre = db.execute(text(sql_quiebre), {"empresa_id": empresa_id}).fetchall()
@@ -34,13 +34,13 @@ def run_maria_agent(db: Session, empresa_id: int):
         
     # 2. Sobre-stock
     sql_sobrestock = """
-        SELECT p.nombre, pm.dias_cobertura, i.valor_inv
+        SELECT p.nombre, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
-        JOIN inventario i ON i.producto_id = p.id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.dias_cobertura > 120
-        AND i.valor_inv > 500
+        AND (i.stock_disponible * p.costo_unitario) > 500
         LIMIT 10
     """
     result_sobrestock = db.execute(text(sql_sobrestock), {"empresa_id": empresa_id}).fetchall()
@@ -59,21 +59,20 @@ def run_lucia_agent(db: Session, empresa_id: int):
     alertas = []
     
     # 1. Caída de demanda (Dead Stock en proceso)
-    # Por ahora asume unidades_venta_60d = 0 como caída brutal para productos que no son Z
     sql_caida = """
-        SELECT p.nombre, pm.xyz, i.unidades
+        SELECT p.nombre, pm.xyz, i.stock_disponible
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
-        JOIN inventario i ON i.producto_id = p.id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.xyz != 'Z'
-        AND i.unidades_venta_60d = 0
-        AND i.unidades > 0
+        AND pm.dias_cobertura > 90
+        AND i.stock_disponible > 0
         LIMIT 10
     """
     result_caida = db.execute(text(sql_caida), {"empresa_id": empresa_id}).fetchall()
     for row in result_caida:
-        alertas.append(f"Lucía (Ventas): Producto '{row[0]}' (Histórico {row[1]}) no ha tenido ventas recientes. Posible dead-stock.")
+        alertas.append(f"Lucía (Ventas): Producto '{row[0]}' (Histórico {row[1]}) no ha tenido ventas recientes o tiene demasiados días de cobertura. Posible dead-stock.")
         
     return alertas
 
@@ -88,11 +87,10 @@ def run_mattia_agent(db: Session, empresa_id: int):
     
     # 1. Margen negativo
     sql_margen = """
-        SELECT p.nombre, i.precio_unit, i.costo_unit
+        SELECT p.nombre, p.precio_venta, p.costo_unitario
         FROM productos p
-        JOIN inventario i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
-        AND i.precio_unit <= i.costo_unit
+        AND p.precio_venta <= p.costo_unitario
         LIMIT 10
     """
     result_margen = db.execute(text(sql_margen), {"empresa_id": empresa_id}).fetchall()
@@ -101,13 +99,13 @@ def run_mattia_agent(db: Session, empresa_id: int):
         
     # 2. Capital estancado
     sql_estancado = """
-        SELECT p.nombre, i.valor_inv
+        SELECT p.nombre, (i.stock_disponible * p.costo_unitario) as valor_inv
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
-        JOIN inventario i ON i.producto_id = p.id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.xyz = 'Z'
-        AND i.valor_inv > 1000
+        AND (i.stock_disponible * p.costo_unitario) > 1000
         LIMIT 10
     """
     result_estancado = db.execute(text(sql_estancado), {"empresa_id": empresa_id}).fetchall()

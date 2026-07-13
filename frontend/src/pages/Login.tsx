@@ -33,9 +33,9 @@ export default function Login() {
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-blue/20 via-slate-950 to-slate-950"></div>
       
       <div className="w-full max-w-md relative z-10">
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
-            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-16" />
+            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-24 md:h-32 w-auto object-contain drop-shadow-2xl" />
           </div>
           <p className="text-slate-400 mt-2">Acceso seguro corporativo</p>
         </div>

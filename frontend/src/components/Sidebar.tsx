@@ -36,10 +36,10 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
       <aside className={`w-64 h-screen bg-white/90 dark:bg-brand-surface/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-transform duration-300 z-50 shadow-2xl md:shadow-none md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-          <div className="flex items-center gap-3 mb-8">
-            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-10" />
+          <div className="flex items-center gap-3 mb-4">
+            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-16 md:h-20 w-auto object-contain" />
             <span className="mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
-              v.1.45
+              v.1.49
             </span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

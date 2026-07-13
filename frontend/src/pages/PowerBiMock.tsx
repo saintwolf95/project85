@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BarChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Filter, Download, RefreshCcw, Maximize2, Share2, MoreHorizontal, ChevronDown, Check } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { Download, RefreshCcw, Maximize2, Share2, ChevronDown, Check } from 'lucide-react';
 
 const salesData = [
   { month: 'Ene', real: 4000, plan: 4400 },
@@ -19,7 +19,40 @@ const categoryData = [
   { name: 'Componentes', value: 200 },
 ];
 
-const COLORS = ['#118DFF', '#12239E', '#E66C37', '#6B007B'];
+const inventoryData = [
+  { name: 'Monitores', value: 1.2 },
+  { name: 'Portátiles', value: 2.1 },
+  { name: 'Periféricos', value: 0.5 },
+  { name: 'Componentes', value: 0.8 },
+  { name: 'Audio', value: 0.3 },
+];
+
+const healthData = [
+  { name: 'Sano', value: 65 },
+  { name: 'Riesgo Rotura', value: 15 },
+  { name: 'Capital Muerto', value: 10 },
+  { name: 'Rotura', value: 10 },
+];
+
+const otifData = [
+  { month: 'Ene', otif: 88 },
+  { month: 'Feb', otif: 90 },
+  { month: 'Mar', otif: 87 },
+  { month: 'Abr', otif: 92 },
+  { month: 'May', otif: 94 },
+  { month: 'Jun', otif: 95 },
+  { month: 'Jul', otif: 93 },
+];
+
+const supplierData = [
+  { name: 'GlobalTech', otif: 98, leadTime: 7 },
+  { name: 'TechSupply', otif: 92, leadTime: 14 },
+  { name: 'Asus Dist.', otif: 89, leadTime: 21 },
+  { name: 'Logitech', otif: 95, leadTime: 10 },
+];
+
+const COLORS = ['#118DFF', '#12239E', '#E66C37', '#6B007B', '#F2C811', '#00B8AA'];
+const HEALTH_COLORS = ['#00B8AA', '#F2C811', '#E66C37', '#D64550'];
 
 export const PowerBiMock = () => {
   const [activeTab, setActiveTab] = useState('Ventas');
@@ -102,90 +135,190 @@ export const PowerBiMock = () => {
             {/* Grid of Visualizations */}
             <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* KPI Cards */}
-              <div className="col-span-1 md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
-                <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
-                  <span className="text-xs text-gray-500 mb-1">Ingresos Totales</span>
-                  <span className="text-2xl md:text-3xl font-light text-gray-800">€ 14.5M</span>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"><MoreHorizontal size={14} className="text-gray-400"/></div>
-                </div>
-                <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
-                  <span className="text-xs text-gray-500 mb-1">Margen Bruto</span>
-                  <span className="text-2xl md:text-3xl font-light text-gray-800">22.4%</span>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"><MoreHorizontal size={14} className="text-gray-400"/></div>
-                </div>
-                <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
-                  <span className="text-xs text-gray-500 mb-1">Unidades Vendidas</span>
-                  <span className="text-2xl md:text-3xl font-light text-gray-800">124k</span>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"><MoreHorizontal size={14} className="text-gray-400"/></div>
-                </div>
-                <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
-                  <span className="text-xs text-gray-500 mb-1">Crecimiento YoY</span>
-                  <span className="text-2xl md:text-3xl font-light text-[#118DFF]">+8.2%</span>
-                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"><MoreHorizontal size={14} className="text-gray-400"/></div>
-                </div>
-              </div>
-
-              {/* Main Chart */}
-              <div className="col-span-1 md:col-span-2 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 bg-white shadow-sm border p-1 z-10">
-                  <Filter size={14} className="text-gray-500"/>
-                  <Maximize2 size={14} className="text-gray-500"/>
-                  <MoreHorizontal size={14} className="text-gray-500"/>
-                </div>
-                <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Ventas vs Plan por Mes</h3>
-                <div className="flex-1 min-h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={salesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAEAEA" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
-                      <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc', boxShadow: '2px 2px 5px rgba(0,0,0,0.1)' }}/>
-                      <Line type="monotone" dataKey="real" name="Ventas Reales" stroke="#118DFF" strokeWidth={3} dot={{r: 4, fill: '#118DFF', strokeWidth: 0}} />
-                      <Line type="monotone" dataKey="plan" name="Planificado" stroke="#E66C37" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Secondary Chart */}
-              <div className="col-span-1 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 bg-white shadow-sm border p-1 z-10">
-                  <Filter size={14} className="text-gray-500"/>
-                  <Maximize2 size={14} className="text-gray-500"/>
-                  <MoreHorizontal size={14} className="text-gray-500"/>
-                </div>
-                <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Ingresos por Categoría</h3>
-                <div className="flex-1 min-h-[200px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={categoryData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={70}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {categoryData.map((_entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                {/* Legend */}
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
-                  {categoryData.map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1 text-[10px] text-gray-600">
-                      <div className="w-2 h-2" style={{backgroundColor: COLORS[index]}}></div>
-                      {entry.name}
+              {/* TAB 1: VENTAS */}
+              {activeTab === 'Ventas' && (
+                <>
+                  {/* KPI Cards */}
+                  <div className="col-span-1 md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Ingresos Totales</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">€ 14.5M</span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Margen Bruto</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">22.4%</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Unidades Vendidas</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">124k</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Crecimiento YoY</span>
+                      <span className="text-2xl md:text-3xl font-light text-[#118DFF]">+8.2%</span>
+                    </div>
+                  </div>
+
+                  {/* Main Chart */}
+                  <div className="col-span-1 md:col-span-2 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Ventas vs Plan por Mes</h3>
+                    <div className="flex-1 min-h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={salesData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAEAEA" />
+                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                          <Line type="monotone" dataKey="real" name="Ventas Reales" stroke="#118DFF" strokeWidth={3} dot={{r: 4, fill: '#118DFF', strokeWidth: 0}} />
+                          <Line type="monotone" dataKey="plan" name="Planificado" stroke="#E66C37" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Secondary Chart */}
+                  <div className="col-span-1 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Ingresos por Categoría</h3>
+                    <div className="flex-1 min-h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={2} dataKey="value">
+                            {categoryData.map((_entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
+                      {categoryData.map((entry, index) => (
+                        <div key={entry.name} className="flex items-center gap-1 text-[10px] text-gray-600">
+                          <div className="w-2 h-2" style={{backgroundColor: COLORS[index]}}></div>
+                          {entry.name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 2: INVENTARIO */}
+              {activeTab === 'Inventario' && (
+                <>
+                  <div className="col-span-1 md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Valor Stock</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">€ 4.9M</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Días Cobertura</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">45</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Roturas Activas</span>
+                      <span className="text-2xl md:text-3xl font-light text-[#E66C37]">24</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Índice Rotación</span>
+                      <span className="text-2xl md:text-3xl font-light text-[#118DFF]">6.8</span>
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Valor de Inventario por Familia (Millones €)</h3>
+                    <div className="flex-1 min-h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={inventoryData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAEAEA" />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <Tooltip cursor={{fill: '#f5f5f5'}} contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                          <Bar dataKey="value" name="Valor (€M)" fill="#118DFF" radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Salud del Stock (%)</h3>
+                    <div className="flex-1 min-h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={healthData} cx="50%" cy="50%" innerRadius={0} outerRadius={70} dataKey="value">
+                            {healthData.map((_entry, index) => (
+                              <Cell key={`cell-${index}`} fill={HEALTH_COLORS[index % HEALTH_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
+                      {healthData.map((entry, index) => (
+                        <div key={entry.name} className="flex items-center gap-1 text-[10px] text-gray-600">
+                          <div className="w-2 h-2" style={{backgroundColor: HEALTH_COLORS[index]}}></div>
+                          {entry.name}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* TAB 3: PROVEEDORES */}
+              {activeTab === 'Proveedores' && (
+                <>
+                  <div className="col-span-1 md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">OTIF Promedio</span>
+                      <span className="text-2xl md:text-3xl font-light text-[#00B8AA]">93%</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Proveedores Activos</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">34</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Lead Time Promedio</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">14 días</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-4 flex flex-col justify-center items-center shadow-sm relative group">
+                      <span className="text-xs text-gray-500 mb-1">Pedidos Entregados</span>
+                      <span className="text-2xl md:text-3xl font-light text-gray-800">1,452</span>
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 md:col-span-2 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Evolución OTIF (On-Time In-Full) %</h3>
+                    <div className="flex-1 min-h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={otifData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EAEAEA" />
+                          <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <YAxis domain={[80, 100]} axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#666'}} />
+                          <Tooltip contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                          <Line type="monotone" dataKey="otif" name="OTIF %" stroke="#00B8AA" strokeWidth={3} dot={{r: 4, fill: '#00B8AA', strokeWidth: 0}} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="col-span-1 bg-white border border-gray-200 p-4 shadow-sm flex flex-col relative group min-h-[300px]">
+                    <h3 className="text-sm text-gray-600 mb-4 font-medium text-center">Top Proveedores (OTIF %)</h3>
+                    <div className="flex-1 min-h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart layout="vertical" data={supplierData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#EAEAEA" />
+                          <XAxis type="number" domain={[0, 100]} hide />
+                          <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#666'}} width={70} />
+                          <Tooltip cursor={{fill: '#f5f5f5'}} contentStyle={{ borderRadius: '0px', border: '1px solid #ccc' }}/>
+                          <Bar dataKey="otif" name="OTIF %" fill="#12239E" radius={[0, 2, 2, 0]} barSize={20} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </>
+              )}
 
             </div>
           </div>

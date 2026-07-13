@@ -39,20 +39,20 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
   const cells = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'];
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm overflow-hidden">
-      <h3 className="title-corporate text-sm mb-2">Matriz de Doble Análisis (Ventas vs Inventario)</h3>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 sm:p-4 shadow-sm overflow-x-auto overflow-y-hidden scrollbar-thin">
+      <h3 className="title-corporate text-sm mb-2 whitespace-nowrap">Matriz de Doble Análisis (Ventas vs Inventario)</h3>
       
       {/* Eje X label */}
-      <div className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+      <div className="text-center text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 whitespace-nowrap">
         ABC Inventario (Inversión) →
       </div>
 
       {/* Contenedor Matriz + Eje Y */}
-      <div className="flex gap-1 items-stretch">
+      <div className="flex gap-1 items-stretch min-w-[280px]">
         {/* Eje Y label (vertical) */}
         <div className="flex items-center justify-center shrink-0" style={{ width: 16 }}>
           <span
-            className="text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap"
+            className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
             XYZ Volatilidad (Demanda) →
@@ -60,23 +60,23 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
         </div>
 
         {/* Grid 3x3 — sin altura fija, las celdas se dimensionan por contenido */}
-        <div className="flex-1 grid grid-cols-3 gap-1.5">
+        <div className="flex-1 grid grid-cols-3 gap-1 sm:gap-1.5">
           {cells.map(cell => {
             const m = metrics[cell as keyof typeof metrics];
             return (
             <div 
               key={cell} 
               onClick={() => onCellClick && onCellClick(cell)}
-              className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border-2 transition-all
+              className={`flex flex-col items-center justify-center py-1.5 px-0.5 sm:py-2 sm:px-1 rounded-lg border-2 transition-all
                 ${getCellColor(cell)} 
                 ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
                 ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
               `}>
-              <span className="text-lg font-bold leading-none">{m.count.toLocaleString('es-ES')}</span>
-              <span className="text-[10px] font-bold uppercase mt-0.5 opacity-90">{cell}</span>
-              <div className="flex flex-col w-full text-[9px] text-center mt-1 border-t border-black/10 dark:border-white/10 pt-1 opacity-80 font-medium">
-                <span>Inv: {formatEuro(m.inv)}</span>
-                <span>Vtas: {formatEuro(m.sales)}</span>
+              <span className="text-base sm:text-lg font-bold leading-none">{m.count.toLocaleString('es-ES')}</span>
+              <span className="text-[9px] sm:text-[10px] font-bold uppercase mt-0.5 opacity-90">{cell}</span>
+              <div className="flex flex-col w-full text-[8px] sm:text-[9px] text-center mt-1 border-t border-black/10 dark:border-white/10 pt-1 opacity-80 font-medium">
+                <span className="truncate w-full px-0.5">Inv: {formatEuro(m.inv)}</span>
+                <span className="truncate w-full px-0.5">Vtas: {formatEuro(m.sales)}</span>
               </div>
             </div>
             );

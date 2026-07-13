@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis } from '../services/api';
-import type { AgentSettings, AgentInsight } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage } from '../services/api';
+import type { AgentSettings, AgentInsight, AgentChatMessage } from '../services/api';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, ChevronDown, ChevronUp, Send, MessageSquare } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface AgentInfo {
@@ -39,9 +39,52 @@ export const AiControlPanel = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   
+  // Chat States
+  const [agentChatHistory, setAgentChatHistory] = useState<AgentChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   // For expanding history rows
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   const [expandedAgentMap, setExpandedAgentMap] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (selectedAgent) {
+      setAgentChatHistory([]);
+      setIsChatLoading(true);
+      getAgentChat(selectedAgent)
+        .then(data => setAgentChatHistory(data))
+        .catch(err => console.error(err))
+        .finally(() => setIsChatLoading(false));
+    }
+  }, [selectedAgent]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [agentChatHistory]);
+
+  const handleSendAgentMessage = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!chatInput.trim() || !selectedAgent || isChatLoading) return;
+    
+    const newMessage: AgentChatMessage = { role: 'user', content: chatInput.trim() };
+    const updatedHistory = [...agentChatHistory, newMessage];
+    
+    setAgentChatHistory(updatedHistory);
+    setChatInput('');
+    setIsChatLoading(true);
+
+    try {
+      const response = await sendAgentMessage(selectedAgent, updatedHistory);
+      setAgentChatHistory([...updatedHistory, { role: 'assistant', content: response.reply }]);
+    } catch (error) {
+      console.error(error);
+      alert("Error enviando mensaje al agente");
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
 
   const refreshData = async () => {
     try {
@@ -316,8 +359,8 @@ export const AiControlPanel = () => {
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6">
-              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 flex flex-col min-h-[500px]">
+              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shrink-0">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Code2 size={16} className="text-brand-blue dark:text-brand-cyan" />
                   Arquitectura Cognitiva
@@ -326,6 +369,63 @@ export const AiControlPanel = () => {
                   <ReactMarkdown>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
                 </div>
               </div>
+
+              {/* Chat Interface */}
+              <div className="flex-1 flex flex-col min-h-[300px] border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900 shadow-inner">
+                <div className="bg-white dark:bg-slate-800 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 shrink-0">
+                  <MessageSquare size={16} className="text-brand-blue dark:text-brand-cyan" />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>
+                </div>
+                
+                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                  {agentChatHistory.length === 0 && !isChatLoading && (
+                    <div className="text-center text-slate-400 text-sm italic py-8 flex flex-col items-center">
+                      <Bot size={32} className="mb-2 opacity-50" />
+                      Saluda a {AGENTS_INFO[selectedAgent].name}. Recuerda que solo responderá sobre su área.
+                    </div>
+                  )}
+                  {agentChatHistory.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${
+                        msg.role === 'user' 
+                          ? 'bg-brand-blue text-white rounded-tr-sm' 
+                          : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-tl-sm shadow-sm'
+                      }`}>
+                        {msg.role === 'user' ? msg.content : <ReactMarkdown className="prose dark:prose-invert max-w-none text-sm">{msg.content}</ReactMarkdown>}
+                      </div>
+                    </div>
+                  ))}
+                  {isChatLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl rounded-tl-sm flex gap-2 items-center shadow-sm">
+                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+                
+                <form onSubmit={handleSendAgentMessage} className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex gap-2 shrink-0">
+                  <input 
+                    type="text" 
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={`Pregúntale a ${AGENTS_INFO[selectedAgent].name}...`}
+                    className="flex-1 bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                    disabled={isChatLoading}
+                  />
+                  <button 
+                    type="submit"
+                    disabled={!chatInput.trim() || isChatLoading}
+                    className="p-2 bg-brand-blue dark:bg-brand-cyan text-white rounded-xl hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors"
+                  >
+                    <Send size={18} />
+                  </button>
+                </form>
+              </div>
+
             </div>
           </div>
         </div>

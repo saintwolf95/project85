@@ -139,3 +139,24 @@ class EmpresaEstadisticas(Base):
     actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     empresa = relationship("Empresa")
+
+class AgentChat(Base):
+    __tablename__ = "agent_chats"
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    agent_name = Column(String, nullable=False) # 'maria', 'lucia', 'mattia', 'ceo'
+    creado_en = Column(DateTime, default=datetime.utcnow)
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    usuario = relationship("Usuario")
+    mensajes = relationship("AgentMessage", back_populates="chat", cascade="all, delete-orphan")
+
+class AgentMessage(Base):
+    __tablename__ = "agent_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    chat_id = Column(Integer, ForeignKey("agent_chats.id"), nullable=False)
+    rol = Column(String, nullable=False) # 'user' o 'assistant'
+    contenido = Column(String, nullable=False)
+    creado_en = Column(DateTime, default=datetime.utcnow)
+    
+    chat = relationship("AgentChat", back_populates="mensajes")

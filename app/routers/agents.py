@@ -38,3 +38,54 @@ from typing import List
 def get_all_insights(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     insights = db.query(AgentInsights).filter(AgentInsights.empresa_id == current_user.empresa_id).order_by(AgentInsights.fecha.desc()).all()
     return insights
+
+from app.models import AgentChat, AgentMessage
+from app.schemas import AgentChatRequest
+from app.agents_service import process_agent_chat
+
+@router.get("/agents/{agent_name}/chat")
+def get_agent_chat(agent_name: str, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    chat = db.query(AgentChat).filter(
+        AgentChat.usuario_id == current_user.id,
+        AgentChat.agent_name == agent_name
+    ).first()
+    if not chat:
+        return []
+    
+    mensajes = db.query(AgentMessage).filter(AgentMessage.chat_id == chat.id).order_by(AgentMessage.creado_en.asc()).all()
+    return [{"role": m.rol, "content": m.contenido} for m in mensajes]
+
+@router.post("/agents/{agent_name}/chat")
+def chat_with_agent(agent_name: str, payload: AgentChatRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Get or create chat
+    chat = db.query(AgentChat).filter(
+        AgentChat.usuario_id == current_user.id,
+        AgentChat.agent_name == agent_name
+    ).first()
+    
+    if not chat:
+        chat = AgentChat(usuario_id=current_user.id, agent_name=agent_name)
+        db.add(chat)
+        db.commit()
+        db.refresh(chat)
+
+    nuevo_mensaje = payload.history[-1]
+    
+    # Save user message
+    user_msg = AgentMessage(chat_id=chat.id, rol=nuevo_mensaje.role, contenido=nuevo_mensaje.content)
+    db.add(user_msg)
+    db.commit()
+
+    # Reconstruct history for AI
+    mensajes_previos = db.query(AgentMessage).filter(AgentMessage.chat_id == chat.id).order_by(AgentMessage.creado_en.asc()).all()
+    history_dicts = [{"role": m.rol, "content": m.contenido} for m in mensajes_previos]
+
+    # Process via AI
+    reply = process_agent_chat(db, current_user.empresa_id, agent_name, history_dicts)
+
+    # Save assistant message
+    assistant_msg = AgentMessage(chat_id=chat.id, rol="assistant", contenido=reply)
+    db.add(assistant_msg)
+    db.commit()
+
+    return {"reply": reply}

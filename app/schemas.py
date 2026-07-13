@@ -97,3 +97,11 @@ class AgentSettingsResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class AgentChatMessage(BaseModel):
+    role: str
+    content: str
+
+class AgentChatRequest(BaseModel):
+    chat_id: Optional[int] = None
+    history: List[AgentChatMessage]

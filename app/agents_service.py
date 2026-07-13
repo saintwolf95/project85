@@ -478,7 +478,6 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
     elif run_fase2 and not run_fase1:
         ceo_summary = "⚠️ El CEO IA está encendido, pero los agentes departamentales están apagados. No hay reportes para sintetizar."
         
-    # Guardar insight
     insight = AgentInsights(
         empresa_id=empresa_id,
         fase1_raw_json=json.dumps(alertas_fase1) if alertas_fase1 else None,
@@ -491,3 +490,57 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
     db.commit()
     db.refresh(insight)
     return insight
+
+def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: list) -> str:
+    """Procesa el chat conversacional con un agente específico, inyectando su memoria de 7 días."""
+    client = get_openai_client()
+    if not client:
+        return "⚠️ Error: API Key de OpenAI no configurada."
+
+    # 1. Recuperar últimos 7 días de insights
+    insights = db.query(AgentInsights).filter(
+        AgentInsights.empresa_id == empresa_id
+    ).order_by(AgentInsights.fecha.desc()).limit(7).all()
+
+    # 2. Extraer memoria específica del agente
+    memoria_md = ""
+    for insight in reversed(insights):
+        fecha_str = insight.fecha.strftime("%Y-%m-%d %H:%M")
+        if agent_name.lower() == "maría" and insight.fase1_maria_md:
+            memoria_md += f"\n--- Reporte del {fecha_str} ---\n{insight.fase1_maria_md}\n"
+        elif agent_name.lower() == "lucía" and insight.fase1_lucia_md:
+            memoria_md += f"\n--- Reporte del {fecha_str} ---\n{insight.fase1_lucia_md}\n"
+        elif agent_name.lower() == "mattia" and insight.fase1_mattia_md:
+            memoria_md += f"\n--- Reporte del {fecha_str} ---\n{insight.fase1_mattia_md}\n"
+        elif agent_name.lower() == "ceo" and insight.fase2_ceo_markdown:
+            memoria_md += f"\n--- Reporte del {fecha_str} ---\n{insight.fase2_ceo_markdown}\n"
+
+    if not memoria_md.strip():
+        memoria_md = "No tienes reportes generados en los últimos días."
+
+    # 3. Construir System Prompt blindado
+    if agent_name.lower() == "maría":
+        sys_prompt = f"Eres María, Analista Experta de Inventario de la empresa. Habla siempre en primera persona como María. Tu único objetivo es analizar el inventario, quiebres de stock, excesos y días de cobertura. Si te preguntan sobre finanzas o ventas, debes decir educadamente que ese no es tu rol y derivarlos a Mattia o Lucía. Basa tus respuestas en tu memoria de los últimos 7 días:\n{memoria_md}"
+    elif agent_name.lower() == "lucía":
+        sys_prompt = f"Eres Lucía, Analista Experta de Ventas de la empresa. Habla siempre en primera persona como Lucía. Tu único objetivo es analizar ventas, rotación de productos, oportunidades de promoción y demanda estancada. Si te preguntan sobre inventario o finanzas profundas, debes decir educadamente que ese no es tu rol y derivarlos a María o Mattia. Basa tus respuestas en tu memoria de los últimos 7 días:\n{memoria_md}"
+    elif agent_name.lower() == "mattia":
+        sys_prompt = f"Eres Mattia, Analista Experto Financiero de la empresa. Habla siempre en primera persona como Mattia. Tu único objetivo es analizar rentabilidad, márgenes, capital inmovilizado y costos. Si te preguntan sobre logística o ventas, debes decir educadamente que ese no es tu rol y derivarlos a María o Lucía. Basa tus respuestas en tu memoria de los últimos 7 días:\n{memoria_md}"
+    elif agent_name.lower() == "ceo":
+        sys_prompt = f"Eres el CEO IA (Director de Operaciones). Habla siempre en primera persona como el CEO. Tu objetivo es dar visión estratégica global basada en los reportes de tus directores. Basa tus respuestas en tu memoria de los últimos 7 días:\n{memoria_md}"
+    else:
+        sys_prompt = f"Eres un asistente analítico basado en estos reportes:\n{memoria_md}"
+
+    messages = [{"role": "system", "content": sys_prompt}]
+    for msg in history:
+        messages.append({"role": msg["role"], "content": msg["content"]})
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=messages,
+            temperature=0.3
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error en chat con {agent_name}: {e}")
+        return f"⚠️ Error al chatear con {agent_name}."

@@ -223,3 +223,19 @@ export const runAgentAnalysis = async (): Promise<AgentInsight> => {
   const response = await api.post('/agents/run');
   return response.data;
 };
+
+// --- Agent Chat ---
+export interface AgentChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export const getAgentChat = async (agentName: string): Promise<AgentChatMessage[]> => {
+  const response = await api.get(`/agents/${agentName}/chat`);
+  return response.data;
+};
+
+export const sendAgentMessage = async (agentName: string, history: AgentChatMessage[]): Promise<{ reply: string }> => {
+  const response = await api.post(`/agents/${agentName}/chat`, { history });
+  return response.data;
+};

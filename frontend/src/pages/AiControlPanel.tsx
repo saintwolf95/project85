@@ -16,19 +16,19 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     id: 'maria',
     name: 'María',
     role: 'Inventario',
-    formula: `**1. Quiebre inminente:** Busca productos con \`dias_cobertura <= 5\` y stock positivo.\n\n**2. Sobre-stock:** Busca productos inmovilizados con \`dias_cobertura > 120\` y más de $500 en valor.`
+    formula: `**[🔴 CRÍTICO] Quiebre Estrella:** Clase A con \`dias_cobertura <= 5\` y stock positivo.\n\n**[🔴 CRÍTICO] Rotura Activa:** Sin stock pero con demanda activa (\`xyz IN (X, Y)\`).\n\n**[🔴 CRÍTICO] Capital Muerto:** Clase Z con excesivo stock inmovilizado (\`> $2000\`).\n\n**[🟡 ADVERTENCIA] Exceso Grave:** Producto secundario (Clase C) con \`dias_cobertura > 120\`.\n\n**[🟡 ADVERTENCIA] Alerta Quiebre:** Clase B con inminente falta de stock (\`dias_cobertura <= 5\`).\n\n**[🟢 OPORTUNIDAD] Optimización:** Productos A/B con cobertura alta (\`90 - 120 días\`).`
   },
   lucia: {
     id: 'lucia',
     name: 'Lucía',
     role: 'Ventas',
-    formula: `**1. Caída de Demanda (Dead-Stock preventivo):** Filtra productos que NO sean clase Z (\`xyz != 'Z'\`) pero que lleven estancados \`dias_cobertura > 90\`.`
+    formula: `**[🔴 CRÍTICO] Estrellas Estancadas:** Clase A con excesiva \`dias_cobertura > 60\`.\n\n**[🔴 CRÍTICO] Ventas Perdidas HOY:** Clase A con \`stock = 0\`.\n\n**[🟡 ADVERTENCIA] Potencial Desperdiciado:** Clase B y Demanda Z con excelente margen (\`precio > costo * 1.5\`).\n\n**[🟡 ADVERTENCIA] Acumulación:** Clase B con \`dias_cobertura > 90\`.\n\n**[🟢 OPORTUNIDAD] Gemas Ocultas:** Clase C rotando rapidísimo (\`dias_cobertura < 15\`).\n\n**[🟢 OPORTUNIDAD] Estrella Naciente:** Era Clase C pero su demanda pasó a constante (\`XYZ = X\`).\n\n**[🟢 OPORTUNIDAD] Candidato Combo:** Liberar stock estancado (\`dias_cobertura > 150\`).`
   },
   mattia: {
     id: 'mattia',
     name: 'Mattia',
     role: 'Finanzas',
-    formula: `**1. Margen Negativo:** Alerta si \`precio_venta <= costo_unitario\`.\n\n**2. Capital Estancado Severo:** Busca productos clase Z (\`xyz = 'Z'\`) con un valor de inventario bloqueado mayor a $1000.`
+    formula: `**[🔴 CRÍTICO] Margen Negativo:** Venta a pérdida (\`precio_venta <= costo_unitario\`).\n\n**[🔴 CRÍTICO] Margen Estrecho VIP:** Clase A ganando menos del 10% (\`precio < costo * 1.10\`).\n\n**[🟡 ADVERTENCIA] Capital Estancado:** Clase Z con más de $1000 bloqueados en inventario sin vender.\n\n**[🟢 OPORTUNIDAD] Gemas de Margen:** Demanda constante (X) con ganancias superiores al 100% (\`precio > costo * 2\`).`
   }
 };
 

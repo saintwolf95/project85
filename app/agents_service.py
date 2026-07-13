@@ -574,13 +574,58 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
     for msg in history:
         messages.append({"role": msg["role"], "content": msg["content"]})
 
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "ejecutar_consulta_sql",
+                "description": "Ejecuta una consulta SQL SELECT en la base de datos para responder a las preguntas del usuario. Tablas disponibles: productos (id, nombre, empresa_id, precio_venta, costo_unitario, marca, familia), producto_metricas (producto_id, dias_cobertura, abc, xyz, ventas_60d, cv, ads), inventario_snapshot (producto_id, stock_disponible).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": f"Consulta SQL (solo SELECT). DEBES incluir 'WHERE empresa_id = {empresa_id}' o un JOIN con productos donde p.empresa_id = {empresa_id}."
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+    ]
+
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
-            temperature=0.3
-        )
-        return response.choices[0].message.content
+        max_iterations = 5
+        iteration = 0
+        
+        while iteration < max_iterations:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+                temperature=0.3
+            )
+            message = response.choices[0].message
+            
+            if not message.tool_calls:
+                return message.content
+                
+            messages.append(message)
+            for tool_call in message.tool_calls:
+                if tool_call.function.name == "ejecutar_consulta_sql":
+                    args = json.loads(tool_call.function.arguments)
+                    query = args.get("query", "")
+                    sql_result = ejecutar_consulta_sql(db, query, empresa_id)
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.function.name,
+                        "content": sql_result
+                    })
+            iteration += 1
+            
+        return messages[-1].get("content", "Error: Se alcanzó el límite de iteraciones buscando datos.")
     except Exception as e:
         logger.error(f"Error en chat con {agent_name}: {e}")
         return f"⚠️ Error al chatear con {agent_name}."

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis } from '../services/api';
 import type { AgentSettings, AgentInsight } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface AgentInfo {

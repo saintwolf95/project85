@@ -198,6 +198,9 @@ export interface AgentInsight {
   id: number;
   fecha: string;
   fase1_raw_json?: string;
+  fase1_maria_md?: string;
+  fase1_lucia_md?: string;
+  fase1_mattia_md?: string;
   fase2_ceo_markdown?: string;
 }
 
@@ -209,6 +212,11 @@ export const getLatestAgentInsight = async (): Promise<AgentInsight | null> => {
     if (error.response?.status === 404) return null;
     throw error;
   }
+};
+
+export const getAllAgentInsights = async (): Promise<AgentInsight[]> => {
+  const response = await api.get('/agents/insights/history');
+  return response.data;
 };
 
 export const runAgentAnalysis = async (): Promise<AgentInsight> => {

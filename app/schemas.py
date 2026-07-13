@@ -26,8 +26,10 @@ class AgentInsightResponse(BaseModel):
     id: int
     fecha: datetime
     fase1_raw_json: Optional[str] = None
+    fase1_maria_md: Optional[str] = None
+    fase1_lucia_md: Optional[str] = None
+    fase1_mattia_md: Optional[str] = None
     fase2_ceo_markdown: Optional[str] = None
-    
     class Config:
         from_attributes = True
 

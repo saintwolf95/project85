@@ -118,7 +118,10 @@ class AgentInsights(Base):
     id = Column(Integer, primary_key=True, index=True)
     empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False)
     fecha = Column(DateTime, default=datetime.utcnow)
-    fase1_raw_json = Column(String, nullable=True) # JSON con las alertas de los 3 agentes
+    fase1_raw_json = Column(String, nullable=True) # JSON con las alertas de los 3 agentes (Legacy)
+    fase1_maria_md = Column(String, nullable=True) # Informe de María (Inventario)
+    fase1_lucia_md = Column(String, nullable=True) # Informe de Lucía (Ventas)
+    fase1_mattia_md = Column(String, nullable=True) # Informe de Mattia (Finanzas)
     fase2_ceo_markdown = Column(String, nullable=True) # Informe final del CEO
 
 class EmpresaEstadisticas(Base):

@@ -32,3 +32,9 @@ def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Se
     if not insight:
         raise HTTPException(status_code=404, detail="No hay insights generados aún.")
     return insight
+
+from typing import List
+@router.get("/agents/insights/history", response_model=List[AgentInsightResponse])
+def get_all_insights(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    insights = db.query(AgentInsights).filter(AgentInsights.empresa_id == current_user.empresa_id).order_by(AgentInsights.fecha.desc()).all()
+    return insights

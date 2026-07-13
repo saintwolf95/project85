@@ -57,6 +57,21 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 db.rollback()
                 print(f"[STARTUP] Error añadiendo columna contexto_negocio: {e}", flush=True)
+        # Migración manual: Añadir columnas markdown a agent_insights
+        try:
+            db.execute(text("SELECT fase1_maria_md FROM agent_insights LIMIT 1"))
+        except Exception:
+            db.rollback()
+            try:
+                db.execute(text("ALTER TABLE agent_insights ADD COLUMN fase1_maria_md VARCHAR"))
+                db.execute(text("ALTER TABLE agent_insights ADD COLUMN fase1_lucia_md VARCHAR"))
+                db.execute(text("ALTER TABLE agent_insights ADD COLUMN fase1_mattia_md VARCHAR"))
+                db.commit()
+                print("[STARTUP] Migración: Columnas MD añadidas a agent_insights.", flush=True)
+            except Exception as e:
+                db.rollback()
+                print(f"[STARTUP] Error añadiendo columnas MD a agent_insights: {e}", flush=True)
+
         # Sincronizar métricas ABC/XYZ para el Copilot
         from .services import sync_metrics_to_db
         print("[STARTUP] Sincronizando métricas ABC/XYZ (Data Mart)...", flush=True)

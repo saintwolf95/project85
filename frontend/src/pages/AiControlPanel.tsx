@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { getAgentSettings, updateAgentSettings, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis } from '../services/api';
 import type { AgentSettings, AgentInsight } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, Activity } from 'lucide-react';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 interface AgentInfo {
@@ -16,47 +16,53 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     id: 'maria',
     name: 'María',
     role: 'Inventario',
-    formula: `**[🔴 CRÍTICO] Quiebre Estrella:** Clase A con \`dias_cobertura <= 5\` y stock positivo.\n\n**[🔴 CRÍTICO] Rotura Activa:** Sin stock pero con demanda activa (\`xyz IN (X, Y)\`).\n\n**[🔴 CRÍTICO] Capital Muerto:** Clase Z con excesivo stock inmovilizado (\`> $2000\`).\n\n**[🟡 ADVERTENCIA] Exceso Grave:** Producto secundario (Clase C) con \`dias_cobertura > 120\`.\n\n**[🟡 ADVERTENCIA] Alerta Quiebre:** Clase B con inminente falta de stock (\`dias_cobertura <= 5\`).\n\n**[🟢 OPORTUNIDAD] Optimización:** Productos A/B con cobertura alta (\`90 - 120 días\`).`
+    formula: `**IA Cognitiva + Tool Calling:** María recibe las alertas logísticas y luego consulta SQL activamente para generar su informe.`
   },
   lucia: {
     id: 'lucia',
     name: 'Lucía',
     role: 'Ventas',
-    formula: `**[🔴 CRÍTICO] Estrellas Estancadas:** Clase A con excesiva \`dias_cobertura > 60\`.\n\n**[🔴 CRÍTICO] Ventas Perdidas HOY:** Clase A con \`stock = 0\`.\n\n**[🟡 ADVERTENCIA] Potencial Desperdiciado:** Clase B y Demanda Z con excelente margen (\`precio > costo * 1.5\`).\n\n**[🟡 ADVERTENCIA] Acumulación:** Clase B con \`dias_cobertura > 90\`.\n\n**[🟢 OPORTUNIDAD] Gemas Ocultas:** Clase C rotando rapidísimo (\`dias_cobertura < 15\`).\n\n**[🟢 OPORTUNIDAD] Estrella Naciente:** Era Clase C pero su demanda pasó a constante (\`XYZ = X\`).\n\n**[🟢 OPORTUNIDAD] Candidato Combo:** Liberar stock estancado (\`dias_cobertura > 150\`).`
+    formula: `**IA Cognitiva + Tool Calling:** Lucía lee alertas comerciales, revisa los márgenes dinámicamente vía SQL y sugiere estrategias de promoción.`
   },
   mattia: {
     id: 'mattia',
     name: 'Mattia',
     role: 'Finanzas',
-    formula: `**[🔴 CRÍTICO] Margen Negativo:** Venta a pérdida (\`precio_venta <= costo_unitario\`).\n\n**[🔴 CRÍTICO] Margen Estrecho VIP:** Clase A ganando menos del 10% (\`precio < costo * 1.10\`).\n\n**[🟡 ADVERTENCIA] Capital Estancado:** Clase Z con más de $1000 bloqueados en inventario sin vender.\n\n**[🟢 OPORTUNIDAD] Gemas de Margen:** Demanda constante (X) con ganancias superiores al 100% (\`precio > costo * 2\`).`
+    formula: `**IA Cognitiva + Tool Calling:** Mattia escanea márgenes negativos, investiga costos en vivo vía SQL y expone la salud financiera del inventario.`
   }
 };
 
 export const AiControlPanel = () => {
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
-  const [insight, setInsight] = useState<AgentInsight | null>(null);
+  const [insightsHistory, setInsightsHistory] = useState<AgentInsight[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  
+  // For expanding history rows
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+  const [expandedAgentMap, setExpandedAgentMap] = useState<Record<string, boolean>>({});
 
-  const getAgentAlerts = (agentName: string) => {
-    if (!insight || !insight.fase1_raw_json) return [];
+  const refreshData = async () => {
     try {
-      const rawAlerts: string[] = JSON.parse(insight.fase1_raw_json);
-      return rawAlerts.filter(a => a.startsWith(agentName));
+      const [settingsData, insightsData] = await Promise.all([
+        getAgentSettings(), 
+        getAllAgentInsights()
+      ]);
+      setSettings(settingsData);
+      setInsightsHistory(insightsData);
+      if (insightsData.length > 0 && !expandedRowId) {
+        setExpandedRowId(insightsData[0].id); // expand first by default
+      }
     } catch (e) {
-      return [];
+      console.error(e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    Promise.all([getAgentSettings(), getLatestAgentInsight()])
-      .then(([settingsData, insightData]) => {
-        setSettings(settingsData);
-        setInsight(insightData);
-        setIsLoading(false);
-      })
-      .catch(console.error);
+    refreshData();
   }, []);
 
   const handleToggle = async (key: keyof AgentSettings) => {
@@ -66,7 +72,6 @@ export const AiControlPanel = () => {
       await updateAgentSettings(newValue);
     } catch (e) {
       console.error(e);
-      // Revert if error
       setSettings(settings);
     }
   };
@@ -78,8 +83,8 @@ export const AiControlPanel = () => {
     }
     setIsRunning(true);
     try {
-      const data = await runAgentAnalysis();
-      setInsight(data);
+      await runAgentAnalysis();
+      await refreshData();
     } catch (error: any) {
       console.error(error);
       const detail = error.response?.data?.detail || error.message || "Desconocido";
@@ -87,6 +92,43 @@ export const AiControlPanel = () => {
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const toggleRow = (id: number) => {
+    setExpandedRowId(expandedRowId === id ? null : id);
+  };
+
+  const toggleAgentView = (rowId: number, agentId: string) => {
+    const key = `${rowId}-${agentId}`;
+    setExpandedAgentMap(prev => ({...prev, [key]: !prev[key]}));
+  };
+
+  const renderAgentAccordion = (rowId: number, agentId: string, title: string, content?: string, defaultOpen = false) => {
+    const key = `${rowId}-${agentId}`;
+    const isOpen = expandedAgentMap[key] !== undefined ? expandedAgentMap[key] : defaultOpen;
+    
+    return (
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mb-3">
+        <button 
+          onClick={() => toggleAgentView(rowId, agentId)}
+          className="w-full flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 text-left transition-colors hover:bg-slate-200 dark:hover:bg-slate-700"
+        >
+          <span className="font-semibold text-slate-800 dark:text-white">{title}</span>
+          {isOpen ? <ChevronUp size={18} className="text-slate-500" /> : <ChevronDown size={18} className="text-slate-500" />}
+        </button>
+        {isOpen && (
+          <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+            {content ? (
+              <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
+                <ReactMarkdown>{content}</ReactMarkdown>
+              </div>
+            ) : (
+              <p className="text-slate-500 text-sm italic">Sin datos generados para este reporte.</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (isLoading) {
@@ -100,10 +142,10 @@ export const AiControlPanel = () => {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-3">
             <Bot className="w-8 h-8 text-brand-blue dark:text-brand-cyan" /> 
-            Gabinete de Analistas IA (Estilo Habbo)
+            Gabinete de Analistas IA (Cognitivo)
           </h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Controla el gasto de tokens y el estado de la plantilla virtual. Enciende a los detectives matemáticos para monitoreo gratuito, o despierta al CEO IA para resúmenes avanzados.
+            Los agentes ahora no solo aplican matemáticas, sino que razonan mediante <b>OpenAI (o1 y gpt-4o)</b> realizando consultas SQL dinámicas (Tool-Calling) para entender mejor los datos antes de emitir su reporte.
           </p>
         </div>
 
@@ -112,10 +154,10 @@ export const AiControlPanel = () => {
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                Fase 1: Detectives Matemáticos (0 Tokens)
+                Fase 1: Agentes de Área (GPT-4o)
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Analistas estadísticos que vigilan la BD en tiempo real mediante algoritmos de Python y SQL.
+                María, Lucía y Mattia extraen alertas SQL y luego redactan un informe cognitivo usando bases de datos reales.
               </p>
             </div>
             
@@ -159,15 +201,15 @@ export const AiControlPanel = () => {
         </div>
 
         {/* Phase 2 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 relative overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 mb-8 relative overflow-hidden">
           <div className="flex justify-between items-center mb-6">
             <div>
               <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <Brain className="w-5 h-5 text-purple-500" />
-                Fase 2: CEO Consolidador (OpenAI)
+                Fase 2: CEO Consolidador (o1-preview)
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Modelo Avanzado (gpt-4o-mini). Recibe las alertas de los detectives y redacta el informe final del día. Consume tokens.
+                El CEO de IA toma los 3 informes departamentales y razona para emitir un Executive Summary.
               </p>
             </div>
             
@@ -182,7 +224,7 @@ export const AiControlPanel = () => {
           <div className="flex justify-center">
             <div className="w-full max-w-md">
               <AgentDesk 
-                title="Director de Operaciones IA" 
+                title="Director de Operaciones (o1)" 
                 icon={<Brain size={16} />}
                 isActive={settings.fase2_active}
                 workingImg="/assets/agents/ceo_work.png"
@@ -199,10 +241,10 @@ export const AiControlPanel = () => {
             <div>
               <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <FileText className="w-5 h-5 text-emerald-500" />
-                Bandeja de Entrada del CEO
+                Historial de Informes Ejecutivos
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">
-                Aquí recibirás el reporte diario generado por los agentes encendidos.
+                Consulta los reportes pasados emitidos por los agentes departamentales y el CEO.
               </p>
             </div>
             <button 
@@ -211,36 +253,46 @@ export const AiControlPanel = () => {
               className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors shadow-sm"
             >
               {isRunning ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
-              {isRunning ? 'Ejecutando Inspección...' : 'Ejecutar Inspección Diaria'}
+              {isRunning ? 'Ejecutando...' : 'Nueva Ejecución'}
             </button>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 min-h-[300px] border border-slate-200 dark:border-slate-700">
-            {insight ? (
-              <div className="space-y-6">
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-4">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  Reporte del {new Date(insight.fecha).toLocaleString()}
-                </div>
-                
-                {insight.fase2_ceo_markdown ? (
-                  <div className="prose dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
-                    <ReactMarkdown>{insight.fase2_ceo_markdown}</ReactMarkdown>
-                  </div>
-                ) : (
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4">Alertas Crudas (Detectives Fase 1)</h3>
-                    <div className="bg-slate-900 text-emerald-400 p-4 rounded-lg font-mono text-sm overflow-auto">
-                      <pre>{insight.fase1_raw_json || '[]'}</pre>
+          <div className="space-y-4">
+            {insightsHistory.length > 0 ? (
+              insightsHistory.map((insight) => (
+                <div key={insight.id} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                  <button 
+                    onClick={() => toggleRow(insight.id)}
+                    className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <span className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      Reporte del {new Date(insight.fecha).toLocaleString()}
+                    </span>
+                    {expandedRowId === insight.id ? <ChevronUp className="text-slate-500" /> : <ChevronDown className="text-slate-500" />}
+                  </button>
+                  
+                  {expandedRowId === insight.id && (
+                    <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                      
+                      {renderAgentAccordion(insight.id, 'ceo', '💼 Executive Summary (CEO)', insight.fase2_ceo_markdown, true)}
+                      
+                      <div className="mt-6">
+                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Informes Departamentales</h4>
+                        {renderAgentAccordion(insight.id, 'maria', '📦 Reporte de Inventario (María)', insight.fase1_maria_md, false)}
+                        {renderAgentAccordion(insight.id, 'lucia', '📈 Reporte de Ventas (Lucía)', insight.fase1_lucia_md, false)}
+                        {renderAgentAccordion(insight.id, 'mattia', '💰 Reporte de Finanzas (Mattia)', insight.fase1_mattia_md, false)}
+                      </div>
+
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              ))
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl">
                 <FileText className="w-12 h-12 mb-4 opacity-20" />
-                <p>La bandeja está vacía.</p>
-                <p className="text-sm">Enciende a los agentes y pulsa Ejecutar Inspección.</p>
+                <p>No hay historial de informes.</p>
+                <p className="text-sm">Enciende a los agentes y pulsa Nueva Ejecución.</p>
               </div>
             )}
           </div>
@@ -268,37 +320,11 @@ export const AiControlPanel = () => {
               <div className="bg-slate-100 dark:bg-slate-800/80 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
                 <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Code2 size={16} className="text-brand-blue dark:text-brand-cyan" />
-                  Algoritmo de Búsqueda
+                  Arquitectura Cognitiva
                 </h3>
                 <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400">
                   <ReactMarkdown>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
                 </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Activity size={16} className="text-emerald-500" />
-                  Hallazgos de Hoy
-                </h3>
-                {insight ? (
-                  getAgentAlerts(AGENTS_INFO[selectedAgent].name).length > 0 ? (
-                    <div className="space-y-2">
-                      {getAgentAlerts(AGENTS_INFO[selectedAgent].name).map((alert, idx) => (
-                        <div key={idx} className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800/30 rounded-lg p-3 text-sm text-slate-700 dark:text-slate-300">
-                          {alert}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-6 text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                      {AGENTS_INFO[selectedAgent].name} no encontró anomalías hoy.
-                    </div>
-                  )
-                ) : (
-                  <div className="text-center p-6 text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg">
-                    Ejecuta la inspección para ver resultados en vivo.
-                  </div>
-                )}
               </div>
             </div>
           </div>

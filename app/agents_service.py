@@ -7,13 +7,103 @@ from app.copilot_service import get_openai_client
 
 logger = logging.getLogger(__name__)
 
+def ejecutar_consulta_sql(db: Session, query: str, empresa_id: int) -> str:
+    """Ejecuta una consulta SQL segura (sólo SELECT)."""
+    if not query.strip().upper().startswith("SELECT"):
+        return "Error: Sólo se permiten consultas SELECT por seguridad."
+    
+    try:
+        # Check basic safety
+        if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper() or "INSERT" in query.upper():
+             return "Error: Sólo SELECT."
+             
+        result = db.execute(text(query)).fetchall()
+        
+        # Convert to JSON string, limit to 20 rows
+        data = []
+        for row in result[:20]:
+            try:
+                data.append(dict(row._mapping))
+            except:
+                data.append(str(row))
+        return json.dumps(data)
+    except Exception as e:
+        return f"Error en la consulta: {str(e)}"
+
+def run_cognitive_agent(db: Session, empresa_id: int, agent_name: str, system_prompt: str, alertas: list) -> str:
+    """Ejecuta un agente cognitivo con GPT-4o y Tool Calling."""
+    if not alertas:
+        return f"No hay alertas matemáticas críticas para {agent_name} hoy."
+        
+    client = get_openai_client()
+    if not client:
+        return "⚠️ Error: API Key de OpenAI no configurada."
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "ejecutar_consulta_sql",
+                "description": "Ejecuta una consulta SQL SELECT en la base de datos para obtener más contexto sobre un producto o alerta. Tablas: productos, producto_metricas, inventario_snapshot.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": f"Consulta SQL (solo SELECT). DEBES incluir 'WHERE empresa_id = {empresa_id}' (o un JOIN adecuado con productos.empresa_id = {empresa_id}) para no ver datos de otras empresas."
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+    ]
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Estas son las alertas matemáticas generadas por el sistema base:\n\n{json.dumps(alertas, indent=2)}\n\nAnaliza estos datos, usa la herramienta SQL si necesitas contexto extra de algún producto (por ejemplo su precio, su stock histórico, etc.), y redacta tu informe departamental en Markdown."}
+    ]
+
+    try:
+        max_iterations = 5
+        iteration = 0
+        
+        while iteration < max_iterations:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+                temperature=0.2
+            )
+            message = response.choices[0].message
+            
+            if not message.tool_calls:
+                return message.content
+                
+            messages.append(message)
+            for tool_call in message.tool_calls:
+                if tool_call.function.name == "ejecutar_consulta_sql":
+                    args = json.loads(tool_call.function.arguments)
+                    query = args.get("query", "")
+                    sql_result = ejecutar_consulta_sql(db, query, empresa_id)
+                    
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.function.name,
+                        "content": sql_result
+                    })
+            iteration += 1
+            
+        return messages[-1].get("content", "Error: Se alcanzó el límite de iteraciones del agente.")
+
+    except Exception as e:
+        logger.error(f"Error en agente cognitivo {agent_name}: {e}")
+        return f"⚠️ Error al generar informe de {agent_name}."
+
 def run_maria_agent(db: Session, empresa_id: int):
-    """
-    Agente de Inventario (María) con 3 niveles de gravedad (ABC/XYZ).
-    """
     alertas = []
     
-    # NIVEL 3: GRAVEDAD CRÍTICA 🔴
     # 3.1 Quiebre Inminente en Clase A
     sql_n3_quiebre = """
         SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
@@ -29,7 +119,7 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n3_quiebre), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡ALERTA CRÍTICA! El producto estrella '{row[0]}' (Clase A) se quedará sin stock en {row[1]} días. Quedan solo {row[2]} unidades.")
 
-    # 3.2 Rotura Activa (Ventas perdidas hoy)
+    # 3.2 Rotura Activa
     sql_rotura_activa = """
         SELECT p.nombre, pm.xyz, pm.abc
         FROM producto_metricas pm
@@ -58,7 +148,6 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n3_sobrestock), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡CAPITAL MUERTO! Producto '{row[0]}' (Clase Z) inmovilizado {row[1]} días, reteniendo ${row[2]:.2f}.")
 
-    # NIVEL 2: ADVERTENCIA 🟡
     # 2.1 Quiebre Inminente en Clase B
     sql_n2_quiebre_b = """
         SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
@@ -103,7 +192,6 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n2_sobrestock), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟡 Nivel 2] María (Inventario): Sobre-stock moderado. Producto '{row[0]}' con {row[1]} días de inventario (${row[2]:.2f}).")
 
-    # NIVEL 1: OPORTUNIDAD 🟢
     # 1.1 Exceso en Productos Dinámicos (A/B)
     sql_n1_exceso = """
         SELECT p.nombre, pm.abc, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
@@ -133,15 +221,14 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n1_quiebre_c), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟢 Nivel 1] María (Inventario): Producto secundario '{row[0]}' (Clase C) próximo a quiebre en {row[1]} días.")
 
-    return alertas
+    sys_prompt = "Eres María, Directora de Inventario. Redacta un informe conciso en Markdown. Usa listas y negritas. Enfócate en las roturas de stock y capital muerto."
+    md_report = run_cognitive_agent(db, empresa_id, "María", sys_prompt, alertas)
+    
+    return alertas, md_report
 
 def run_lucia_agent(db: Session, empresa_id: int):
-    """
-    Agente de Ventas (Lucía) con 3 niveles de gravedad (ABC/XYZ).
-    """
     alertas = []
     
-    # NIVEL 3: GRAVEDAD CRÍTICA 🔴
     # 3.1 Estrellas Estancadas
     sql_n3_estancadas = """
         SELECT p.nombre, pm.dias_cobertura, i.stock_disponible
@@ -171,7 +258,6 @@ def run_lucia_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n3_stockout), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🔴 Nivel 3] Lucía (Ventas): ¡VENTAS PERDIDAS! Producto estrella '{row[0]}' ({row[1]}) está en CERO. Estamos perdiendo dinero hoy.")
 
-    # NIVEL 2: ADVERTENCIA 🟡
     # 2.1 Potencial Desperdiciado
     sql_n2_potencial = """
         SELECT p.nombre, p.precio_venta, p.costo_unitario
@@ -203,7 +289,6 @@ def run_lucia_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n2_acumulacion), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟡 Nivel 2] Lucía (Ventas): Acumulación. Producto '{row[0]}' (Clase B) cayendo en ventas ({row[1]} días de stock). Sugiero leve descuento.")
 
-    # NIVEL 1: OPORTUNIDAD 🟢
     # 1.1 Gemas Ocultas
     sql_n1_gemas = """
         SELECT p.nombre, pm.dias_cobertura
@@ -248,15 +333,12 @@ def run_lucia_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n1_combos), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): Oportunidad de Cross-Selling. Arma un combo con '{row[0]}' para liberar sus {row[1]} días de stock.")
 
-    return alertas
+    sys_prompt = "Eres Lucía, Directora de Ventas. Redacta un informe conciso en Markdown enfocado en oportunidades comerciales, pérdida de ventas y promociones."
+    md_report = run_cognitive_agent(db, empresa_id, "Lucía", sys_prompt, alertas)
+    
+    return alertas, md_report
 
 def run_mattia_agent(db: Session, empresa_id: int):
-    """
-    Agente de Finanzas (Mattia)
-    Busca:
-    1. Fuga de capital (precio <= costo)
-    2. Capital estancado severo (Valor Inv > 1000 y Clase Z)
-    """
     alertas = []
     
     # 1. Margen negativo
@@ -319,67 +401,90 @@ def run_mattia_agent(db: Session, empresa_id: int):
         margen_pct = ((row[1] - row[2]) / row[1]) * 100
         alertas.append(f"Mattia (Finanzas): [OPORTUNIDAD] El producto '{row[0]}' tiene demanda constante (XYZ=X) y un margen altísimo del {margen_pct:.1f}%. ¡Invierte más en este!")
 
-    return alertas
+    sys_prompt = "Eres Mattia, Director de Finanzas. Redacta un informe conciso en Markdown enfocado en márgenes, rentabilidad y capital inmovilizado."
+    md_report = run_cognitive_agent(db, empresa_id, "Mattia", sys_prompt, alertas)
+    
+    return alertas, md_report
 
-def run_ceo_agent(alertas_fase1: list) -> str:
+def run_ceo_agent(maria_md: str, lucia_md: str, mattia_md: str) -> str:
     """
-    CEO IA (Consolidador)
-    Recibe las alertas crudas y redacta un Executive Summary.
+    CEO IA (Consolidador) usando el modelo o1-preview.
     """
-    if not alertas_fase1:
-        return "El sistema no detectó alertas críticas hoy."
-        
     client = get_openai_client()
     if not client:
         return "⚠️ Error: API Key de OpenAI no configurada para el CEO."
         
     prompt = f"""
     Eres el CEO IA (Director de Operaciones) de una empresa de retail/logística.
-    Tus tres agentes (María de Inventario, Lucía de Ventas y Mattia de Finanzas) acaban de enviarte estas alertas crudas:
+    Tus tres directores acaban de entregarte estos reportes departamentales:
     
-    {json.dumps(alertas_fase1, indent=2)}
+    === REPORTE INVENTARIO (MARÍA) ===
+    {maria_md if maria_md else 'Sin datos.'}
+    
+    === REPORTE VENTAS (LUCÍA) ===
+    {lucia_md if lucia_md else 'Sin datos.'}
+    
+    === REPORTE FINANZAS (MATTIA) ===
+    {mattia_md if mattia_md else 'Sin datos.'}
     
     Tu tarea es sintetizar esto en un único "Executive Summary" (en Markdown).
-    - Agrupa los problemas si están relacionados.
-    - Destaca las 3 cosas más urgentes que el equipo humano debe resolver hoy.
-    - No repitas los mensajes como robot, redáctalo como un líder estratégico.
-    - Se directo, profesional y claro.
+    - Busca correlaciones estratégicas entre los tres reportes.
+    - Destaca las 3 acciones más urgentes que el equipo humano debe resolver hoy.
+    - Se directo, profesional y muy analítico.
     """
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "developer", "content": "Eres un CEO IA estratégico experto en Supply Chain."}, 
-                      {"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=800
-        )
-        return response.choices[0].message.content
+        try:
+            # Intentar primero con la familia o1 (o1-preview u o1)
+            response = client.chat.completions.create(
+                model="o1-preview",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if "does not exist" in str(e) or "access" in str(e) or "model_not_found" in str(e):
+                logger.warning(f"Modelo o1-preview no accesible. Cayendo a gpt-4o. Detalle: {e}")
+                fallback_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "Eres el Director de Operaciones IA. Actúa de forma analítica y profunda."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3
+                )
+                return fallback_response.choices[0].message.content
+            raise e
+        
     except Exception as e:
         logger.error(f"Error en CEO IA: {e}")
-        return "⚠️ Error al generar síntesis IA."
+        return f"⚠️ Error al generar síntesis IA con CEO: {e}"
 
 def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_fase2: bool):
     """
     Ejecuta el flujo completo dependiendo de los switches encendidos.
     """
     alertas_fase1 = []
+    maria_md, lucia_md, mattia_md = None, None, None
     
     if run_fase1:
-        alertas_fase1.extend(run_maria_agent(db, empresa_id))
-        alertas_fase1.extend(run_lucia_agent(db, empresa_id))
-        alertas_fase1.extend(run_mattia_agent(db, empresa_id))
+        a_maria, maria_md = run_maria_agent(db, empresa_id)
+        a_lucia, lucia_md = run_lucia_agent(db, empresa_id)
+        a_mattia, mattia_md = run_mattia_agent(db, empresa_id)
+        alertas_fase1 = a_maria + a_lucia + a_mattia
         
     ceo_summary = None
-    if run_fase2 and run_fase1: # Solo tiene sentido si la Fase 1 corrió para darle datos
-        ceo_summary = run_ceo_agent(alertas_fase1)
+    if run_fase2 and run_fase1:
+        ceo_summary = run_ceo_agent(maria_md, lucia_md, mattia_md)
     elif run_fase2 and not run_fase1:
-        ceo_summary = "⚠️ El CEO IA está encendido, pero los agentes de Fase 1 están apagados. No hay datos para analizar."
+        ceo_summary = "⚠️ El CEO IA está encendido, pero los agentes departamentales están apagados. No hay reportes para sintetizar."
         
     # Guardar insight
     insight = AgentInsights(
         empresa_id=empresa_id,
         fase1_raw_json=json.dumps(alertas_fase1) if alertas_fase1 else None,
+        fase1_maria_md=maria_md,
+        fase1_lucia_md=lucia_md,
+        fase1_mattia_md=mattia_md,
         fase2_ceo_markdown=ceo_summary
     )
     db.add(insight)

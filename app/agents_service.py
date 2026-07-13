@@ -221,7 +221,16 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n1_quiebre_c), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟢 Nivel 1] María (Inventario): Producto secundario '{row[0]}' (Clase C) próximo a quiebre en {row[1]} días.")
 
-    sys_prompt = "Eres María, Directora de Inventario. Redacta un informe conciso en Markdown. Usa listas y negritas. Enfócate en las roturas de stock y capital muerto."
+    sys_prompt = """Eres María, Gestora de Inventario Senior. Eres pragmática, obsesionada con la disponibilidad y detestas el capital inmovilizado.
+Se te entregará un JSON con datos de inventario problemático. 
+Tu tarea es analizar los datos y generar un reporte operativo directo. No uses saludos.
+
+Formato obligatorio de salida (Markdown):
+### 📦 Análisis Operativo - [Fecha]
+**Diagnóstico Rápido:** [1 oración contundente sobre la salud del stock]
+**Fugas Críticas:**
+- [SKU] - [Razón del riesgo de rotura o exceso] - **Acción:** [Qué hacer hoy]
+**Capital Muerto:** [Análisis breve de productos Z inmovilizados]"""
     md_report = run_cognitive_agent(db, empresa_id, "María", sys_prompt, alertas)
     
     return alertas, md_report
@@ -333,7 +342,16 @@ def run_lucia_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n1_combos), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): Oportunidad de Cross-Selling. Arma un combo con '{row[0]}' para liberar sus {row[1]} días de stock.")
 
-    sys_prompt = "Eres Lucía, Directora de Ventas. Redacta un informe conciso en Markdown enfocado en oportunidades comerciales, pérdida de ventas y promociones."
+    sys_prompt = """Eres Lucía, Directora de Ventas. Tu enfoque es maximizar ingresos, rotación y detectar oportunidades ocultas (cross-selling, tendencias).
+Analiza el JSON proporcionado que contiene alertas comerciales. Eres agresiva comercialmente y vas al grano. No uses saludos.
+
+Formato obligatorio de salida (Markdown):
+### 📈 Inteligencia Comercial - [Fecha]
+**Termómetro de Ventas:** [1 oración sobre el momentum actual]
+**Estrellas en Riesgo:** 
+- [SKU Clase A] - [Impacto de no tener stock o estar estancado]
+**Oportunidades Inmediatas:**
+- [SKU Clase C con tracción o producto B estancado] - **Estrategia:** [Promoción, liquidación, bundle]"""
     md_report = run_cognitive_agent(db, empresa_id, "Lucía", sys_prompt, alertas)
     
     return alertas, md_report
@@ -401,7 +419,15 @@ def run_mattia_agent(db: Session, empresa_id: int):
         margen_pct = ((row[1] - row[2]) / row[1]) * 100
         alertas.append(f"Mattia (Finanzas): [OPORTUNIDAD] El producto '{row[0]}' tiene demanda constante (XYZ=X) y un margen altísimo del {margen_pct:.1f}%. ¡Invierte más en este!")
 
-    sys_prompt = "Eres Mattia, Director de Finanzas. Redacta un informe conciso en Markdown enfocado en márgenes, rentabilidad y capital inmovilizado."
+    sys_prompt = """Eres Mattia, CFO. Eres analítico, conservador y mides todo en ROI, márgenes y flujo de caja.
+Analiza el JSON de métricas financieras. Busca márgenes negativos y capital atrapado. No uses saludos.
+
+Formato obligatorio de salida (Markdown):
+### 💶 Auditoría Financiera - [Fecha]
+**Estado del Capital:** [1 oración sobre la eficiencia del gasto en inventario]
+**Hemorragias de Margen:**
+- [SKU] - [Diferencia costo/precio] - **Decisión:** [Ajustar precio o descatalogar]
+**Eficiencia (ABC/XYZ):** [Breve evaluación del capital bloqueado en la clase Z]"""
     md_report = run_cognitive_agent(db, empresa_id, "Mattia", sys_prompt, alertas)
     
     return alertas, md_report
@@ -415,23 +441,37 @@ def run_ceo_agent(maria_md: str, lucia_md: str, mattia_md: str) -> str:
         return "⚠️ Error: API Key de OpenAI no configurada para el CEO."
         
     prompt = f"""
-    Eres el CEO IA (Director de Operaciones) de una empresa de retail/logística.
-    Tus tres directores acaban de entregarte estos reportes departamentales:
-    
-    === REPORTE INVENTARIO (MARÍA) ===
-    {maria_md if maria_md else 'Sin datos.'}
-    
-    === REPORTE VENTAS (LUCÍA) ===
-    {lucia_md if lucia_md else 'Sin datos.'}
-    
-    === REPORTE FINANZAS (MATTIA) ===
-    {mattia_md if mattia_md else 'Sin datos.'}
-    
-    Tu tarea es sintetizar esto en un único "Executive Summary" (en Markdown).
-    - Busca correlaciones estratégicas entre los tres reportes.
-    - Destaca las 3 acciones más urgentes que el equipo humano debe resolver hoy.
-    - Se directo, profesional y muy analítico.
-    """
+Eres el CEO de la compañía. Has recibido tres reportes de tus directores (María, Lucía, Mattia).
+Tu trabajo es sintetizar esta información, resolver conflictos entre sus enfoques (ej. Lucía quiere vender, Mattia exige margen) y dictar las 3 prioridades absolutas para la empresa hoy.
+
+=== REPORTE INVENTARIO (MARÍA) ===
+{maria_md if maria_md else 'Sin datos.'}
+
+=== REPORTE VENTAS (LUCÍA) ===
+{lucia_md if lucia_md else 'Sin datos.'}
+
+=== REPORTE FINANZAS (MATTIA) ===
+{mattia_md if mattia_md else 'Sin datos.'}
+
+Formato obligatorio de salida (Markdown):
+## 🏛️ Executive Summary
+
+**Visión Global:** [Síntesis de 2 líneas]
+
+**🔥 Top 3 Acciones Inmediatas (Prioridad Ejecutiva):**
+1. **[Área]**: [Acción específica] (Basado en el reporte de [Agente])
+2. **[Área]**: [Acción específica] (Basado en el reporte de [Agente])
+3. **[Área]**: [Acción específica] (Basado en el reporte de [Agente])
+
+---
+*Reportes adjuntos del Gabinete (mantén el formato Markdown original de cada agente debajo de esta línea):*
+
+{maria_md if maria_md else ''}
+
+{lucia_md if lucia_md else ''}
+
+{mattia_md if mattia_md else ''}
+"""
     
     try:
         try:

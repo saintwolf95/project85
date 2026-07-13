@@ -391,7 +391,7 @@ export const AiControlPanel = () => {
                           ? 'bg-brand-blue text-white rounded-tr-sm' 
                           : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-tl-sm shadow-sm'
                       }`}>
-                        {msg.role === 'user' ? msg.content : <ReactMarkdown className="prose dark:prose-invert max-w-none text-sm">{msg.content}</ReactMarkdown>}
+                        {msg.role === 'user' ? msg.content : <div className="prose dark:prose-invert max-w-none text-sm"><ReactMarkdown>{msg.content}</ReactMarkdown></div>}
                       </div>
                     </div>
                   ))}

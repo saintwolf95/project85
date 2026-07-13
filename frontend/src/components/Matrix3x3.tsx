@@ -7,17 +7,26 @@ interface MatrixProps {
 }
 
 export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
-  const counts = {
-    AX: 0, AY: 0, AZ: 0,
-    BX: 0, BY: 0, BZ: 0,
-    CX: 0, CY: 0, CZ: 0,
+  const metrics = {
+    AX: { count: 0, inv: 0, sales: 0 }, AY: { count: 0, inv: 0, sales: 0 }, AZ: { count: 0, inv: 0, sales: 0 },
+    BX: { count: 0, inv: 0, sales: 0 }, BY: { count: 0, inv: 0, sales: 0 }, BZ: { count: 0, inv: 0, sales: 0 },
+    CX: { count: 0, inv: 0, sales: 0 }, CY: { count: 0, inv: 0, sales: 0 }, CZ: { count: 0, inv: 0, sales: 0 },
   };
 
   data.forEach(item => {
-    if (counts[item.matriz_abc as keyof typeof counts] !== undefined) {
-      counts[item.matriz_abc as keyof typeof counts]++;
+    const key = item.matriz_abc as keyof typeof metrics;
+    if (metrics[key]) {
+      metrics[key].count++;
+      metrics[key].inv += (item.valor_inv || 0);
+      metrics[key].sales += (item.ventas_60d || 0);
     }
   });
+
+  const formatEuro = (value: number) => {
+    if (value >= 1000000) return `€${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `€${(value / 1000).toFixed(0)}k`;
+    return `€${value.toFixed(0)}`;
+  };
 
   const getCellColor = (matriz: string) => {
     if (matriz === 'CX') return 'bg-red-50 dark:bg-red-500/20 border-red-200 dark:border-red-500/50 text-red-600 dark:text-red-400';
@@ -25,14 +34,6 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
     if (matriz === 'AZ') return 'bg-green-50 dark:bg-green-500/20 border-green-200 dark:border-green-500/50 text-green-600 dark:text-green-400';
     if (matriz === 'CZ') return 'bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400';
     return 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700';
-  };
-
-  const getCellLabel = (matriz: string) => {
-    if (matriz === 'CX') return 'Riesgo Financiero';
-    if (matriz === 'AX') return 'Riesgo Rotura';
-    if (matriz === 'AZ') return 'Estrella';
-    if (matriz === 'CZ') return 'Baja Prioridad';
-    return 'Regular';
   };
 
   const cells = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'];
@@ -60,20 +61,26 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
 
         {/* Grid 3x3 — sin altura fija, las celdas se dimensionan por contenido */}
         <div className="flex-1 grid grid-cols-3 gap-1.5">
-          {cells.map(cell => (
+          {cells.map(cell => {
+            const m = metrics[cell as keyof typeof metrics];
+            return (
             <div 
               key={cell} 
               onClick={() => onCellClick && onCellClick(cell)}
-              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg border-2 transition-all
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border-2 transition-all
                 ${getCellColor(cell)} 
                 ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
                 ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
               `}>
-              <span className="text-lg font-bold leading-none">{counts[cell as keyof typeof counts].toLocaleString('es-ES')}</span>
-              <span className="text-[10px] font-medium uppercase mt-0.5 opacity-80">{cell}</span>
-              <span className="text-[9px] text-center opacity-60 leading-tight hidden sm:block">{getCellLabel(cell)}</span>
+              <span className="text-lg font-bold leading-none">{m.count.toLocaleString('es-ES')}</span>
+              <span className="text-[10px] font-bold uppercase mt-0.5 opacity-90">{cell}</span>
+              <div className="flex flex-col w-full text-[9px] text-center mt-1 border-t border-black/10 dark:border-white/10 pt-1 opacity-80 font-medium">
+                <span>Inv: {formatEuro(m.inv)}</span>
+                <span>Vtas: {formatEuro(m.sales)}</span>
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

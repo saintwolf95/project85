@@ -34,12 +34,9 @@ export default function Login() {
       
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-blue/10 border border-brand-blue/30 mb-6">
-            <span className="font-bold text-3xl text-brand-cyan leading-none">5m</span>
+          <div className="flex justify-center mb-6">
+            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-16" />
           </div>
-          <h1 className="text-3xl font-light text-white tracking-wide">
-            five-<span className="font-bold text-brand-cyan">minutes</span>
-          </h1>
           <p className="text-slate-400 mt-2">Acceso seguro corporativo</p>
         </div>
 

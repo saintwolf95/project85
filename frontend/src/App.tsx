@@ -11,6 +11,7 @@ import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
 import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
+import { PowerBiMock } from './pages/PowerBiMock';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -36,6 +37,7 @@ function App() {
             <Route path="ai-control" element={<AiControlPanel />} />
             <Route path="integrations" element={<DataEngineering />} />
             <Route path="import-guide" element={<DataImportGuide />} />
+            <Route path="powerbi" element={<PowerBiMock />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

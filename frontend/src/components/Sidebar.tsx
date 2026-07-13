@@ -21,6 +21,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/ai-control', icon: Power, label: 'Control IA' },
     { to: '/integrations', icon: Database, label: 'Data Engineering' },
     { to: '/import-guide', icon: FileSpreadsheet, label: 'Guía de Importación' },
+    { to: '/powerbi', icon: BarChart3, label: 'Power BI Services' },
   ];
 
   return (
@@ -36,14 +37,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       <aside className={`w-64 h-screen bg-white/90 dark:bg-brand-surface/90 backdrop-blur-md border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 transition-transform duration-300 z-50 shadow-2xl md:shadow-none md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 bg-brand-cyan/20 rounded-xl flex items-center justify-center border border-brand-cyan/30">
-              <span className="text-brand-cyan font-bold font-orbitron text-lg">5m</span>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white tracking-wide">five-</h1>
-              <h1 className="text-xl font-bold text-white tracking-wide leading-none">minutes</h1>
-            </div>
-            <span className="ml-2 mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
+            <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-10" />
+            <span className="mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
               v.1.45
             </span>
           </div>

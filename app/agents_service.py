@@ -29,7 +29,21 @@ def run_maria_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n3_quiebre), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡ALERTA CRÍTICA! El producto estrella '{row[0]}' (Clase A) se quedará sin stock en {row[1]} días. Quedan solo {row[2]} unidades.")
 
-    # 3.2 Capital Muerto Severo
+    # 3.2 Rotura Activa (Ventas perdidas hoy)
+    sql_rotura_activa = """
+        SELECT p.nombre, pm.ventas_60d, pm.abc
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND i.stock_disponible = 0
+        AND pm.ventas_60d > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_rotura_activa), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🔴 Nivel 3] María (Inventario): [PÉRDIDA] Producto '{row[0]}' (Clase {row[2]}) tiene stock cero pero demanda activa ({row[1]:.1f} ventas/60d). Estamos perdiendo ventas.")
+
+    # 3.3 Capital Muerto Severo
     sql_n3_sobrestock = """
         SELECT p.nombre, pm.dias_cobertura, (i.stock_disponible * p.costo_unitario) as valor_inv
         FROM producto_metricas pm
@@ -205,7 +219,22 @@ def run_lucia_agent(db: Session, empresa_id: int):
     for row in db.execute(text(sql_n1_gemas), {"empresa_id": empresa_id}).fetchall():
         alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): ¡Gema Oculta! Producto '{row[0]}' (Clase C) rotando muy rápido ({row[1]} días). Destácalo en la tienda.")
 
-    # 1.2 Candidatos para Combos
+    # 1.2 Estrella Naciente
+    sql_estrella = """
+        SELECT p.nombre, pm.ventas_60d, i.stock_disponible
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        JOIN inventario_snapshot i ON i.producto_id = p.id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'C'
+        AND pm.xyz = 'X'
+        AND i.stock_disponible > 0
+        LIMIT 10
+    """
+    for row in db.execute(text(sql_estrella), {"empresa_id": empresa_id}).fetchall():
+        alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): [ESTRELLA] Producto '{row[0]}' era Clase C, pero ahora tiene demanda constante (XYZ=X, Ventas={row[1]:.1f}). Vigilar stock.")
+
+    # 1.3 Candidatos para Combos
     sql_n1_combos = """
         SELECT p.nombre, pm.dias_cobertura
         FROM producto_metricas pm
@@ -242,7 +271,23 @@ def run_mattia_agent(db: Session, empresa_id: int):
     for row in result_margen:
         alertas.append(f"Mattia (Finanzas): ¡Pérdida detectada! Producto '{row[0]}' se vende a ${row[1]} pero cuesta ${row[2]}.")
         
-    # 2. Capital estancado
+    # 2. Margen estrecho en productos VIP
+    sql_margen_estrecho = """
+        SELECT p.nombre, p.precio_venta, p.costo_unitario
+        FROM producto_metricas pm
+        JOIN productos p ON p.id = pm.producto_id
+        WHERE p.empresa_id = :empresa_id 
+        AND pm.abc = 'A'
+        AND p.precio_venta < (p.costo_unitario * 1.10)
+        AND p.precio_venta > p.costo_unitario
+        LIMIT 10
+    """
+    result_margen_estrecho = db.execute(text(sql_margen_estrecho), {"empresa_id": empresa_id}).fetchall()
+    for row in result_margen_estrecho:
+        margen_pct = ((row[1] - row[2]) / row[1]) * 100
+        alertas.append(f"Mattia (Finanzas): [ALERTA MARGEN] Producto Estrella '{row[0]}' tiene un margen muy estrecho ({margen_pct:.1f}%). Precio: ${row[1]}, Costo: ${row[2]}.")
+
+    # 3. Capital estancado
     sql_estancado = """
         SELECT p.nombre, (i.stock_disponible * p.costo_unitario) as valor_inv
         FROM producto_metricas pm
@@ -255,7 +300,7 @@ def run_mattia_agent(db: Session, empresa_id: int):
     """
     result_estancado = db.execute(text(sql_estancado), {"empresa_id": empresa_id}).fetchall()
     for row in result_estancado:
-        alertas.append(f"Mattia (Finanzas): Tienes ${row[1]:.2f} bloqueados en el producto '{row[0]}' (Clase Z) que no se vende.")
+        alertas.append(f"Mattia (Finanzas): [ESTANCADO] Tienes ${row[1]:.2f} bloqueados en el producto '{row[0]}' (Clase Z) que no se vende.")
         
     return alertas
 

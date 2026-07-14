@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 import logging
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 from docx import Document
 import io
 

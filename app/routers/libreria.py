@@ -8,9 +8,9 @@ from docx import Document
 import io
 
 from ..database import get_db
-from ..models import LibreriaDocumento
+from ..api.deps import get_current_user
+from ..models import LibreriaDocumento, Usuario
 from ..schemas import LibreriaDocumentoResponse, LibreriaChatRequest, LibreriaChatResponse
-from ..api.deps import get_current_user_empresa
 from ..copilot_service import get_openai_client
 
 router = APIRouter()
@@ -43,7 +43,7 @@ async def extract_text_from_upload(file: UploadFile) -> str:
 async def upload_document(
     file: UploadFile = File(...),
     department: str = Form(...),
-    empresa_id: int = Depends(get_current_user_empresa),
+    current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     try:
@@ -52,7 +52,7 @@ async def upload_document(
         
         # Guardar en BD
         doc = LibreriaDocumento(
-            empresa_id=empresa_id,
+            empresa_id=current_user.empresa_id,
             filename=file.filename,
             department=department,
             content_text=text_content
@@ -68,18 +68,18 @@ async def upload_document(
 
 @router.get("/documents", response_model=List[LibreriaDocumentoResponse])
 async def get_documents(
-    empresa_id: int = Depends(get_current_user_empresa),
+    current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return db.query(LibreriaDocumento).filter(LibreriaDocumento.empresa_id == empresa_id).order_by(LibreriaDocumento.upload_date.desc()).all()
+    return db.query(LibreriaDocumento).filter(LibreriaDocumento.empresa_id == current_user.empresa_id).order_by(LibreriaDocumento.upload_date.desc()).all()
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(
     doc_id: int,
-    empresa_id: int = Depends(get_current_user_empresa),
+    current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    doc = db.query(LibreriaDocumento).filter(LibreriaDocumento.id == doc_id, LibreriaDocumento.empresa_id == empresa_id).first()
+    doc = db.query(LibreriaDocumento).filter(LibreriaDocumento.id == doc_id, LibreriaDocumento.empresa_id == current_user.empresa_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
@@ -90,10 +90,10 @@ async def delete_document(
 @router.post("/ask", response_model=LibreriaChatResponse)
 async def ask_libreria(
     request: LibreriaChatRequest,
-    empresa_id: int = Depends(get_current_user_empresa),
+    current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    query = db.query(LibreriaDocumento).filter(LibreriaDocumento.empresa_id == empresa_id)
+    query = db.query(LibreriaDocumento).filter(LibreriaDocumento.empresa_id == current_user.empresa_id)
     
     if request.department_filter and request.department_filter != "all":
         query = query.filter(LibreriaDocumento.department == request.department_filter)

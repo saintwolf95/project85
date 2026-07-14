@@ -17,7 +17,7 @@ load_dotenv()
 
 from . import models, seed_data
 from .database import engine, get_db, SessionLocal
-from .routers import analytics, copilot, inventory, settings, agents
+from .routers import analytics, copilot, inventory, settings, agents, libreria
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -128,6 +128,7 @@ app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
+app.include_router(libreria.router, prefix="/api/v1/libreria")
 
 @app.post("/api/v1/seed", status_code=status.HTTP_201_CREATED)
 @limiter.limit("1/minute")

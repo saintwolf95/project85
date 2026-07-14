@@ -105,3 +105,20 @@ class AgentChatMessage(BaseModel):
 class AgentChatRequest(BaseModel):
     chat_id: Optional[int] = None
     history: List[AgentChatMessage]
+
+class LibreriaDocumentoResponse(BaseModel):
+    id: int
+    filename: str
+    department: str
+    upload_date: datetime
+    
+    class Config:
+        from_attributes = True
+
+class LibreriaChatRequest(BaseModel):
+    department_filter: Optional[str] = None
+    question: str
+
+class LibreriaChatResponse(BaseModel):
+    answer: str
+    context_docs: int

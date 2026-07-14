@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -21,6 +21,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/ai-control', icon: Power, label: 'Control IA' },
     { to: '/integrations', icon: Database, label: 'Data Engineering' },
     { to: '/import-guide', icon: FileSpreadsheet, label: 'Guía de Importación' },
+    { to: '/libreria', icon: BookOpen, label: 'LibrerIA' },
     { to: '/powerbi', icon: BarChart3, label: 'Power BI Services' },
   ];
 

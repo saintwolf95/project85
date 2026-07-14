@@ -160,3 +160,14 @@ class AgentMessage(Base):
     creado_en = Column(DateTime, default=datetime.utcnow)
     
     chat = relationship("AgentChat", back_populates="mensajes")
+
+class LibreriaDocumento(Base):
+    __tablename__ = "libreria_documentos"
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False)
+    filename = Column(String, nullable=False)
+    department = Column(String, nullable=False)
+    content_text = Column(String, nullable=False)
+    upload_date = Column(DateTime, default=datetime.utcnow)
+    
+    empresa = relationship("Empresa")

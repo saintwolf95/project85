@@ -54,6 +54,18 @@ export interface AIInsight {
   tipo: string;
 }
 
+export interface LibreriaDocument {
+  id: number;
+  filename: string;
+  department: string;
+  upload_date: string;
+}
+
+export interface LibreriaChatResponse {
+  answer: string;
+  context_docs: number;
+}
+
 export interface ProductHistoryDaily {
   fecha: string;
   ventas_eur: number;
@@ -65,6 +77,36 @@ export interface ProductHistoryResponse {
   nombre: string;
   historico: ProductHistoryDaily[];
 }
+
+export const uploadLibreriaDocument = async (file: File, department: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('department', department);
+  const response = await api.post<LibreriaDocument>('/libreria/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    }
+  });
+  return response.data;
+};
+
+export const getLibreriaDocuments = async () => {
+  const response = await api.get<LibreriaDocument[]>('/libreria/documents');
+  return response.data;
+};
+
+export const deleteLibreriaDocument = async (docId: number) => {
+  const response = await api.delete(`/libreria/documents/${docId}`);
+  return response.data;
+};
+
+export const askLibreria = async (question: string, department_filter?: string) => {
+  const response = await api.post<LibreriaChatResponse>('/libreria/ask', {
+    question,
+    department_filter: department_filter || 'all'
+  });
+  return response.data;
+};
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://fivemin-7hq5.onrender.com/api/v1' : 'http://localhost:8080/api/v1'),

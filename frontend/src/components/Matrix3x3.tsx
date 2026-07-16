@@ -29,11 +29,18 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
   };
 
   const getCellColor = (matriz: string) => {
-    if (matriz === 'CX') return 'bg-red-50 dark:bg-red-500/20 border-red-200 dark:border-red-500/50 text-red-600 dark:text-red-400';
-    if (matriz === 'AX') return 'bg-orange-50 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/50 text-orange-600 dark:text-orange-400';
-    if (matriz === 'AZ') return 'bg-green-50 dark:bg-green-500/20 border-green-200 dark:border-green-500/50 text-green-600 dark:text-green-400';
-    if (matriz === 'CZ') return 'bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400';
-    return 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700';
+    switch(matriz) {
+      case 'AX': return 'bg-blue-50 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/50 text-blue-600 dark:text-blue-400';
+      case 'AY': return 'bg-yellow-50 dark:bg-yellow-500/20 border-yellow-200 dark:border-yellow-500/50 text-yellow-600 dark:text-yellow-400';
+      case 'AZ': return 'bg-red-50 dark:bg-red-500/20 border-red-200 dark:border-red-500/50 text-red-600 dark:text-red-400';
+      case 'BX': return 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-400';
+      case 'BY': return 'bg-yellow-50 dark:bg-yellow-500/20 border-yellow-200 dark:border-yellow-500/50 text-yellow-600 dark:text-yellow-400';
+      case 'BZ': return 'bg-orange-50 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/50 text-orange-600 dark:text-orange-400';
+      case 'CX': return 'bg-emerald-50 dark:bg-emerald-500/20 border-emerald-200 dark:border-emerald-500/50 text-emerald-600 dark:text-emerald-400';
+      case 'CY': return 'bg-lime-50 dark:bg-lime-500/20 border-lime-200 dark:border-lime-500/50 text-lime-600 dark:text-lime-400';
+      case 'CZ': return 'bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400';
+      default: return 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700';
+    }
   };
 
   const cells = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'];

@@ -1,4 +1,5 @@
 import type { ProductMetrics } from '../services/api';
+import { Info } from 'lucide-react';
 
 interface MatrixProps {
   data: ProductMetrics[];
@@ -43,6 +44,21 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
     }
   };
 
+  const getCellDescription = (matriz: string) => {
+    switch(matriz) {
+      case 'AX': return 'Core Business (AX): Productos estrella. Gran valor invertido (A) pero con demanda súper estable (X). Sabes exactamente cuánto vas a vender.';
+      case 'AY': return 'Atención Moderada (AY): Alta inversión pero demanda variable. Hay que controlarlos para evitar roturas o sobre-stock.';
+      case 'AZ': return 'CRÍTICO (AZ): Riesgo Máximo. Mucho dinero bloqueado en artículos con ventas erráticas. Mayor probabilidad de obsolescencia.';
+      case 'BX': return 'Flujo Seguro (BX): Inversión media, venta constante y segura. Mantienen a la empresa facturando.';
+      case 'BY': return 'Vigilancia Estándar (BY): Inversión y variación medias. Cuadrante normal, pero requiere alertas de máximos/mínimos.';
+      case 'BZ': return 'Riesgo Alto (BZ): Inversión moderada pero ventas erráticas. Cuidado con los cambios del mercado.';
+      case 'CX': return 'Automatizable (CX): Poco valor económico y venta constante. Su reposición se puede automatizar.';
+      case 'CY': return 'Baja Prioridad (CY): Poco valor y venta irregular. Monitoreo pasivo es suficiente.';
+      case 'CZ': return 'Ruido del Catálogo (CZ): Poco valor y demanda casi nula. Evaluar discontinuar o comprar sólo bajo pedido.';
+      default: return 'Detalle de Cuadrante';
+    }
+  };
+
   const cells = ['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'];
 
   return (
@@ -74,12 +90,18 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
             <div 
               key={cell} 
               onClick={() => onCellClick && onCellClick(cell)}
-              className={`flex flex-col items-center justify-center py-1.5 px-0.5 sm:py-2 sm:px-1 rounded-lg border-2 transition-all
+              className={`relative flex flex-col items-center justify-center py-1.5 px-0.5 sm:py-2 sm:px-1 rounded-lg border-2 transition-all
                 ${getCellColor(cell)} 
                 ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
                 ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
               `}>
-              <span className="text-base sm:text-lg font-bold leading-none">{m.count.toLocaleString('es-ES')}</span>
+              <div 
+                className="absolute top-1 right-1 cursor-help"
+                title={getCellDescription(cell)}
+              >
+                <Info className="w-3 h-3 opacity-40 hover:opacity-100 transition-opacity" />
+              </div>
+              <span className="text-base sm:text-lg font-bold leading-none mt-1">{m.count.toLocaleString('es-ES')}</span>
               <span className="text-[9px] sm:text-[10px] font-bold uppercase mt-0.5 opacity-90">{cell}</span>
               <div className="flex flex-col w-full text-[8px] sm:text-[9px] text-center mt-1 border-t border-black/10 dark:border-white/10 pt-1 opacity-80 font-medium">
                 <span className="truncate w-full px-0.5">Inv: {formatEuro(m.inv)}</span>

@@ -3,6 +3,7 @@ import { getInventoryAbc, getDashboardKpis } from '../services/api';
 import type { ProductMetrics, DashboardKPIsResponse } from '../services/api';
 import { KpiCards } from '../components/KpiCards';
 import { Matrix3x3 } from '../components/Matrix3x3';
+import { MatrixBarChart } from '../components/MatrixBarChart';
 import { InventoryTable } from '../components/InventoryTable';
 import { ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, Download, ArrowRight } from 'lucide-react';
 import { MatrixDetail } from '../components/MatrixDetail';
@@ -262,6 +263,7 @@ export const Intelligence = () => {
             <div className="flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar pb-1">
               <div className="shrink-0">
                 <Matrix3x3 data={inventoryData} onCellClick={handleCellClick} activeCell={activeCell} />
+                <MatrixBarChart data={inventoryData} />
               </div>
 
               {activeCell && (

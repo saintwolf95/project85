@@ -23,10 +23,13 @@ if DATABASE_URL and (DATABASE_URL.startswith("postgresql://") or DATABASE_URL.st
         if DATABASE_URL.endswith("?"):
             DATABASE_URL = DATABASE_URL[:-1]
             
+    print(f"[DATABASE] Conectando a PostgreSQL (Supabase) host: {DATABASE_URL.split('@')[-1].split('/')[0]}", flush=True)
     engine = create_engine(DATABASE_URL)
     engine_ro = create_engine(DATABASE_URL) # En Postgres la seguridad debe hacerse a nivel de usuario (Rol)
 else:
     # Fallback a SQLite local
+    print("[DATABASE] ATENCIÓN: DATABASE_URL no encontrada. Usando fallback a SQLite (supplychain.db).", flush=True)
+    print("[DATABASE] Si estás en Producción (Render), añade DATABASE_URL en las variables de entorno.", flush=True)
     SQLALCHEMY_DATABASE_URL = "sqlite:///./supplychain.db"
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL, 

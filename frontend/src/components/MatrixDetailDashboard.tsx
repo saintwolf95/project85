@@ -24,103 +24,103 @@ interface Strategy {
 
 const getStrategy = (activeCell: string): Strategy => {
   switch (activeCell) {
-    case 'AA': return {
-      title: 'Productos Estrella ⭐',
-      desc: 'Alta rotación de ventas y alta inversión en inventario. Estos artículos son el motor de tu negocio. Nunca deben faltar en stock.',
-      color: 'emerald',
-      textColor: 'text-emerald-600 dark:text-emerald-400',
-      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
-      borderColor: 'border-emerald-200 dark:border-emerald-800',
-      icon: <TrendingUp className="w-5 h-5" />,
-      actions: ['✅ Mantener stock de seguridad elevado', '✅ Negociar volumen con proveedores', '✅ Monitorear semanalmente'],
-      kpiLabel: 'ventas60'
-    };
-    case 'AB': return {
-      title: 'Alta Venta, Inversión Media',
-      desc: 'Productos con muy buena demanda pero con nivel de inversión moderado. Tienen potencial para convertirse en Clase A completa.',
+    case 'AX': return {
+      title: 'Core Business (AX) ⭐',
+      desc: 'Alta inversión y demanda altamente predecible. Estos artículos son el motor principal de la empresa. Riesgo casi nulo.',
       color: 'blue',
-      textColor: 'text-brand-blue dark:text-brand-cyan',
+      textColor: 'text-blue-600 dark:text-blue-400',
       bg: 'bg-blue-50 dark:bg-blue-900/20',
       borderColor: 'border-blue-200 dark:border-blue-800',
       icon: <TrendingUp className="w-5 h-5" />,
-      actions: ['📈 Incrementar compras para aprovechar la demanda', '📊 Revisar si el stock sube de categoría'],
+      actions: ['✅ Automatizar las compras (reposición automática)', '✅ Negociar grandes volúmenes con proveedores', '✅ Mantener niveles de servicio altos'],
       kpiLabel: 'ventas60'
     };
-    case 'AC': return {
-      title: '🚨 Riesgo de Rotura Inminente',
-      desc: 'Artículos con ventas muy altas pero inventario mínimo. Alta probabilidad de quedarse sin stock. Actuar con urgencia.',
+    case 'AY': return {
+      title: 'Atención Moderada (AY)',
+      desc: 'Alta inversión pero con demanda variable. Es importante controlarlos de cerca para evitar sobre-stock o roturas.',
+      color: 'amber',
+      textColor: 'text-yellow-600 dark:text-yellow-400',
+      bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+      borderColor: 'border-yellow-200 dark:border-yellow-800',
+      icon: <TrendingUp className="w-5 h-5" />,
+      actions: ['📈 Monitorear fluctuaciones semanales', '📊 Ajustar márgenes de seguridad dinámicamente'],
+      kpiLabel: 'ventas60'
+    };
+    case 'AZ': return {
+      title: 'CRÍTICO: Riesgo Máximo (AZ) 🚨',
+      desc: 'Dinero bloqueado en artículos con ventas erráticas. Mayor probabilidad de obsolescencia. Situación muy tóxica.',
       color: 'red',
       textColor: 'text-red-600 dark:text-red-400',
       bg: 'bg-red-50 dark:bg-red-900/20',
       borderColor: 'border-red-200 dark:border-red-800',
       icon: <AlertTriangle className="w-5 h-5" />,
-      actions: ['🔴 Emitir Orden de Compra URGENTE', '🔴 Verificar stock físico inmediatamente', '🔴 Activar plan B con proveedores alternativos'],
-      kpiLabel: 'rotura'
-    };
-    case 'BA': return {
-      title: 'Inversión Alta, Ventas Medias',
-      desc: 'Alto capital inmovilizado con demanda media. Evaluar si el stock está sobredimensionado respecto a la rotación real.',
-      color: 'amber',
-      textColor: 'text-amber-600 dark:text-amber-500',
-      bg: 'bg-amber-50 dark:bg-amber-900/20',
-      borderColor: 'border-amber-200 dark:border-amber-800',
-      icon: <TrendingDown className="w-5 h-5" />,
-      actions: ['⚠️ Reducir próximas órdenes de compra', '⚠️ Analizar si hay estacionalidad', '⚠️ Considerar promociones puntuales'],
+      actions: ['🔴 Limitar compras, trabajar bajo pedido si es posible', '🔴 Negociar acuerdos de devolución', '🔴 Bajar precios de inmediato para rotar'],
       kpiLabel: 'valor'
     };
-    case 'BB': return {
-      title: 'Productos Equilibrados',
-      desc: 'Venta e inversión medias. Son el grueso del catálogo. Mantener una política de stock estándar y reabastecimiento regular.',
-      color: 'blue',
-      textColor: 'text-brand-blue dark:text-brand-cyan',
-      bg: 'bg-slate-50 dark:bg-slate-800/50',
-      borderColor: 'border-slate-200 dark:border-slate-700',
+    case 'BX': return {
+      title: 'Flujo Seguro (BX)',
+      desc: 'Inversión media, venta constante y segura. No dan problemas y mantienen a la empresa facturando.',
+      color: 'emerald',
+      textColor: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+      borderColor: 'border-emerald-200 dark:border-emerald-800',
       icon: <ShoppingCart className="w-5 h-5" />,
-      actions: ['✅ Mantener ciclos de reposición estándar', '📊 Revisar trimestralmente su evolución'],
+      actions: ['✅ Programar compras mensuales/bimensuales', '✅ Relajación en controles diarios'],
+      kpiLabel: 'ventas60'
+    };
+    case 'BY': return {
+      title: 'Vigilancia Estándar (BY)',
+      desc: 'Inversión y variación medias. Un cuadrante normal. No quita el sueño pero hay que mantener control.',
+      color: 'amber',
+      textColor: 'text-yellow-600 dark:text-yellow-400',
+      bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+      borderColor: 'border-yellow-200 dark:border-yellow-800',
+      icon: <ShoppingCart className="w-5 h-5" />,
+      actions: ['⚠️ Utilizar alertas de máximos y mínimos', '📊 Revisar trimestralmente su evolución'],
       kpiLabel: 'valor'
     };
-    case 'BC': return {
-      title: 'Venta Media, Stock Bajo',
-      desc: 'Artículos con demanda media pero muy poco stock. Pueden entrar en rotura si la demanda sube levemente.',
+    case 'BZ': return {
+      title: 'Riesgo Alto (BZ)',
+      desc: 'Inversión moderada pero ventas muy erráticas. Riesgo significativo de quedar obsoleto si cambia el mercado.',
       color: 'orange',
       textColor: 'text-orange-600 dark:text-orange-400',
       bg: 'bg-orange-50 dark:bg-orange-900/20',
       borderColor: 'border-orange-200 dark:border-orange-800',
       icon: <AlertTriangle className="w-5 h-5" />,
-      actions: ['⚠️ Revisar punto de reorden', '📦 Aumentar frecuencia de pedidos'],
-      kpiLabel: 'rotura'
-    };
-    case 'CA': return {
-      title: '💰 Capital Inmovilizado',
-      desc: 'Artículos con muy poca o nula rotación pero con alta inversión en stock. Riesgo de obsolescencia y pérdida financiera.',
-      color: 'amber',
-      textColor: 'text-amber-600 dark:text-amber-500',
-      bg: 'bg-amber-50 dark:bg-amber-900/20',
-      borderColor: 'border-amber-200 dark:border-amber-800',
-      icon: <TrendingDown className="w-5 h-5" />,
-      actions: ['🔶 Lanzar promociones o descuentos', '🔶 Proponer a comercial para bundle', '🔶 Evaluar devolución al proveedor', '🔶 Marcar para liquidación si >180 días'],
+      actions: ['⚠️ Bajar el punto de pedido urgentemente', '📦 Intentar forzar ventas cruzadas (bundles)'],
       kpiLabel: 'valor'
     };
-    case 'CB': return {
-      title: 'Stock Alto, Ventas Bajas',
-      desc: 'Inventario medio-alto con poca demanda. Vigilar la cobertura; si supera los 90 días puede convertirse en problema financiero.',
-      color: 'slate',
-      textColor: 'text-slate-600 dark:text-slate-400',
-      bg: 'bg-slate-50 dark:bg-slate-800/50',
-      borderColor: 'border-slate-200 dark:border-slate-700',
-      icon: <TrendingDown className="w-5 h-5" />,
-      actions: ['📉 Reducir siguiente orden de compra', '📊 Monitorizar evolución mensual'],
-      kpiLabel: 'valor'
-    };
-    case 'CC': return {
-      title: 'Baja Prioridad',
-      desc: 'Poca venta y poca inversión. No generan riesgo pero tampoco valor. Simplificar el catálogo eliminando o comprando sólo bajo pedido.',
-      color: 'slate',
-      textColor: 'text-slate-500',
-      bg: 'bg-slate-50 dark:bg-slate-800',
-      borderColor: 'border-slate-200 dark:border-slate-700',
+    case 'CX': return {
+      title: 'Automatizable (CX)',
+      desc: 'Poco valor económico y venta constante. Los típicos consumibles rápidos. Deben gestionarse sin tiempo humano.',
+      color: 'emerald',
+      textColor: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+      borderColor: 'border-emerald-200 dark:border-emerald-800',
       icon: <Package className="w-5 h-5" />,
-      actions: ['⬇️ Comprar únicamente bajo pedido', '🗑️ Considerar discontinuar referencias', '✂️ Simplificar catálogo'],
+      actions: ['⚙️ Automatización total de reposición', '⚙️ Trabajar con Kanban de 2 bins'],
+      kpiLabel: 'valor'
+    };
+    case 'CY': return {
+      title: 'Baja Prioridad (CY)',
+      desc: 'Poco valor, venta irregular pero algo predecible. Monitoreo pasivo.',
+      color: 'lime',
+      textColor: 'text-lime-600 dark:text-lime-400',
+      bg: 'bg-lime-50 dark:bg-lime-900/20',
+      borderColor: 'border-lime-200 dark:border-lime-800',
+      icon: <Package className="w-5 h-5" />,
+      actions: ['📉 Revisión esporádica', '📊 Compras por lotes para abaratar envío'],
+      kpiLabel: 'valor'
+    };
+    case 'CZ': return {
+      title: 'Ruido del Catálogo (CZ)',
+      desc: 'Poco valor y demanda casi nula o aleatoria. No generan beneficio. Son accesorios residuales.',
+      color: 'slate',
+      textColor: 'text-slate-500 dark:text-slate-400',
+      bg: 'bg-slate-100 dark:bg-slate-800',
+      borderColor: 'border-slate-300 dark:border-slate-700',
+      icon: <TrendingDown className="w-5 h-5" />,
+      actions: ['⬇️ Mover a "sólo por pedido"', '🗑️ Evaluar discontinuar producto', '✂️ Simplificar catálogo retirándolos'],
       kpiLabel: 'valor'
     };
     default: return {

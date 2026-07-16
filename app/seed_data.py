@@ -77,7 +77,8 @@ def crear_datos_demo(db: Session):
         admin_user.supabase_uid = uid_env
         db.commit()
 
-    # ─── 2. Limpiar Supply Chain previo (preserva auth) ───
+    from .models import ProductoMetricas
+    db.query(ProductoMetricas).delete()
     db.query(Registro_PO).delete()
     db.query(VentaHistorica).delete()
     db.query(InventarioSnapshot).delete()
@@ -195,9 +196,9 @@ def crear_datos_demo(db: Session):
                 cantidad = 0 if random.random() < 0.88 else 1
             else:
                 if xyz_profile == 'X':
-                    prob_sale = 0.98
-                    base_qty = max(1, (vmin + vmax) // 2)
-                    varianza = max(1, int(base_qty * 0.1))
+                    prob_sale = 1.0
+                    base_qty = max(15, vmin + vmax)
+                    varianza = max(1, int(base_qty * 0.05))
                 elif xyz_profile == 'Y':
                     prob_sale = 0.70
                     base_qty = max(1, (vmin + vmax) // 2)

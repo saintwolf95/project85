@@ -40,7 +40,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           <div className="flex items-center gap-3 mb-4">
             <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-16 md:h-20 w-auto object-contain" />
             <span className="mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
-              v.1.58
+              v.1.01
             </span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

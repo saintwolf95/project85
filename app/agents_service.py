@@ -475,15 +475,15 @@ Formato obligatorio de salida (Markdown):
     
     try:
         try:
-            # Intentar primero con la familia o1 (o1-preview u o1)
+            # Intentar primero con la familia o1
             response = client.chat.completions.create(
-                model="o1-preview",
+                model="o1",
                 messages=[{"role": "user", "content": prompt}]
             )
             return response.choices[0].message.content
         except Exception as e:
             if "does not exist" in str(e) or "access" in str(e) or "model_not_found" in str(e):
-                logger.warning(f"Modelo o1-preview no accesible. Cayendo a gpt-4o. Detalle: {e}")
+                logger.warning(f"Modelo o1 no accesible. Cayendo a gpt-4o. Detalle: {e}")
                 fallback_response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[

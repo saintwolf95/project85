@@ -126,7 +126,7 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
             )
         except Exception as e:
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL): {str(e)}", exc_info=True)
-            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
+            return f"SELECT 'Error de comunicación con el motor de IA. Detalle: {str(e)}' AS error"
     
     sql_query = response.choices[0].message.content.strip()
     
@@ -265,7 +265,7 @@ Contexto del Negocio: {contexto}
             )
         except Exception as e:
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
-            return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
+            return f"⚠️ **Error de comunicación:** {str(e)}"
     
     reply = response.choices[0].message.content.strip()
     # Adjuntamos el SQL oculto para el feature de CSV Export

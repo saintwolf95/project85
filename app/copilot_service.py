@@ -282,13 +282,35 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         
     user_message = history[-1]["content"]
     
-    # 1. Generar SQL
-    sql_query = generate_sql(history, empresa_id, model_preference, contexto)
+    # Loop de reintento: si la SQL falla, se le dice a GPT qué falló para que corrija
+    max_retries = 2
+    retry_history = list(history)  # Copia para no mutar el original
     
-    # 2. Ejecutar SQL en la conexión RO
-    raw_data, error = execute_sql(db, sql_query)
+    for attempt in range(max_retries + 1):
+        # 1. Generar SQL
+        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto)
+        
+        # 2. Ejecutar SQL en la conexión RO
+        raw_data, error = execute_sql(db, sql_query)
+        
+        # 3. Si hay error y quedan reintentos, pedirle a GPT que corrija
+        if error and attempt < max_retries:
+            logger.warning(f"[AUDIT SQL] Reintento {attempt + 1}/{max_retries}. SQL fallida: {sql_query}")
+            # Añadir el contexto del error para que GPT corrija
+            retry_history = list(history)  # Reset al historial original
+            retry_history.append({
+                "role": "assistant",
+                "content": sql_query
+            })
+            retry_history.append({
+                "role": "user",
+                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, inventario_snapshot, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
+            })
+            continue
+        
+        # 4. Interpretar (ya sea con datos o con error final)
+        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto)
+        return final_response
     
-    # 3. Interpretar
-    final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto)
-    
-    return final_response
+    return "⚠️ No se pudo generar una consulta válida tras varios intentos. Por favor, reformula tu pregunta."
+

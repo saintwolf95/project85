@@ -39,56 +39,106 @@ def cleanup_old_chats(db: Session, usuario_id: int):
         logger.error(f"Error limpiando chats antiguos: {e}")
         db.rollback()
 SCHEMA_PROMPT = """
-Eres un experto en bases de datos y logística. 
-Tu trabajo es responder a la pregunta del usuario generando EXCLUSIVAMENTE una consulta SQL válida para SQLite.
+Eres un experto en bases de datos y logística de supply chain.
+Tu trabajo es responder a la pregunta del usuario generando EXCLUSIVAMENTE una consulta SQL válida para PostgreSQL.
 No incluyas explicaciones, ni etiquetas de markdown. Devuelve únicamente el texto de la consulta SQL.
 
 El esquema de la base de datos es el siguiente:
 
-Tabla `productos`:
+Tabla `productos` (alias recomendado: p):
 - id (INTEGER, Primary Key)
-- empresa_id (INTEGER)
-- sku (VARCHAR)
-- nombre (VARCHAR)
-- costo_unitario (FLOAT)
-- precio_venta (FLOAT)
-- lead_time_dias (INTEGER)
-- part_number (VARCHAR)
-- ean (VARCHAR)
-- peso (FLOAT)
-- familia (VARCHAR)
-- marca (VARCHAR)
+- empresa_id (INTEGER) -- OBLIGATORIO filtrar siempre por este campo
+- sku (VARCHAR) -- código único del producto
+- nombre (VARCHAR) -- nombre descriptivo del artículo
+- costo_unitario (FLOAT) -- coste de compra al proveedor
+- precio_venta (FLOAT) -- precio de venta al cliente
+- lead_time_dias (INTEGER) -- días de plazo de entrega del proveedor
+- familia (VARCHAR) -- categoría de producto (ej: 'Portátiles', 'Procesadores')
+- marca (VARCHAR) -- marca del producto
+- product_manager (VARCHAR) -- responsable del producto
+- seccion (VARCHAR) -- sección o subcategoría
 
-Tabla `inventario_snapshot`:
-- producto_id (INTEGER, Primary Key, Foreign Key a productos.id)
-- stock_disponible (INTEGER)
+Tabla `inventario_snapshot` (alias recomendado: inv):
+- producto_id (INTEGER, FK a productos.id)
+- stock_disponible (INTEGER) -- unidades físicas actuales en almacén
 
-Tabla `ventas_historicas`:
+Tabla `ventas_historicas` (alias recomendado: vh):
 - id (INTEGER, Primary Key)
-- producto_id (INTEGER, Foreign Key a productos.id)
-- fecha_venta (DATE)
-- cantidad_vendida (INTEGER)
+- producto_id (INTEGER, FK a productos.id)
+- fecha_venta (DATE) -- fecha de la venta (formato YYYY-MM-DD)
+- cantidad_vendida (INTEGER) -- unidades vendidas
 - precio_unitario (FLOAT)
-- ingreso_total (FLOAT)
-- stock_disponible (INTEGER)
+- ingreso_total (FLOAT) -- ingresos en euros de esa línea de venta
 
-Tabla `registro_po`:
+Tabla `registro_po` (alias recomendado: po):
 - id (INTEGER, Primary Key)
-- producto_id (INTEGER, Foreign Key a productos.id)
+- producto_id (INTEGER, FK a productos.id)
 - fecha_orden (DATE)
 - cantidad_sugerida_algoritmo (INTEGER)
 - cantidad_aprobada_usuario (INTEGER)
-- motivo_modificacion (VARCHAR)
-- estado (VARCHAR)
+- estado (VARCHAR) -- 'Pendiente', 'Aprobado', 'Rechazado'
 
-Tabla `producto_metricas`:
-- producto_id (INTEGER, Primary Key, Foreign Key a productos.id)
-- abc (VARCHAR) -- Clasificación Pareto por Ventas (A, B, C)
-- xyz (VARCHAR) -- Clasificación Pareto por Inventario (X, Y, Z)
-- matriz_abc (VARCHAR) -- Cuadrante de Doble Análisis (ej: AX, BY, CZ)
-- dias_cobertura (FLOAT)
-- riesgo_rotura (BOOLEAN)
+Tabla `producto_metricas` (alias recomendado: pm):
+- producto_id (INTEGER, FK a productos.id)
+- abc (VARCHAR) -- Clasificación ABC por valor de ventas: 'A' (top 80%), 'B' (siguiente 15%), 'C' (restante 5%)
+- xyz (VARCHAR) -- Clasificación XYZ por volatilidad de demanda: 'X' (estable), 'Y' (variable), 'Z' (errática)
+- matriz_abc (VARCHAR) -- Cuadrante combinado: 'AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'
+- dias_cobertura (FLOAT) -- días que durará el stock actual al ritmo de ventas actual
+- riesgo_rotura (BOOLEAN) -- TRUE si hay riesgo inminente de quedarse sin stock
+- ventas_60d (FLOAT) -- ingresos totales en euros de los últimos 60 días
+- ventas_90d (FLOAT) -- ingresos totales en euros de los últimos 90 días
+- valor_inv (FLOAT) -- valor económico del inventario actual (stock * coste unitario)
+- ads (FLOAT) -- Average Daily Sales: ventas diarias promedio en unidades
+- unidades_venta_60d (INTEGER) -- unidades vendidas en los últimos 60 días
+- precio_unit (FLOAT) -- precio de venta unitario
+- unidades (INTEGER) -- stock disponible actual (igual que inventario_snapshot.stock_disponible)
+
+EJEMPLOS DE QUERIES ÚTILES:
+-- Top productos por valor de inventario:
+SELECT p.nombre, pm.valor_inv, pm.matriz_abc FROM productos p JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 ORDER BY pm.valor_inv DESC LIMIT 10;
+-- Productos con riesgo de rotura clase A:
+SELECT p.nombre, pm.dias_cobertura, pm.ventas_90d FROM productos p JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 AND pm.abc = 'A' AND pm.riesgo_rotura = TRUE ORDER BY pm.dias_cobertura ASC;
 """
+
+CONVERSATIONAL_KEYWORDS = [
+    'hola', 'buenos días', 'buenas tardes', 'buenas noches', 'cómo estás', 'como estas',
+    'gracias', 'de nada', 'ok', 'perfecto', 'entendido', 'ayuda', 'help',
+    'qué puedes hacer', 'que puedes hacer', 'para qué sirves', 'para que sirves'
+]
+
+def is_conversational(message: str) -> bool:
+    """Detecta si el mensaje es conversacional y no requiere SQL."""
+    msg_lower = message.lower().strip()
+    # Mensaje muy corto sin palabras clave de negocio
+    if len(msg_lower) < 15:
+        business_keywords = ['producto', 'stock', 'inventario', 'venta', 'sku', 'familia', 'clase', 'abc', 'riesgo', 'cobertura', 'precio', 'margen', 'proveedor']
+        if not any(kw in msg_lower for kw in business_keywords):
+            return True
+    # Saludo explícito
+    if any(kw in msg_lower for kw in CONVERSATIONAL_KEYWORDS):
+        return True
+    return False
+
+def handle_conversational(message: str, contexto: str = "") -> str:
+    """Responde a preguntas conversacionales sin generar SQL."""
+    client = get_openai_client()
+    if not client:
+        return "¡Hola! Soy tu AI Copilot de Supply Chain. Puedes preguntarme sobre tu inventario, ventas, productos, alertas de stock, y mucho más."
+    
+    system = f"""Eres SupplyChain AI, un asistente experto en logística y gestión de inventario.
+Responde de forma amigable, concisa y en español. Menciona brevemente qué tipo de preguntas puedes responder (inventario, ventas, stock, clasificación ABC/XYZ, etc.).
+Contexto de la empresa: {contexto or 'No disponible'}"""
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": message}],
+            max_tokens=300,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return "¡Hola! Soy tu AI Copilot. Puedo analizar tu inventario, ventas, y métricas ABC/XYZ. ¿Qué necesitas saber?"
 
 def generate_sql(history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
@@ -208,6 +258,9 @@ REGLAS ESTRICTAS PARA MODO AVANZADO:
 5. **Lenguaje SQL Prohibido:** NUNCA muestres código SQL ni nombres de tablas/columnas técnicas al usuario.
 6. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
 7. **Contexto Corporativo:** Usa el "Contexto del Negocio" para adaptar tus consejos a la realidad de la empresa.
+8. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
+9. **Moneda:** Usa siempre el formato europeo para importes: €1.234,56 con punto como separador de miles y coma como decimal.
+10. **Tablas:** Cuando los datos sean una lista de artículos o comparativa, formatea la respuesta como tabla Markdown.
 
 Contexto Técnico Interno (OCULTO AL USUARIO):
 Consulta SQL ejecutada: {sql_query}
@@ -246,6 +299,9 @@ REGLAS ESTRICTAS PARA MODO RÁPIDO:
 4. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL ni nombres de tablas/columnas técnicas.
 5. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
 6. **Contexto:** Usa el "Contexto del Negocio".
+7. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
+8. **Moneda:** Usa siempre el formato europeo para importes: €1.234,56 con punto como separador de miles y coma como decimal.
+9. **Tablas:** Cuando los datos sean una lista de artículos o comparativa, formatea la respuesta como tabla Markdown (| col1 | col2 |).
 
 Contexto Técnico Interno (OCULTO AL USUARIO):
 Consulta SQL ejecutada: {sql_query}
@@ -260,8 +316,8 @@ Contexto del Negocio: {contexto}
             response = client.chat.completions.create(
                 model=model_name,
                 messages=messages,
-                temperature=0.2,
-                max_tokens=1000
+                temperature=0.1,
+                max_tokens=2000
             )
         except Exception as e:
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
@@ -281,6 +337,10 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         return "No hay historial de mensajes."
         
     user_message = history[-1]["content"]
+    
+    # Detectar si es una pregunta conversacional (no requiere SQL)
+    if is_conversational(user_message):
+        return handle_conversational(user_message, contexto)
     
     # Loop de reintento: si la SQL falla, se le dice a GPT qué falló para que corrija
     max_retries = 2
@@ -311,5 +371,11 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto)
         return final_response
     
-    return "⚠️ No se pudo generar una consulta válida tras varios intentos. Por favor, reformula tu pregunta."
+    return """⚠️ **No pude obtener datos para responder tu pregunta** tras varios intentos.
+
+Esto puede ocurrir si la pregunta usa términos muy genéricos o combinaciones inusuales. Prueba a ser más específico:
+- ✅ *¿Cuál es el valor del inventario de la familia 'Portátiles'?*
+- ✅ *¿Qué productos clase A tienen riesgo de rotura?*
+- ✅ *Top 10 productos por ventas 90 días*
+- ✅ *¿Cuántos artículos hay en cada cuadrante de la matriz ABC/XYZ?*"""
 

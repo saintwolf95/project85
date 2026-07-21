@@ -138,3 +138,27 @@ async def ask_libreria(
     except Exception as e:
         logger.error(f"Error en Libreria Ask: {e}")
         raise HTTPException(status_code=500, detail="Error consultando a la IA de LibrerIA.")
+
+@router.get("/documents/for-copilot")
+async def get_documents_for_copilot(
+    doc_ids: str,
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        ids = [int(i.strip()) for i in doc_ids.split(',') if i.strip().isdigit()]
+        if not ids:
+            return {"context": "", "count": 0}
+        docs = db.query(LibreriaDocumento).filter(
+            LibreriaDocumento.empresa_id == current_user.empresa_id,
+            LibreriaDocumento.id.in_(ids)
+        ).all()
+        if not docs:
+            return {"context": "", "count": 0}
+        context_parts = []
+        for doc in docs:
+            context_parts.append(f"--- Documento: {doc.filename} ({doc.department}) ---\n{doc.content_text}\n")
+        return {"context": "\n\n".join(context_parts), "count": len(docs)}
+    except Exception as e:
+        logger.error(f"Error recuperando docs para Copilot: {e}")
+        return {"context": "", "count": 0}

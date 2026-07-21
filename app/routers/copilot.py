@@ -20,6 +20,7 @@ class ChatRequest(BaseModel):
     chat_id: Optional[int] = None
     history: List[ChatMessage] = Field(..., max_length=20)
     model_preference: Literal["fast", "thinking", "ultra_thinking"] = "fast"
+    libreria_doc_ids: Optional[List[int]] = None
 
 class ChatResponse(BaseModel):
     reply: str
@@ -162,6 +163,22 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         # Obtener contexto de negocio
         empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
         contexto_negocio = empresa.contexto_negocio if empresa else ""
+
+        if payload.libreria_doc_ids:
+            try:
+                from ..models import LibreriaDocumento
+                libreria_docs = db.query(LibreriaDocumento).filter(
+                    LibreriaDocumento.empresa_id == current_user.empresa_id,
+                    LibreriaDocumento.id.in_(payload.libreria_doc_ids)
+                ).all()
+                if libreria_docs:
+                    lib_ctx = "\n\n=== DOCUMENTOS DE REFERENCIA (LibrerIA) ===\nUsa estos documentos como base de conocimiento, terminologia y contexto del negocio:\n\n"
+                    for doc in libreria_docs:
+                        lib_ctx += f"--- {doc.filename} ({doc.department}) ---\n{doc.content_text[:3000]}\n\n"
+                    contexto_negocio = (contexto_negocio or "") + lib_ctx
+            except Exception as e_lib:
+                import logging as _log
+                _log.warning(f"Error cargando docs LibrerIA: {e_lib}")
 
         # DB RO para queries analíticas de la IA
         from ..database import SessionLocal

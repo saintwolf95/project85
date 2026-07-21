@@ -4,13 +4,15 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
 from ..database import get_db, get_db_ro
-from ..copilot_service import process_copilot_chat, cleanup_old_chats
+from ..copilot_service import process_copilot_chat, cleanup_old_chats, extract_signed_sql_export
 from ..models import Usuario, CopilotChat, CopilotMessage
 from ..api.deps import get_current_user
 from ..core.rate_limit import limiter
 from .. import models
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
+MAX_CONTEXT_FILE_SIZE = 1_048_576
+MAX_CONTEXT_CHARS = 200_000
 
 class ChatMessage(BaseModel):
     role: Literal["user", "assistant"]
@@ -28,7 +30,7 @@ class ChatResponse(BaseModel):
     message_id: int
 
 class ContextoRequest(BaseModel):
-    contexto_negocio: str
+    contexto_negocio: str = Field(..., max_length=MAX_CONTEXT_CHARS)
 
 @router.get("/context")
 def get_context(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -42,21 +44,21 @@ def update_context(payload: ContextoRequest, db: Session = Depends(get_db), curr
     empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa no encontrada")
-    empresa.contexto_negocio = payload.contexto_negocio
+    empresa.contexto_negocio = payload.contexto_negocio.strip()
     db.commit()
     return {"success": True}
 
 @router.post("/context/upload")
 async def upload_context_document(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
-    # 1MB limit check
-    if file.size and file.size > 1048576:
+    raw_filename = file.filename or "documento"
+    if file.size and file.size > MAX_CONTEXT_FILE_SIZE:
         raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido de 1MB.")
         
-    content = await file.read()
-    if len(content) > 1048576:
+    content = await file.read(MAX_CONTEXT_FILE_SIZE + 1)
+    if len(content) > MAX_CONTEXT_FILE_SIZE:
         raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido de 1MB.")
         
-    filename = file.filename.lower()
+    filename = raw_filename.lower()
     text_content = ""
     
     try:
@@ -67,8 +69,8 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
             import io
             reader = PdfReader(io.BytesIO(content))
             for page in reader.pages:
-                text_content += page.extract_text() + "\n"
-        elif filename.endswith(".doc") or filename.endswith(".docx"):
+                text_content += (page.extract_text() or "") + "\n"
+        elif filename.endswith(".docx"):
             from docx import Document
             import io
             doc = Document(io.BytesIO(content))
@@ -81,14 +83,18 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
         empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
         if empresa:
             current_context = empresa.contexto_negocio or ""
-            new_context = current_context + f"\n\n--- Contenido de {file.filename} ---\n{text_content}"
+            new_context = current_context + f"\n\n--- Contenido de {raw_filename} ---\n{text_content.strip()}"
+            if len(new_context) > MAX_CONTEXT_CHARS:
+                raise HTTPException(status_code=400, detail="El contexto del negocio no puede superar 200.000 caracteres.")
             empresa.contexto_negocio = new_context
             db.commit()
             
         return {"success": True, "extracted_text": text_content, "full_context": new_context}
+    except HTTPException:
+        raise
     except Exception as e:
         import logging
-        logging.error(f"[COPILOT UPLOAD] Error processing file {file.filename}: {e}", exc_info=True)
+        logging.error(f"[COPILOT UPLOAD] Error processing file {raw_filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error procesando el archivo. Comprueba que el formato sea correcto.")
 
 @router.get("/chats")
@@ -181,8 +187,8 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
                 _log.warning(f"Error cargando docs LibrerIA: {e_lib}")
 
         # DB RO para queries analíticas de la IA
-        from ..database import SessionLocal
-        db_ro = SessionLocal()
+        from ..database import SessionLocalRO
+        db_ro = SessionLocalRO()
         try:
             reply = process_copilot_chat(
                 db=db_ro, 
@@ -202,7 +208,9 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         return {"reply": reply, "chat_id": chat_id, "message_id": assistant_msg_db.id}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        import logging
+        logging.error(f"[COPILOT CHAT] Error procesando chat: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error interno procesando el chat.")
 
 @router.get("/chat/message/{message_id}/export")
 def download_message_export(
@@ -211,12 +219,10 @@ def download_message_export(
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    import re
-    import base64
     import io
     import csv
     from fastapi.responses import StreamingResponse
-    from ..database import SessionLocal
+    from ..database import SessionLocalRO
     from ..copilot_service import execute_sql
     
     # 1. Recuperar el mensaje asegurando que pertenece a un chat del usuario
@@ -228,21 +234,15 @@ def download_message_export(
     if not msg:
         raise HTTPException(status_code=404, detail="Mensaje no encontrado")
         
-    # 2. Extraer el SQL codificado
-    match = re.search(r"<!-- sql_query_b64: (.*?) -->", msg.contenido)
-    if not match:
+    # 2. Extraer el SQL firmado
+    sql_query = extract_signed_sql_export(msg.contenido)
+    if not sql_query:
         raise HTTPException(status_code=400, detail="Este mensaje no contiene datos exportables.")
         
-    sql_b64 = match.group(1)
-    try:
-        sql_query = base64.b64decode(sql_b64).decode('utf-8')
-    except Exception:
-        raise HTTPException(status_code=400, detail="Error decodificando la consulta original.")
-        
     # 3. Re-ejecutar SQL en read-only
-    db_ro = SessionLocal()
+    db_ro = SessionLocalRO()
     try:
-        raw_data, error = execute_sql(db_ro, sql_query)
+        raw_data, error = execute_sql(db_ro, sql_query, current_user.empresa_id)
         if error or not raw_data:
             raise HTTPException(status_code=500, detail="Error ejecutando la consulta original o sin datos.")
             

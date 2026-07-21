@@ -3,6 +3,7 @@ import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAna
 import type { AgentSettings, AgentInsight, AgentChatMessage } from '../services/api';
 import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 
 interface AgentInfo {
   id: string;
@@ -198,7 +199,7 @@ export const AiControlPanel = () => {
           <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
             {content ? (
               <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
-                <ReactMarkdown>{content}</ReactMarkdown>
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{content}</ReactMarkdown>
               </div>
             ) : (
               <p className="text-slate-500 text-sm italic">Sin datos generados para este reporte.</p>
@@ -506,7 +507,7 @@ export const AiControlPanel = () => {
                     <FileText size={13} /> Último informe ({new Date(latestInsight.fecha).toLocaleDateString('es-ES')})
                   </h3>
                   <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                    <ReactMarkdown>{String(latestInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] || '').slice(0, 400) + '...'}</ReactMarkdown>
+                    <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(latestInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] || '').slice(0, 400) + '...'}</ReactMarkdown>
                   </div>
                 </div>
               )}
@@ -517,7 +518,7 @@ export const AiControlPanel = () => {
                   <Code2 size={14} className="text-brand-blue dark:text-brand-cyan" /> Arquitectura Cognitiva
                 </h3>
                 <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400">
-                  <ReactMarkdown>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
+                  <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
                 </div>
               </div>
 
@@ -538,7 +539,7 @@ export const AiControlPanel = () => {
                   {agentChatHistory.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-brand-blue text-white rounded-tr-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-tl-sm shadow-sm'}`}>
-                        {msg.role === 'user' ? msg.content : <div className="prose dark:prose-invert max-w-none text-sm"><ReactMarkdown>{msg.content}</ReactMarkdown></div>}
+                        {msg.role === 'user' ? msg.content : <div className="prose dark:prose-invert max-w-none text-sm"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown></div>}
                       </div>
                     </div>
                   ))}

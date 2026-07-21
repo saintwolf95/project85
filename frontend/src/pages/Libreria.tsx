@@ -3,6 +3,7 @@ import { uploadLibreriaDocument, getLibreriaDocuments, deleteLibreriaDocument, a
 import type { LibreriaDocument } from '../services/api';
 import { BookOpen, Upload, Trash2, Send, Bot, FileText, Loader2, Filter } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -264,7 +265,7 @@ export const Libreria = () => {
                       <p className="text-sm">{msg.content}</p>
                     ) : (
                       <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown>
                       </div>
                     )}
                   </div>

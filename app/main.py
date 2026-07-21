@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.deps import get_current_active_admin
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
+import os
 import uvicorn
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -34,15 +35,13 @@ async def lifespan(app: FastAPI):
             seed_data.crear_datos_demo(db)
             print("[STARTUP] Seed completado exitosamente.", flush=True)
         else:
-            # Reparar UIDs incorrectos
-            import os
             correct_uid = os.getenv("ADMIN_SUPABASE_UID")
             admin = db.query(models.Usuario).filter(models.Usuario.email == "admin@demo.com").first()
             if admin and correct_uid and admin.supabase_uid != correct_uid:
-                print(f"[STARTUP] Reparando UID admin: {admin.supabase_uid} -> {correct_uid}", flush=True)
+                print("[STARTUP] Reparando UID admin configurado.", flush=True)
                 admin.supabase_uid = correct_uid
                 db.commit()
-            print(f"[STARTUP] BD ya tiene datos. Admin UID: {admin.supabase_uid if admin else 'N/A'}", flush=True)
+            print("[STARTUP] BD ya tiene datos.", flush=True)
             
         # Migración manual: Asegurar que exista la columna contexto_negocio (por si no se creó de cero)
         from sqlalchemy import text
@@ -109,15 +108,21 @@ async def add_security_headers(request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:4000",
+    "http://localhost:5173",
+    "https://fivemin-xi.vercel.app",
+]
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS)).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:4000", 
-        "http://localhost:5173",
-        "https://fivemin-xi.vercel.app"
-    ],
-    allow_origin_regex=r"https://fivemin(-[a-z0-9]+)?\.vercel\.app",
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -10,10 +10,12 @@ from ..models import Usuario
 from ..core.security import SUPABASE_JWT_SECRET
 
 security = HTTPBearer()
+SUPABASE_PROJECT_URL = os.environ.get("SUPABASE_PROJECT_URL", "https://rygviqehzmtsenphncig.supabase.co").rstrip("/")
+SUPABASE_ISSUER = os.environ.get("SUPABASE_ISSUER", f"{SUPABASE_PROJECT_URL}/auth/v1")
 
 # Cargar las llaves publicas de Supabase para soportar firmas asimetricas (ES256)
 try:
-    JWKS_URL = "https://rygviqehzmtsenphncig.supabase.co/auth/v1/.well-known/jwks.json"
+    JWKS_URL = f"{SUPABASE_PROJECT_URL}/auth/v1/.well-known/jwks.json"
     req = urllib.request.Request(os.environ.get("SUPABASE_JWKS_URL", JWKS_URL), headers={'User-Agent': 'Mozilla/5.0'})
     response = urllib.request.urlopen(req, timeout=5) # nosec B310
     SUPABASE_JWKS = json.loads(response.read())
@@ -48,7 +50,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
             audience="authenticated"
         )
         sub: str = payload.get("sub")
-        if sub is None:
+        if sub is None or payload.get("iss") != SUPABASE_ISSUER:
             raise credentials_exception
     except Exception:
         raise credentials_exception

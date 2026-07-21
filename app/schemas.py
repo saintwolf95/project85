@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
 
@@ -100,11 +100,11 @@ class AgentSettingsResponse(BaseModel):
 
 class AgentChatMessage(BaseModel):
     role: str
-    content: str
+    content: str = Field(..., max_length=2000)
 
 class AgentChatRequest(BaseModel):
     chat_id: Optional[int] = None
-    history: List[AgentChatMessage]
+    history: List[AgentChatMessage] = Field(..., max_length=20)
 
 class LibreriaDocumentoResponse(BaseModel):
     id: int
@@ -116,8 +116,8 @@ class LibreriaDocumentoResponse(BaseModel):
         from_attributes = True
 
 class LibreriaChatRequest(BaseModel):
-    department_filter: Optional[str] = None
-    question: str
+    department_filter: Optional[str] = Field(default=None, max_length=80)
+    question: str = Field(..., max_length=2000)
 
 class LibreriaChatResponse(BaseModel):
     answer: str

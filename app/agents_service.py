@@ -2,22 +2,21 @@ import json
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from app.database import SessionLocalRO
 from app.models import AgentInsights
-from app.copilot_service import get_openai_client
+from app.copilot_service import get_openai_client, validate_read_only_sql
 
 logger = logging.getLogger(__name__)
 
 def ejecutar_consulta_sql(db: Session, query: str, empresa_id: int) -> str:
     """Ejecuta una consulta SQL segura (sólo SELECT)."""
-    if not query.strip().upper().startswith("SELECT"):
-        return "Error: Sólo se permiten consultas SELECT por seguridad."
+    safe_query, params, validation_error = validate_read_only_sql(query, empresa_id)
+    if validation_error:
+        return validation_error
     
+    db_ro = SessionLocalRO()
     try:
-        # Check basic safety
-        if "UPDATE" in query.upper() or "DELETE" in query.upper() or "DROP" in query.upper() or "INSERT" in query.upper():
-             return "Error: Sólo SELECT."
-             
-        result = db.execute(text(query)).fetchall()
+        result = db_ro.execute(text(safe_query), params).fetchall()
         
         # Convert to JSON string, limit to 20 rows
         data = []
@@ -29,6 +28,8 @@ def ejecutar_consulta_sql(db: Session, query: str, empresa_id: int) -> str:
         return json.dumps(data)
     except Exception as e:
         return f"Error en la consulta: {str(e)}"
+    finally:
+        db_ro.close()
 
 def run_cognitive_agent(db: Session, empresa_id: int, agent_name: str, system_prompt: str, alertas: list) -> str:
     """Ejecuta un agente cognitivo con GPT-4o y Tool Calling."""

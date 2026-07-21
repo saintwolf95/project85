@@ -26,6 +26,10 @@ const QUICK_SUGGESTIONS = [
   { label: 'Días cobertura A', prompt: 'Listado de productos clase A con menos de 15 días de cobertura' },
 ];
 
+const SQL_EXPORT_PATTERN = /<!-- sql_export: .*? -->/g;
+const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').trim();
+const hasCopilotExport = (content: string) => SQL_EXPORT_PATTERN.test(content);
+
 const MODEL_OPTIONS = [
   { value: 'fast' as const, label: 'Fast', sublabel: 'GPT-4o', icon: <Zap size={14} />, color: 'text-brand-blue dark:text-brand-cyan', badge: '🟢', desc: 'Rápido y eficiente' },
   { value: 'thinking' as const, label: 'Thinking', sublabel: 'o3-mini', icon: <Brain size={14} />, color: 'text-purple-600 dark:text-purple-400', badge: '🟣', desc: 'Razonamiento avanzado' },
@@ -88,7 +92,7 @@ const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(text.split('<!-- sql_query_b64:')[0].trim());
+      await navigator.clipboard.writeText(cleanCopilotContent(text));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {}
@@ -553,9 +557,9 @@ export const AiCopilot = () => {
                               }
                             }}
                           >
-                            {msg.content.split('<!-- sql_query_b64:')[0]}
+                            {cleanCopilotContent(msg.content)}
                           </ReactMarkdown>
-                          {msg.content.includes('<!-- sql_query_b64:') && (
+                          {hasCopilotExport(msg.content) && (
                             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex flex-wrap gap-3">
                               <button onClick={() => downloadExport(msg.id, 'csv')} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm">
                                 <Download size={16} /> Descargar CSV

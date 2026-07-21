@@ -1,9 +1,14 @@
 import os
 import logging
+import re
+import base64
+import hashlib
+import hmac
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import HTTPException
+from .core.security import SUPABASE_JWT_SECRET
 
 # Configuración de Logger de Auditoría
 logger = logging.getLogger(__name__)
@@ -15,6 +20,24 @@ if not logger.handlers:
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     logger.addHandler(ch)
+
+EXPORT_MARKER_PATTERN = re.compile(r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64}) -->")
+
+def _export_signature(sql_b64: str) -> str:
+    return hmac.new(SUPABASE_JWT_SECRET.encode("utf-8"), sql_b64.encode("utf-8"), hashlib.sha256).hexdigest()
+
+def build_sql_export_marker(sql_query: str) -> str:
+    sql_b64 = base64.b64encode(sql_query.encode("utf-8")).decode("utf-8")
+    return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64)} -->"
+
+def extract_signed_sql_export(content: str) -> str | None:
+    match = EXPORT_MARKER_PATTERN.search(content)
+    if not match:
+        return None
+    sql_b64, signature = match.groups()
+    if not hmac.compare_digest(signature, _export_signature(sql_b64)):
+        return None
+    return base64.b64decode(sql_b64).decode("utf-8")
 
 def get_openai_client():
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -173,7 +196,7 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
             )
         except Exception as e:
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL): {str(e)}", exc_info=True)
-            return f"SELECT 'Error de comunicación con el motor de IA. Detalle: {str(e)}' AS error"
+            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     
     sql_query = response.choices[0].message.content.strip()
     
@@ -186,26 +209,63 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
         
     return sql_query.strip()
 
-def execute_sql(db: Session, sql_query: str):
-    logger.info(f"[AUDIT SQL] Query generada interceptada: {sql_query}")
-    
-    # C1: SQL Injection Protection - ONLY allow SELECT
-    sql_upper = sql_query.upper().strip()
-    if not sql_upper.startswith("SELECT"):
-        logger.error("[AUDIT SQL] Abortado: La query no comienza con SELECT")
-        return None, "Error de seguridad: Solo se permiten operaciones de lectura (SELECT)."
-    
-    # Reject dangerous keywords even if it starts with SELECT
-    dangerous_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", "CREATE", "GRANT", "REVOKE", "EXEC", "CALL"]
-    for word in dangerous_keywords:
-        if f" {word} " in f" {sql_upper} ":
-            logger.error(f"[AUDIT SQL] Abortado: Palabra prohibida detectada ({word})")
-            return None, "Error de seguridad: La consulta contiene palabras reservadas no permitidas."
+ALLOWED_SQL_TABLES = {
+    "productos",
+    "inventario_snapshot",
+    "ventas_historicas",
+    "registro_po",
+    "producto_metricas",
+}
+
+FORBIDDEN_SQL_KEYWORDS = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE|EXEC|CALL|MERGE|COPY|VACUUM|ANALYZE|REINDEX|ATTACH|DETACH|PRAGMA)\b",
+    re.IGNORECASE,
+)
+
+TABLE_REFERENCE_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([a-zA-Z_][\w\.]*)", re.IGNORECASE)
+
+def _strip_sql_comments(sql_query: str) -> str:
+    return re.sub(r"(--[^\n]*|/\*.*?\*/)", " ", sql_query, flags=re.DOTALL).strip()
+
+def validate_read_only_sql(sql_query: str, empresa_id: int):
+    if not isinstance(sql_query, str) or not sql_query.strip():
+        return None, None, "La consulta SQL está vacía."
+
+    normalized = _strip_sql_comments(sql_query)
+    normalized = normalized.rstrip(";").strip()
+    if ";" in normalized:
+        return None, None, "Error de seguridad: solo se permite una sentencia SQL."
+    if not re.match(r"^SELECT\b", normalized, flags=re.IGNORECASE):
+        return None, None, "Error de seguridad: solo se permiten consultas SELECT."
+    if FORBIDDEN_SQL_KEYWORDS.search(normalized):
+        return None, None, "Error de seguridad: la consulta contiene una operación no permitida."
+
+    referenced_tables = {match.group(1).split(".")[-1].lower() for match in TABLE_REFERENCE_PATTERN.finditer(normalized)}
+    invalid_tables = referenced_tables - ALLOWED_SQL_TABLES
+    if invalid_tables:
+        return None, None, "Error de seguridad: la consulta referencia tablas no permitidas."
+
+    tenant_filter = re.search(r"\b(?:p\.)?empresa_id\s*=\s*(?::empresa_id|\d+)\b", normalized, flags=re.IGNORECASE)
+    if not tenant_filter:
+        return None, None, "Error de seguridad: la consulta debe filtrar por empresa_id."
+    numeric_value = re.search(r"\d+", tenant_filter.group(0))
+    if numeric_value and int(numeric_value.group(0)) != empresa_id:
+        return None, None, "Error de seguridad: el filtro de empresa no coincide con el usuario."
+
+    safe_query = re.sub(r"\b((?:p\.)?empresa_id)\s*=\s*\d+\b", r"\1 = :empresa_id", normalized, flags=re.IGNORECASE)
+    params = {"empresa_id": empresa_id}
+    return safe_query, params, None
+
+def execute_sql(db: Session, sql_query: str, empresa_id: int):
+    query_hash = hashlib.sha256(sql_query.encode("utf-8")).hexdigest()[:12]
+    logger.info(f"[AUDIT SQL] Query generada interceptada hash={query_hash}")
+    safe_query, params, validation_error = validate_read_only_sql(sql_query, empresa_id)
+    if validation_error:
+        logger.error(f"[AUDIT SQL] Consulta bloqueada: {validation_error}")
+        return None, validation_error
 
     try:
-        # Añadir un timeout simple a nivel de base de datos si es postgres (opcional pero recomendado)
-        # SQLite no soporta set_statement_timeout fácilmente desde sqlalchemy text(), pero protegemos contra inyección destructiva.
-        result = db.execute(text(sql_query))
+        result = db.execute(text(safe_query), params)
         rows = result.fetchall()
         columns = result.keys()
         data = [dict(zip(columns, row)) for row in rows]
@@ -318,14 +378,12 @@ Contexto del Negocio: {contexto}
             )
         except Exception as e:
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
-            return f"⚠️ **Error de comunicación:** {str(e)}"
+            return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
     reply = response.choices[0].message.content.strip()
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
-        import base64
-        sql_b64 = base64.b64encode(sql_query.encode('utf-8')).decode('utf-8')
-        reply += f"\n\n<!-- sql_query_b64: {sql_b64} -->"
+        reply += f"\n\n{build_sql_export_marker(sql_query)}"
         
     return reply
 
@@ -348,11 +406,11 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto)
         
         # 2. Ejecutar SQL en la conexión RO
-        raw_data, error = execute_sql(db, sql_query)
+        raw_data, error = execute_sql(db, sql_query, empresa_id)
         
         # 3. Si hay error y quedan reintentos, pedirle a GPT que corrija
         if error and attempt < max_retries:
-            logger.warning(f"[AUDIT SQL] Reintento {attempt + 1}/{max_retries}. SQL fallida: {sql_query}")
+            logger.warning(f"[AUDIT SQL] Reintento {attempt + 1}/{max_retries}. SQL fallida hash={hashlib.sha256(sql_query.encode('utf-8')).hexdigest()[:12]}")
             # Acumular el error en retry_history (NO resetear) para que GPT vea todos los intentos fallidos
             retry_history.append({
                 "role": "assistant",

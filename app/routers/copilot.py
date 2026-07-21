@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
-from ..database import get_db, get_db_ro
+from ..database import get_db
 from ..copilot_service import process_copilot_chat, cleanup_old_chats, extract_signed_sql_export
 from ..models import Usuario, CopilotChat, CopilotMessage
 from ..api.deps import get_current_user
@@ -112,7 +112,10 @@ def create_chat(db: Session = Depends(get_db), current_user: Usuario = Depends(g
     return {"id": new_chat.id, "titulo": new_chat.titulo, "actualizado_en": new_chat.actualizado_en}
 
 @router.get("/chats/{chat_id}")
-def get_chat_history(chat_id: int, db: Session = Depends(get_db_ro), current_user: Usuario = Depends(get_current_user)):
+def get_chat_history(chat_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    # El historial es persistencia de la aplicacion, no una consulta analitica
+    # generada por la IA. Leerlo con la sesion normal evita depender de grants
+    # RO sobre tablas de chat creadas despues de configurar DATABASE_RO_URL.
     chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
     if not chat:
         from fastapi import HTTPException

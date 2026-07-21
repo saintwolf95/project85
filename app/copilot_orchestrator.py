@@ -114,7 +114,9 @@ def detectar_medida(texto: str) -> tuple[str | None, str | None]:
         return "beneficio_eur", "rentabilidad"
     if _contiene(normalizado, ("margen", "rentabilidad")):
         return "margen_eur", "rentabilidad"
-    if _contiene(normalizado, ("unidades en stock", "unidades de stock", "stock en unidades", "stock disponible en unidades", "inventario en unidades")):
+    if _contiene(normalizado, ("unidades en stock", "unidades de stock", "stock en unidades", "stock disponible en unidades", "inventario en unidades")) or re.search(
+        r"\bunidades\b.*\b(?:stock|inventario)\b", normalizado
+    ):
         return "inventario_unidades", "inventario"
     if _contiene(normalizado, ("unidades vendidas", "cantidad vendida", "uds vendidas", "ventas en unidades", "en unidades")):
         return "ventas_unidades", "ventas"
@@ -139,6 +141,20 @@ def detectar_agrupacion(texto: str) -> str | None:
 def detectar_filtros(texto: str) -> dict[str, str]:
     """Extrae filtros concretos que se convierten siempre en parametros SQL."""
     filtros: dict[str, str] = {}
+    normalizado = normalizar_texto(texto)
+
+    # "Clase A/B/C" se refiere a ABC (ventas EUR) y "clase X/Y/Z" a XYZ
+    # (inventario EUR). Tambien aceptamos expresiones como "ABC A" o "XYZ X".
+    clase_abc = re.search(r"\b(?:clase\s*(?:abc\s*)?|abc\s*)([abc])\b", normalizado)
+    clase_xyz = re.search(r"\b(?:clase\s*(?:xyz\s*)?|xyz\s*)([xyz])\b", normalizado)
+    cuadrante = re.search(r"\b(?:matriz|cuadrante)\s*([abc][xyz])\b", normalizado)
+    if clase_abc:
+        filtros["abc"] = clase_abc.group(1).upper()
+    if clase_xyz:
+        filtros["xyz"] = clase_xyz.group(1).upper()
+    if cuadrante:
+        filtros["matriz_abc"] = cuadrante.group(1).upper()
+
     sku = re.search(r"\bsku\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9_-]*)", texto, flags=re.IGNORECASE)
     if sku:
         filtros["sku"] = sku.group(1).strip()
@@ -313,6 +329,9 @@ def _condiciones_sql(intento: IntentoSemantico, incluir_periodo: bool = False) -
     for campo in ("familia", "marca", "sku"):
         if campo in intento.parametros:
             condiciones.append(f"p.{campo} = :{campo}")
+    for campo in ("abc", "xyz", "matriz_abc"):
+        if campo in intento.parametros:
+            condiciones.append(f"pm.{campo} = :{campo}")
     if incluir_periodo:
         if intento.comparacion:
             condiciones.append("vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin")
@@ -463,7 +482,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         else:
             agrupacion = None
 
-        join_metricas = " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id" if intento.agrupacion == "matriz" else ""
+        join_metricas = (
+            " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id"
+            if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("abc", "xyz", "matriz_abc"))
+            else ""
+        )
         if intento.comparacion:
             actual_sql, anterior_sql, variacion_sql, variacion_pct_sql, variacion_pp_sql = _expresiones_comparativas(intento, expresion)
             columnas_comparacion = (
@@ -491,6 +514,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                            {productos_actuales} AS productos
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    {join_metricas}
                     WHERE {condiciones}
                 """
             return sql, dict(intento.parametros)
@@ -508,12 +532,13 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             """
         else:
             sql = f"""
-                SELECT {expresion_agregada} AS {alias_agregado},
-                       COUNT(DISTINCT vh.producto_id) AS productos
-                FROM ventas_historicas vh
-                JOIN productos p ON p.id = vh.producto_id
-                WHERE {condiciones}
-            """
+                   SELECT {expresion_agregada} AS {alias_agregado},
+                          COUNT(DISTINCT vh.producto_id) AS productos
+                   FROM ventas_historicas vh
+                   JOIN productos p ON p.id = vh.producto_id
+                   {join_metricas}
+                   WHERE {condiciones}
+               """
         return sql, dict(intento.parametros)
 
     if intento.medida == "inventario_unidades":
@@ -532,7 +557,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
     else:
         agrupacion = None
 
-    join_metricas = " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id" if intento.agrupacion == "matriz" else ""
+    join_metricas = (
+        " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id"
+        if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("abc", "xyz", "matriz_abc"))
+        else ""
+    )
     condiciones = _condiciones_sql(intento)
     if agrupacion:
         sql = f"""
@@ -553,6 +582,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                    COUNT(DISTINCT p.id) AS productos
             FROM productos p
             JOIN inventario_snapshot inv ON inv.producto_id = p.id
+            {join_metricas}
             WHERE {condiciones}
         """
     return sql, dict(intento.parametros)

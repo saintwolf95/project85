@@ -180,6 +180,7 @@ DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - Cuando se solicite una comparación, informa periodo actual, periodo anterior, variación absoluta y variación porcentual.
 - "oportunidad comercial" significa producto ABC A/B con stock disponible, margen positivo y ventas en los últimos 90 días; "acción prioritaria" ordena primero roturas de productos clave, después capital inmovilizado y después oportunidades.
 - "ABC" se basa en ventas EUR de los últimos 90 días; "XYZ" se basa en inventario EUR actual.
+- "clase A/B/C" significa filtrar `pm.abc = 'A'/'B'/'C'`; "clase X/Y/Z" significa filtrar `pm.xyz = 'X'/'Y'/'Z'`. Para un cuadrante concreto usa `pm.matriz_abc` (por ejemplo, `AX`).
 - `cv` y `ads` representan variabilidad y velocidad de demanda para cobertura, pero no determinan la letra XYZ.
 - Para totales y sumatorias, calcula en SQL con SUM y devuelve una sola fila agregada. No limites los totales a 50 productos.
 

@@ -13,7 +13,7 @@ interface ProductModalProps {
 export const ProductModal = ({ isOpen, onClose, title, description, products }: ProductModalProps) => {
   if (!isOpen) return null;
 
-  const totalVentas = products.reduce((acc, p) => acc + p.ventas_60d, 0);
+  const totalVentas = products.reduce((acc, p) => acc + p.ventas_90d, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -57,7 +57,7 @@ export const ProductModal = ({ isOpen, onClose, title, description, products }: 
                 <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nombre</th>
                 <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Marca</th>
                 <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Precio</th>
-                <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ventas (60D)</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ventas (90D)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -68,7 +68,7 @@ export const ProductModal = ({ isOpen, onClose, title, description, products }: 
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-[250px] truncate" title={p.nombre_art}>{p.nombre_art}</td>
                   <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{p.marca}</td>
                   <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 text-right">{formatEUR(p.precio_unit)}</td>
-                  <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_60d)}</td>
+                  <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_90d)}</td>
                 </tr>
               ))}
               {products.length === 0 && (
@@ -79,7 +79,7 @@ export const ProductModal = ({ isOpen, onClose, title, description, products }: 
             </tbody>
             <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 sticky bottom-0 z-10 font-bold">
               <tr>
-                <td colSpan={5} className="px-4 py-4 text-right text-slate-700 dark:text-white">TOTAL VENTAS (60D) - {products.length} SKUs</td>
+                <td colSpan={5} className="px-4 py-4 text-right text-slate-700 dark:text-white">TOTAL VENTAS (90D) - {products.length} SKUs</td>
                 <td className="px-4 py-4 text-sm text-brand-blue dark:text-brand-cyan text-right">{formatEUR(totalVentas)}</td>
               </tr>
             </tfoot>

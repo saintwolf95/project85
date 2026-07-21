@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments } from '../services/api';
 import type { CopilotChat, LibreriaDocument } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -10,25 +10,137 @@ import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, Tooltip, R
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 const THINKING_MESSAGES = [
-  'Analizando tu inventario...',
-  'Generando consulta SQL...',
-  'Consultando la base de datos...',
-  'Interpretando resultados...',
-  'Preparando respuesta...',
+  'Entendiendo tu pregunta...',
+  'Calculando las métricas...',
+  'Consultando tus datos...',
+  'Buscando patrones relevantes...',
+  'Preparando una respuesta clara...',
 ];
 
 const QUICK_SUGGESTIONS = [
   { label: 'Top 10 por ventas 90D', prompt: '¿Cuáles son los 10 productos con más ventas en los últimos 90 días?' },
   { label: 'Riesgo de rotura', prompt: '¿Qué productos tienen riesgo de rotura de stock inmediato?' },
-  { label: 'Artículos AZ críticos', prompt: 'Muéstrame los artículos AZ más peligrosos por capital inmovilizado' },
+  { label: 'Qué priorizar hoy', prompt: '¿Qué acciones debería priorizar hoy en inventario y ventas?' },
+  { label: 'Artículos AZ críticos', prompt: 'Muéstrame los artículos AZ con más ventas y menos inventario disponible' },
   { label: 'Resumen por familia', prompt: 'Dame un resumen del inventario agrupado por familia de producto' },
-  { label: 'Capital clase C', prompt: '¿Cuánto capital tenemos inmovilizado en productos clase C?' },
+  { label: 'Tendencia de ventas', prompt: 'Compara las ventas de los últimos 30 días con los 30 días anteriores y explícame la tendencia' },
+  { label: 'Capital clase C', prompt: '¿Cuánto inventario en euros tenemos en productos clase C?' },
+  { label: 'Oportunidades comerciales', prompt: '¿Qué productos son oportunidades comerciales según ventas, margen y stock disponible?' },
   { label: 'Días cobertura A', prompt: 'Listado de productos clase A con menos de 15 días de cobertura' },
 ];
 
-const SQL_EXPORT_PATTERN = /<!-- sql_export: .*? -->/g;
-const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').trim();
-const hasCopilotExport = (content: string) => SQL_EXPORT_PATTERN.test(content);
+const SQL_EXPORT_PATTERN = /<!-- sql_export: [\s\S]*? -->/g;
+const METRICS_MARKER_PATTERN = /<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->/;
+const FOLLOWUPS_MARKER_PATTERN = /<!-- copilot_followups: ([A-Za-z0-9+/=]+) -->/;
+const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').replace(METRICS_MARKER_PATTERN, '').replace(FOLLOWUPS_MARKER_PATTERN, '').trim();
+const hasCopilotExport = (content: string) => /<!-- sql_export: [\s\S]*? -->/.test(content);
+
+type CopilotMetricPayload = { data: Record<string, number>; formato?: 'eur' | 'unidades' | 'porcentaje' };
+
+const parseCopilotMetrics = (content: string): CopilotMetricPayload | null => {
+  const match = METRICS_MARKER_PATTERN.exec(content);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(atob(match[1])) as CopilotMetricPayload;
+    return parsed?.data ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const METRIC_LABELS: Record<string, string> = {
+  ventas_eur: 'Ventas',
+  ventas_unidades: 'Unidades vendidas',
+  inventario_eur: 'Inventario',
+  inventario_unidades: 'Unidades en stock',
+  beneficio_eur: 'Beneficio',
+  margen_eur: 'Margen',
+  margen_pct: 'Margen %',
+  periodo_actual: 'Periodo actual',
+  periodo_anterior: 'Periodo anterior',
+  variacion_absoluta: 'Variación',
+  variacion_pct: 'Variación %',
+  variacion_pp: 'Variación p.p.',
+  productos: 'Productos',
+  productos_alerta: 'Productos en alerta',
+  productos_sobrestock: 'Productos con sobrestock',
+};
+
+const formatMetricValue = (key: string, value: number, formato?: CopilotMetricPayload['formato']) => {
+  const isPercent = key.includes('pct') || key.includes('_pp') || formato === 'porcentaje' && key.includes('periodo');
+  if (isPercent) return `${value.toLocaleString('es-ES', { maximumFractionDigits: 2 })}%`;
+  if (key === 'productos' || key.includes('unidades') || formato === 'unidades') {
+    return value.toLocaleString('es-ES', { maximumFractionDigits: 0 });
+  }
+  if (formato === 'eur' || /(eur|ventas|beneficio|margen|inventario|variacion)/.test(key)) {
+    return value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
+  }
+  return value.toLocaleString('es-ES', { maximumFractionDigits: 2 });
+};
+
+const CopilotMetricCards = ({ content }: { content: string }) => {
+  const payload = parseCopilotMetrics(content);
+  if (!payload) return null;
+  const entries = Object.entries(payload.data).filter(([, value]) => typeof value === 'number').slice(0, 6);
+  if (!entries.length) return null;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+      {entries.map(([key, value]) => {
+        const isVariation = key.startsWith('variacion');
+        const positive = value >= 0;
+        return (
+          <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-3 py-2.5">
+            <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
+            <p className={`mt-1 text-sm font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-slate-900 dark:text-white'}`}>
+              {formatMetricValue(key, value, payload.formato)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+type CopilotFollowup = { label: string; prompt: string };
+
+const parseCopilotFollowups = (content: string): CopilotFollowup[] => {
+  const match = FOLLOWUPS_MARKER_PATTERN.exec(content);
+  if (!match) return [];
+  try {
+    const parsed = JSON.parse(atob(match[1])) as { actions?: CopilotFollowup[] };
+    return Array.isArray(parsed?.actions) ? parsed.actions.filter(action => action?.label && action?.prompt).slice(0, 4) : [];
+  } catch {
+    return [];
+  }
+};
+
+const CopilotFollowups = ({ content, onSelect, disabled }: { content: string; onSelect: (prompt: string) => void; disabled: boolean }) => {
+  const actions = parseCopilotFollowups(content);
+  if (!actions.length) return null;
+  return (
+    <div className="mt-4 flex flex-wrap gap-2" aria-label="Siguientes análisis">
+      {actions.map(action => (
+        <button
+          key={action.label}
+          onClick={() => onSelect(action.prompt)}
+          disabled={disabled}
+          className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 dark:border-brand-cyan/25 bg-brand-blue/5 dark:bg-brand-cyan/5 px-3 py-1.5 text-xs font-medium text-brand-blue dark:text-brand-cyan transition-colors hover:bg-brand-blue/10 dark:hover:bg-brand-cyan/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {action.label}
+          <ArrowRight size={12} />
+        </button>
+      ))}
+    </div>
+  );
+};
+
+const getCopilotErrorMessage = (error: unknown) => {
+  const apiError = error as ChatApiError;
+  if (apiError.response?.status === 429) return 'Has alcanzado el límite temporal de consultas. Espera un momento y vuelve a intentarlo.';
+  if (apiError.response?.status === 401) return 'Tu sesión ha caducado. Inicia sesión de nuevo para continuar.';
+  if (apiError.response?.data?.detail) return apiError.response.data.detail;
+  return 'No he podido completar la consulta. Comprueba la conexión e inténtalo de nuevo.';
+};
 
 const MODEL_OPTIONS = [
   { value: 'fast' as const, label: 'Fast', sublabel: 'GPT-4o', icon: <Zap size={14} />, color: 'text-brand-blue dark:text-brand-cyan', badge: '🟢', desc: 'Rápido y eficiente' },
@@ -88,6 +200,13 @@ interface Message {
   timestamp: string;
 }
 
+interface ChatApiError {
+  response?: {
+    status?: number;
+    data?: { detail?: string };
+  };
+}
+
 const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -100,7 +219,7 @@ const CopyButton = ({ text }: { text: string }) => {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md bg-slate-200/80 dark:bg-slate-700/80 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400"
+      className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-md bg-slate-200/80 dark:bg-slate-700/80 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400"
       title="Copiar respuesta"
     >
       {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -148,10 +267,15 @@ export const AiCopilot = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [lastFailedQuestion, setLastFailedQuestion] = useState<string | null>(null);
+  const [exportingMessage, setExportingMessage] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
   const [businessContext, setBusinessContext] = useState('');
   const [isSavingContext, setIsSavingContext] = useState(false);
+  const [contextSaveError, setContextSaveError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
@@ -187,6 +311,7 @@ export const AiCopilot = () => {
   const loadChats = async () => {
     try {
       setIsLoadingChats(true);
+      setChatError(null);
       const data = await getCopilotChats();
       setChats(data);
       if (data.length > 0 && currentChatId === null) {
@@ -199,6 +324,7 @@ export const AiCopilot = () => {
       setBusinessContext(ctx);
     } catch (error) {
       console.error('Error cargando chats', error);
+      setChatError(getCopilotErrorMessage(error));
     } finally {
       setIsLoadingChats(false);
     }
@@ -207,6 +333,8 @@ export const AiCopilot = () => {
   const selectChat = async (chatId: number) => {
     setCurrentChatId(chatId);
     setShowSuggestions(false);
+    setChatError(null);
+    setIsLoadingMessages(true);
     if (window.innerWidth < 1024) setIsSidebarOpen(false);
     try {
       const history = await getCopilotChatHistory(chatId);
@@ -224,6 +352,9 @@ export const AiCopilot = () => {
       }
     } catch (error) {
       console.error('Error cargando historial de chat', error);
+      setChatError('No se pudo cargar este chat. Inténtalo de nuevo.');
+    } finally {
+      setIsLoadingMessages(false);
     }
   };
 
@@ -232,6 +363,8 @@ export const AiCopilot = () => {
     setMessages([defaultGreetingMessage]);
     setShowSuggestions(true);
     setSelectedLibDocIds([]);
+    setChatError(null);
+    setLastFailedQuestion(null);
     if (window.innerWidth < 1024) setIsSidebarOpen(false);
   };
 
@@ -256,6 +389,8 @@ export const AiCopilot = () => {
     if (!userText || isLoading) return;
     if (typeof textOverride !== 'string') setInput('');
     setShowSuggestions(false);
+    setChatError(null);
+    setLastFailedQuestion(null);
 
     const newUserMsg: Message = { id: Date.now().toString(), role: 'user', content: userText, timestamp: now() };
     setMessages(prev => [...prev, newUserMsg]);
@@ -277,6 +412,7 @@ export const AiCopilot = () => {
         timestamp: now(),
       };
       setMessages(prev => [...prev, aiMsg]);
+      setChatError(null);
 
       if (!currentChatId && response.data.chat_id) {
         setCurrentChatId(response.data.chat_id);
@@ -293,12 +429,8 @@ export const AiCopilot = () => {
       }
     } catch (error) {
       console.error('Error calling copilot API:', error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'ai',
-        content: '⚠️ Error de conexión con el motor analítico. Verifica que el backend y OpenAI estén configurados correctamente.',
-        timestamp: now(),
-      }]);
+      setChatError(getCopilotErrorMessage(error));
+      setLastFailedQuestion(userText);
     } finally {
       setIsLoading(false);
     }
@@ -306,6 +438,7 @@ export const AiCopilot = () => {
 
   const downloadExport = async (messageId: string, format: 'csv' | 'xlsx') => {
     try {
+      setExportingMessage(`${messageId}-${format}`);
       const response = await api.get(`/copilot/chat/message/${messageId}/export?format=${format}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -314,22 +447,27 @@ export const AiCopilot = () => {
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
-    } catch {
-      console.error('Error descargando archivo');
+    } catch (error) {
+      console.error('Error descargando archivo', error);
+      setChatError('No se pudo preparar la exportación. Inténtalo de nuevo.');
+    } finally {
+      setExportingMessage(null);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && input.trim()) handleSend();
   };
 
   const handleSaveContext = async () => {
     try {
       setIsSavingContext(true);
+      setContextSaveError(null);
       await updateBusinessContext(businessContext);
       setIsContextModalOpen(false);
-    } catch {
+    } catch (error) {
       console.error('Error guardando contexto');
+      setContextSaveError(getCopilotErrorMessage(error));
     } finally {
       setIsSavingContext(false);
     }
@@ -372,9 +510,24 @@ export const AiCopilot = () => {
         <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
           <Bot className="text-brand-blue dark:text-brand-cyan" size={24} /> AI Copilot
         </h1>
-        <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-          <Menu size={20} className="text-slate-700 dark:text-slate-300" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setContextSaveError(null); setIsContextModalOpen(true); }}
+            className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-brand-blue dark:text-brand-cyan"
+            title="Abrir Cerebro del Negocio"
+            aria-label="Abrir Cerebro del Negocio"
+          >
+            <BookOpen size={20} />
+          </button>
+          <button
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+            title="Abrir historial"
+            aria-label="Abrir historial"
+          >
+            <Menu size={20} className="text-slate-700 dark:text-slate-300" />
+          </button>
+        </div>
       </div>
 
       {/* Backdrop para móvil */}
@@ -483,7 +636,7 @@ export const AiCopilot = () => {
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Historial persistente · 30 días de retención</p>
           </div>
           <button
-            onClick={() => setIsContextModalOpen(true)}
+            onClick={() => { setContextSaveError(null); setIsContextModalOpen(true); }}
             className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-blue dark:text-brand-cyan bg-brand-blue/10 dark:bg-brand-cyan/10 hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-lg transition-colors border border-brand-blue/20 dark:border-brand-cyan/20 shadow-sm"
           >
             <BookOpen size={16} /> Cerebro del Negocio
@@ -492,7 +645,15 @@ export const AiCopilot = () => {
 
         {/* Feed de mensajes */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
-          {messages.map((msg) => (
+          {isLoadingChats || isLoadingMessages ? (
+            <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
+              <div className="flex items-center gap-3 text-sm">
+                <Loader2 size={18} className="animate-spin text-brand-blue dark:text-brand-cyan" />
+                Cargando conversación...
+              </div>
+            </div>
+          ) : (
+          messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-4 max-w-[90%] md:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
 
@@ -521,6 +682,7 @@ export const AiCopilot = () => {
                     ) : (
                       <>
                         <CopyButton text={msg.content} />
+                        <CopilotMetricCards content={msg.content} />
                         <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-100 dark:prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-200 dark:prose-pre:border-slate-700 prose-a:text-brand-blue dark:prose-a:text-brand-cyan prose-table:text-sm prose-th:bg-slate-200 dark:prose-th:bg-slate-700 prose-td:border prose-th:border prose-td:border-slate-300 dark:prose-td:border-slate-600 prose-td:p-2 prose-th:p-2">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -559,13 +721,14 @@ export const AiCopilot = () => {
                           >
                             {cleanCopilotContent(msg.content)}
                           </ReactMarkdown>
+                          <CopilotFollowups content={msg.content} onSelect={handleSend} disabled={isLoading} />
                           {hasCopilotExport(msg.content) && (
                             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex flex-wrap gap-3">
-                              <button onClick={() => downloadExport(msg.id, 'csv')} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm">
-                                <Download size={16} /> Descargar CSV
+                              <button onClick={() => downloadExport(msg.id, 'csv')} disabled={Boolean(exportingMessage)} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm disabled:opacity-50">
+                                {exportingMessage === `${msg.id}-csv` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar CSV
                               </button>
-                              <button onClick={() => downloadExport(msg.id, 'xlsx')} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-medium transition-colors border border-emerald-200 dark:border-emerald-500/30 shadow-sm">
-                                <Download size={16} /> Descargar Excel (.xlsx)
+                              <button onClick={() => downloadExport(msg.id, 'xlsx')} disabled={Boolean(exportingMessage)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-medium transition-colors border border-emerald-200 dark:border-emerald-500/30 shadow-sm disabled:opacity-50">
+                                {exportingMessage === `${msg.id}-xlsx` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar Excel (.xlsx)
                               </button>
                             </div>
                           )}
@@ -581,7 +744,7 @@ export const AiCopilot = () => {
                 </div>
               </div>
             </div>
-          ))}
+          )))}
 
           {isLoading && <ThinkingIndicator modelPreference={modelPreference} />}
 
@@ -606,10 +769,27 @@ export const AiCopilot = () => {
         {/* Controles y Caja de Input */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50">
 
+          {chatError && (
+            <div className="mb-3 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" role="alert">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p>{chatError}</p>
+                {lastFailedQuestion && (
+                  <button onClick={() => handleSend(lastFailedQuestion)} disabled={isLoading} className="mt-2 inline-flex items-center gap-1.5 font-semibold hover:underline disabled:opacity-50">
+                    <RotateCcw size={13} /> Reintentar consulta
+                  </button>
+                )}
+              </div>
+              <button onClick={() => setChatError(null)} className="shrink-0 rounded p-1 hover:bg-red-100 dark:hover:bg-red-500/20" title="Cerrar aviso" aria-label="Cerrar aviso">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Selector de modelo */}
-          <div className="flex items-center gap-3 mb-3 px-1">
+          <div className="flex flex-wrap items-center gap-3 mb-3 px-1">
             <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">Motor AI:</span>
-            <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg gap-1">
+            <div className="flex max-w-full overflow-x-auto bg-slate-200 dark:bg-slate-800 p-1 rounded-lg gap-1">
               {MODEL_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
@@ -628,26 +808,29 @@ export const AiCopilot = () => {
             </div>
           </div>
 
-          <div className="relative flex items-center">
-            <input
-              type="text"
+          <div className="relative flex items-end">
+            <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pregunta a la IA sobre tu inventario..."
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl pl-4 pr-12 py-4 focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan transition-colors"
-              disabled={isLoading}
+              placeholder="Pregunta por ventas, inventario, alertas o ABCXYZ..."
+              aria-label="Pregunta al AI Copilot"
+              maxLength={2000}
+              rows={2}
+              className="w-full min-h-[76px] max-h-40 resize-none overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl pl-4 pr-14 py-3 focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan transition-colors"
             />
             <button
               onClick={() => handleSend()}
               disabled={isLoading || !input.trim()}
-              className="absolute right-3 p-2 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md dark:shadow-[0_0_10px_var(--color-brand-cyan)]"
+              title="Enviar pregunta"
+              aria-label="Enviar pregunta"
+              className="absolute right-3 bottom-3 p-2 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md dark:shadow-[0_0_10px_var(--color-brand-cyan)]"
             >
-              <Send size={20} />
+              {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
             </button>
           </div>
           <p className="text-center text-slate-500 text-[10px] md:text-xs mt-2">
-            SupplyChain Copilot genera consultas seguras limitadas a tu entorno · Responde siempre en español
+            Enter para enviar · Shift + Enter para una nueva línea · Respuestas en español
           </p>
         </div>
       </div>
@@ -680,7 +863,7 @@ export const AiCopilot = () => {
                   </p>
                 </div>
                 <div>
-                  <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.csv,.pdf,.doc,.docx" onChange={handleFileUpload} />
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".txt,.csv,.pdf,.docx" onChange={handleFileUpload} />
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading || isSavingContext}
@@ -694,6 +877,11 @@ export const AiCopilot = () => {
               {uploadError && (
                 <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
                   <span>⚠️</span> {uploadError}
+                </div>
+              )}
+              {contextSaveError && (
+                <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2" role="alert">
+                  <AlertCircle size={14} /> {contextSaveError}
                 </div>
               )}
               <textarea

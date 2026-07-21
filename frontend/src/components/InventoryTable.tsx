@@ -91,11 +91,11 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('precio_unit')}>PrecioUnit <SortIcon columnKey="precio_unit" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades <SortIcon columnKey="unidades" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>ValorInv <SortIcon columnKey="valor_inv" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades_venta_60d')}>U. Venta (60D) <SortIcon columnKey="unidades_venta_60d" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_60d')}>Ventas (60D) <SortIcon columnKey="ventas_60d" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades_venta_90d')}>U. Venta (90D) <SortIcon columnKey="unidades_venta_90d" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas (90D) <SortIcon columnKey="ventas_90d" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ads')}>ADS <SortIcon columnKey="ads" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('dias_cobertura')}>Días Cob. <SortIcon columnKey="dias_cobertura" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-brand-blue dark:text-brand-cyan uppercase tracking-wider whitespace-nowrap text-center cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('matriz_abc')}>Matriz ABC <SortIcon columnKey="matriz_abc" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-brand-blue dark:text-brand-cyan uppercase tracking-wider whitespace-nowrap text-center cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('matriz_abc')}>Matriz ABCXYZ <SortIcon columnKey="matriz_abc" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Estado / Riesgos</th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Acciones</th>
             </tr>
@@ -115,8 +115,8 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.precio_unit)}</td>
                 <td className="px-4 py-4 text-sm text-slate-800 dark:text-slate-200 whitespace-nowrap text-right font-medium">{item.unidades}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.valor_inv)}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.unidades_venta_60d}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.ventas_60d)}</td>
+                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.unidades_venta_90d}</td>
+                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.ventas_90d)}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.ads.toFixed(1)}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.dias_cobertura >= 999 ? '>999' : item.dias_cobertura.toFixed(0)}</td>
                 <td className="px-4 py-4 text-sm text-center whitespace-nowrap">

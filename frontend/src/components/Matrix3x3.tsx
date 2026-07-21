@@ -19,7 +19,7 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
     if (metrics[key]) {
       metrics[key].count++;
       metrics[key].inv += (item.valor_inv || 0);
-      metrics[key].sales += (item.ventas_60d || 0);
+      metrics[key].sales += (item.ventas_90d || 0);
     }
   });
 
@@ -46,15 +46,15 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
 
   const getCellDescription = (matriz: string) => {
     switch(matriz) {
-      case 'AX': return 'Core Business (AX): Productos estrella. Gran valor invertido (A) pero con demanda súper estable (X). Sabes exactamente cuánto vas a vender.';
-      case 'AY': return 'Atención Moderada (AY): Alta inversión pero demanda variable. Hay que controlarlos para evitar roturas o sobre-stock.';
-      case 'AZ': return 'CRÍTICO (AZ): Riesgo Máximo. Mucho dinero bloqueado en artículos con ventas erráticas. Mayor probabilidad de obsolescencia.';
-      case 'BX': return 'Flujo Seguro (BX): Inversión media, venta constante y segura. Mantienen a la empresa facturando.';
-      case 'BY': return 'Vigilancia Estándar (BY): Inversión y variación medias. Cuadrante normal, pero requiere alertas de máximos/mínimos.';
-      case 'BZ': return 'Riesgo Alto (BZ): Inversión moderada pero ventas erráticas. Cuidado con los cambios del mercado.';
-      case 'CX': return 'Automatizable (CX): Poco valor económico y venta constante. Su reposición se puede automatizar.';
-      case 'CY': return 'Baja Prioridad (CY): Poco valor y venta irregular. Monitoreo pasivo es suficiente.';
-      case 'CZ': return 'Ruido del Catálogo (CZ): Poco valor y demanda casi nula. Evaluar discontinuar o comprar sólo bajo pedido.';
+      case 'AX': return 'Core Business (AX): Mayor contribución de ventas y mayor concentración de inventario. Requieren máxima disponibilidad y control financiero.';
+      case 'AY': return 'Atención Moderada (AY): Alta contribución de ventas y concentración media de inventario. Equilibrar servicio y capital.';
+      case 'AZ': return 'CRÍTICO (AZ): Alta contribución de ventas y bajo inventario relativo. Vigilar la disponibilidad y el riesgo de rotura.';
+      case 'BX': return 'Flujo Seguro (BX): Contribución media de ventas y alta concentración de inventario. Mantener rotación y cobertura.';
+      case 'BY': return 'Vigilancia Estándar (BY): Contribución e inventario medios. Revisar máximos, mínimos y cobertura.';
+      case 'BZ': return 'Riesgo Alto (BZ): Contribución media de ventas y bajo inventario. Puede requerir reposición según cobertura.';
+      case 'CX': return 'Automatizable (CX): Baja contribución de ventas y alta concentración de inventario. Revisar capital inmovilizado.';
+      case 'CY': return 'Baja Prioridad (CY): Baja contribución e inventario medio. Monitoreo y compra ajustada.';
+      case 'CZ': return 'Cola del Catálogo (CZ): Baja contribución de ventas y bajo valor de inventario. Comprar solo bajo pedido o revisar continuidad.';
       default: return 'Detalle de Cuadrante';
     }
   };
@@ -67,7 +67,7 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
       
       {/* Eje X label */}
       <div className="text-center text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 whitespace-nowrap">
-        ABC Inventario (Inversión) →
+        ABC Ventas EUR 90D →
       </div>
 
       {/* Contenedor Matriz + Eje Y */}
@@ -78,7 +78,7 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
             className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap"
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
           >
-            XYZ Volatilidad (Demanda) →
+            XYZ Inventario EUR →
           </span>
         </div>
 

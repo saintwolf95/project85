@@ -1,8 +1,12 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from cachetools import cached, TTLCache
 from .models import Producto, InventarioSnapshot, VentaHistorica
+from .semantic_metrics import DIAS_CLASIFICACION_ABC, clasificar_por_contribucion
+
+ZONA_NEGOCIO = ZoneInfo("Europe/Madrid")
 
 # Caché de 5 minutos (300 segundos) para almacenar métricas por empresa
 metrics_cache = TTLCache(maxsize=10, ttl=300)
@@ -21,8 +25,9 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         return []
 
     # Fechas para los filtros (90 días)
-    hoy = date.today()
-    fecha_90_dias = hoy - timedelta(days=90)
+    hoy = datetime.now(ZONA_NEGOCIO).date()
+    fecha_90_dias = hoy - timedelta(days=DIAS_CLASIFICACION_ABC - 1)
+    fecha_60_dias = hoy - timedelta(days=60 - 1)
     fecha_30_dias = hoy - timedelta(days=30)
 
     # Obtener ventas históricas usando read_sql (extremadamente eficiente en memoria vs ORM)
@@ -63,43 +68,61 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     if df_ventas.empty:
         df_ventas = pd.DataFrame(columns=["producto_id", "ingreso_total", "cantidad_vendida", "fecha_venta"])
 
-    # 1. Ventas totales y Unidades vendidas últimos 60 días
+    # 1. Ventas totales y unidades vendidas en 60D y 90D.
     if not df_ventas.empty:
-        ventas_60 = df_ventas.groupby("producto_id").agg({
+        ventas_90 = df_ventas.groupby("producto_id").agg({
             "ingreso_total": "sum",
             "cantidad_vendida": "sum"
-        }).reset_index()
-        ventas_60 = ventas_60.rename(columns={
+        }).reset_index().rename(columns={
+            "ingreso_total": "ventas_90d",
+            "cantidad_vendida": "unidades_venta_90d"
+        })
+        ventas_60 = df_ventas[df_ventas["fecha_venta"] >= fecha_60_dias].groupby("producto_id").agg({
+            "ingreso_total": "sum",
+            "cantidad_vendida": "sum"
+        }).reset_index().rename(columns={
             "ingreso_total": "ventas_60d",
             "cantidad_vendida": "unidades_venta_60d"
         })
     else:
+        ventas_90 = pd.DataFrame({
+            "producto_id": df_prod["producto_id"],
+            "ventas_90d": 0.0,
+            "unidades_venta_90d": 0
+        })
         ventas_60 = pd.DataFrame({
-            "producto_id": df_prod["producto_id"], 
-            "ventas_60d": 0.0, 
+            "producto_id": df_prod["producto_id"],
+            "ventas_60d": 0.0,
             "unidades_venta_60d": 0
         })
 
-    df = pd.merge(df_prod, ventas_60, on="producto_id", how="left")
+    df = pd.merge(df_prod, ventas_90, on="producto_id", how="left")
+    df = pd.merge(df, ventas_60, on="producto_id", how="left")
+    df["ventas_90d"] = df["ventas_90d"].fillna(0.0)
+    df["unidades_venta_90d"] = df["unidades_venta_90d"].fillna(0)
     df["ventas_60d"] = df["ventas_60d"].fillna(0.0)
     df["unidades_venta_60d"] = df["unidades_venta_60d"].fillna(0)
 
-    # 2. Eje ABC (Valor de Inventario)
+    # ABC: ventas en euros de los últimos 90 días.
+    df = df.sort_values(by="ventas_90d", ascending=False).reset_index(drop=True)
+    total_ventas_90d = df["ventas_90d"].sum()
+    df["porcentaje_ventas_90d"] = df["ventas_90d"] / total_ventas_90d if total_ventas_90d > 0 else 0
+    df["acum_ventas_90d"] = df["porcentaje_ventas_90d"].cumsum()
+    df["abc"] = df["acum_ventas_90d"].apply(
+        lambda acumulado: clasificar_por_contribucion(acumulado, "A", "B", "C")
+    )
+
+    # XYZ: inventario actual en euros al último día disponible.
     df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
+    total_inventario = df["valor_inv"].sum()
     df = df.sort_values(by="valor_inv", ascending=False).reset_index(drop=True)
-    df["porcentaje_inv"] = df["valor_inv"] / df["valor_inv"].sum() if df["valor_inv"].sum() > 0 else 0
-    df["acum_inv"] = df["porcentaje_inv"].cumsum()
+    df["porcentaje_inventario"] = df["valor_inv"] / total_inventario if total_inventario > 0 else 0
+    df["acum_inventario"] = df["porcentaje_inventario"].cumsum()
+    df["xyz"] = df["acum_inventario"].apply(
+        lambda acumulado: clasificar_por_contribucion(acumulado, "X", "Y", "Z")
+    )
 
-    def clasificar_abc(acumulado):
-        if acumulado <= 0.80: return "A"
-        if acumulado <= 0.95: return "B"
-        return "C"
-
-    df["abc"] = df["acum_inv"].apply(clasificar_abc)
-    if df["valor_inv"].sum() == 0:
-        df["abc"] = "C"
-
-    # 3. Eje XYZ (Volatilidad de la Demanda)
+    # 4. Variabilidad de demanda interna para ADS y cobertura; no define XYZ.
     import numpy as np
 
     if not df_ventas.empty:
@@ -123,26 +146,15 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         with np.errstate(divide='ignore', invalid='ignore'):
             cvs = stds / means
         
-        xyz_df = pd.DataFrame({
+        variabilidad_df = pd.DataFrame({
             "producto_id": vd_pivot.index,
             "cv": cvs.values,
             "ads": means.values
         })
-        
-        def assign_xyz(cv):
-            if pd.isna(cv) or cv == np.inf: return "Z"
-            if cv <= 0.2: return "X"
-            elif cv <= 0.6: return "Y"
-            else: return "Z"
-            
-        xyz_df["xyz"] = xyz_df["cv"].apply(assign_xyz)
-        
-        df = pd.merge(df, xyz_df, on="producto_id", how="left")
-        df["xyz"] = df["xyz"].fillna("Z")
+        df = pd.merge(df, variabilidad_df, on="producto_id", how="left")
         df["ads"] = df["ads"].fillna(0.0)
     else:
         df["cv"] = np.nan
-        df["xyz"] = "Z"
         df["ads"] = 0.0
 
     df["matriz_abc"] = df["abc"] + df["xyz"]
@@ -194,7 +206,7 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     # Preparar el resultado como diccionarios
     columnas_finales = [
         "producto_id", "fecha", "nombre_art", "cod_art", "pn", "ean", "costo_unit", "peso", 
-        "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d",
+        "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d", "unidades_venta_90d", "ventas_90d",
         "abc", "xyz", "cv", "matriz_abc", "ads", "dias_cobertura", "riesgos_categorizados"
     ]
     df_final = df[columnas_finales]
@@ -237,7 +249,14 @@ def sync_metrics_to_db(db: Session, empresa_id: int):
         metrics = calculate_inventory_metrics(db, empresa_id)
         
         # Limpiar métricas anteriores
-        db.query(ProductoMetricas).delete()
+        producto_ids_empresa = [
+            producto_id
+            for (producto_id,) in db.query(Producto.id).filter(Producto.empresa_id == empresa_id).all()
+        ]
+        if producto_ids_empresa:
+            db.query(ProductoMetricas).filter(
+                ProductoMetricas.producto_id.in_(producto_ids_empresa)
+            ).delete(synchronize_session=False)
         
         # Insertar nuevas métricas
         records = []
@@ -256,6 +275,8 @@ def sync_metrics_to_db(db: Session, empresa_id: int):
             records.append(pm)
         
         db.bulk_save_objects(records)
+        from .copilot_context import invalidar_resumen_operativo
+        invalidar_resumen_operativo(empresa_id)
         
         # Calcular y guardar Estadísticas de Dashboard
         from .models import EmpresaEstadisticas

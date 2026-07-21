@@ -12,7 +12,7 @@ interface MatrixDetailProps {
 export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) => {
   const [sortConfig, setSortConfig] = React.useState<{ key: keyof ProductMetrics | null, direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
 
-  const totalVentas = products.reduce((acc, p) => acc + p.ventas_60d, 0);
+  const totalVentas = products.reduce((acc, p) => acc + p.ventas_90d, 0);
   const totalInventario = products.reduce((acc, p) => acc + p.valor_inv, 0);
   const totalUnidades = products.reduce((acc, p) => acc + p.unidades, 0);
 
@@ -48,7 +48,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
       'Precio Unitario': p.precio_unit,
       'Unidades': p.unidades,
       'Valor Inventario': p.valor_inv,
-      'Ventas 60D': p.ventas_60d,
+      'Ventas 90D': p.ventas_90d,
       'Clase ABC': p.matriz_abc
     })));
     const wb = XLSX.utils.book_new();
@@ -89,7 +89,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('cod_art')}>CodArt <SortIcon columnKey="cod_art" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>Nombre <SortIcon columnKey="nombre_art" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Categoría <SortIcon columnKey="familia" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_60d')}>Ventas 60D <SortIcon columnKey="ventas_60d" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas 90D <SortIcon columnKey="ventas_90d" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>Inv. (€) <SortIcon columnKey="valor_inv" /></th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades <SortIcon columnKey="unidades" /></th>
             </tr>
@@ -101,7 +101,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
                 <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 font-medium">{p.cod_art}</td>
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-[150px] truncate" title={p.nombre_art}>{p.nombre_art}</td>
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{p.familia}</td>
-                <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_60d)}</td>
+                <td className="px-4 py-3 text-sm text-brand-blue dark:text-brand-cyan text-right font-medium">{formatEUR(p.ventas_90d)}</td>
                 <td className="px-4 py-3 text-sm text-emerald-600 dark:text-emerald-500 text-right font-medium">{formatEUR(p.valor_inv)}</td>
                 <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 text-right">{p.unidades.toLocaleString('es-ES')}</td>
               </tr>

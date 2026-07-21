@@ -122,17 +122,17 @@ def run_maria_agent(db: Session, empresa_id: int):
 
     # 3.2 Rotura Activa
     sql_rotura_activa = """
-        SELECT p.nombre, pm.xyz, pm.abc
+        SELECT p.nombre, pm.abc
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND i.stock_disponible = 0
-        AND pm.xyz IN ('X', 'Y')
+        AND pm.abc IN ('A', 'B')
         LIMIT 10
     """
     for row in db.execute(text(sql_rotura_activa), {"empresa_id": empresa_id}).fetchall():
-        alertas.append(f"[🔴 Nivel 3] María (Inventario): [PÉRDIDA] Producto '{row[0]}' (Clase {row[2]}) tiene stock cero pero demanda activa (XYZ={row[1]}). Estamos perdiendo ventas.")
+        alertas.append(f"[🔴 Nivel 3] María (Inventario): [PÉRDIDA] Producto '{row[0]}' (Clase {row[1]}) tiene stock cero y pertenece a una clase relevante de ventas. Estamos perdiendo ventas.")
 
     # 3.3 Capital Muerto Severo
     sql_n3_sobrestock = """
@@ -142,12 +142,11 @@ def run_maria_agent(db: Session, empresa_id: int):
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.dias_cobertura > 180
-        AND pm.xyz = 'Z'
         AND (i.stock_disponible * p.costo_unitario) > 1000
         LIMIT 10
     """
     for row in db.execute(text(sql_n3_sobrestock), {"empresa_id": empresa_id}).fetchall():
-        alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡CAPITAL MUERTO! Producto '{row[0]}' (Clase Z) inmovilizado {row[1]} días, reteniendo ${row[2]:.2f}.")
+        alertas.append(f"[🔴 Nivel 3] María (Inventario): ¡CAPITAL MUERTO! Producto '{row[0]}' inmovilizado {row[1]} días, reteniendo ${row[2]:.2f}.")
 
     # 2.1 Quiebre Inminente en Clase B
     sql_n2_quiebre_b = """
@@ -276,13 +275,12 @@ def run_lucia_agent(db: Session, empresa_id: int):
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.abc = 'B'
-        AND pm.xyz = 'Z'
         AND p.precio_venta > (p.costo_unitario * 1.5)
         AND i.stock_disponible > 0
         LIMIT 10
     """
     for row in db.execute(text(sql_n2_potencial), {"empresa_id": empresa_id}).fetchall():
-        alertas.append(f"[🟡 Nivel 2] Lucía (Ventas): Potencial desperdiciado. '{row[0]}' (Clase B) tiene demanda errática pero deja excelente margen (${row[1]} vs ${row[2]}). ¡Hagamos publicidad!")
+        alertas.append(f"[🟡 Nivel 2] Lucía (Ventas): Potencial desperdiciado. '{row[0]}' (Clase B) tiene inventario disponible y deja excelente margen (${row[1]} vs ${row[2]}). ¡Hagamos publicidad!")
 
     # 2.2 Acumulación Silenciosa
     sql_n2_acumulacion = """
@@ -322,12 +320,11 @@ def run_lucia_agent(db: Session, empresa_id: int):
         JOIN inventario_snapshot i ON i.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.abc = 'C'
-        AND pm.xyz = 'X'
         AND i.stock_disponible > 0
         LIMIT 10
     """
     for row in db.execute(text(sql_estrella), {"empresa_id": empresa_id}).fetchall():
-        alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): [ESTRELLA] Producto '{row[0]}' era Clase C, pero ahora tiene demanda constante (XYZ=X, {row[1]} días de cobertura). Vigilar stock.")
+        alertas.append(f"[🟢 Nivel 1] Lucía (Ventas): [ESTRELLA] Producto '{row[0]}' era Clase C y mantiene inventario disponible ({row[1]} días de cobertura). Vigilar su evolución.")
 
     # 1.3 Candidatos para Combos
     sql_n1_combos = """
@@ -394,14 +391,14 @@ def run_mattia_agent(db: Session, empresa_id: int):
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
-        WHERE p.empresa_id = :empresa_id 
-        AND pm.xyz = 'Z'
+        WHERE p.empresa_id = :empresa_id
+        AND pm.dias_cobertura > 180
         AND (i.stock_disponible * p.costo_unitario) > 1000
         LIMIT 10
     """
     result_estancado = db.execute(text(sql_estancado), {"empresa_id": empresa_id}).fetchall()
     for row in result_estancado:
-        alertas.append(f"Mattia (Finanzas): [ESTANCADO] Tienes ${row[1]:.2f} bloqueados en el producto '{row[0]}' (Clase Z) que no se vende.")
+        alertas.append(f"Mattia (Finanzas): [ESTANCADO] Tienes ${row[1]:.2f} bloqueados en el producto '{row[0]}' con cobertura excesiva.")
         
     # 4. Gemas de Margen (Alta Rentabilidad)
     sql_alta_rentabilidad = """
@@ -412,13 +409,12 @@ def run_mattia_agent(db: Session, empresa_id: int):
         WHERE p.empresa_id = :empresa_id 
         AND p.precio_venta > (p.costo_unitario * 2)
         AND i.stock_disponible > 0
-        AND pm.xyz = 'X'
         LIMIT 10
     """
     result_alta_rentabilidad = db.execute(text(sql_alta_rentabilidad), {"empresa_id": empresa_id}).fetchall()
     for row in result_alta_rentabilidad:
         margen_pct = ((row[1] - row[2]) / row[1]) * 100
-        alertas.append(f"Mattia (Finanzas): [OPORTUNIDAD] El producto '{row[0]}' tiene demanda constante (XYZ=X) y un margen altísimo del {margen_pct:.1f}%. ¡Invierte más en este!")
+        alertas.append(f"Mattia (Finanzas): [OPORTUNIDAD] El producto '{row[0]}' concentra inventario y tiene un margen altísimo del {margen_pct:.1f}%. Revisar inversión y rotación.")
 
     sys_prompt = """Eres Mattia, CFO. Eres analítico, conservador y mides todo en ROI, márgenes y flujo de caja.
 Analiza el JSON de métricas financieras. Busca márgenes negativos y capital atrapado. No uses saludos.
@@ -428,7 +424,7 @@ Formato obligatorio de salida (Markdown):
 **Estado del Capital:** [1 oración sobre la eficiencia del gasto en inventario]
 **Hemorragias de Margen:**
 - [SKU] - [Diferencia costo/precio] - **Decisión:** [Ajustar precio o descatalogar]
-**Eficiencia (ABC/XYZ):** [Breve evaluación del capital bloqueado en la clase Z]"""
+**Eficiencia (ABC/XYZ):** [Breve evaluación de ventas ABC y concentración de inventario XYZ]"""
     md_report = run_cognitive_agent(db, empresa_id, "Mattia", sys_prompt, alertas)
     
     return alertas, md_report
@@ -580,7 +576,7 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
             "type": "function",
             "function": {
                 "name": "ejecutar_consulta_sql",
-                "description": "Ejecuta una consulta SQL SELECT en la base de datos para responder a las preguntas del usuario. Tablas disponibles: productos (id, nombre, empresa_id, precio_venta, costo_unitario, marca, familia), producto_metricas (producto_id, dias_cobertura, abc, xyz, ventas_60d, cv, ads), inventario_snapshot (producto_id, stock_disponible).",
+                "description": "Ejecuta una consulta SQL SELECT en la base de datos para responder a las preguntas del usuario. ABC usa ventas EUR de los últimos 90 días y XYZ usa inventario EUR actual. Tablas: productos (id, nombre, empresa_id, precio_venta, costo_unitario, marca, familia), producto_metricas (producto_id, dias_cobertura, abc, xyz, riesgo_rotura), inventario_snapshot (producto_id, stock_disponible), ventas_historicas (fecha_venta, cantidad_vendida, ingreso_total).",
                 "parameters": {
                     "type": "object",
                     "properties": {

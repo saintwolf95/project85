@@ -15,7 +15,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   const links = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/inventory', icon: BarChart3, label: 'Intelligence ABC' },
+    { to: '/inventory', icon: BarChart3, label: 'Intelligence ABCXYZ' },
     { to: '/forecast', icon: TrendingUp, label: 'Predicción Demanda' },
     { to: '/copilot', icon: Bot, label: 'AI Copilot' },
     { to: '/ai-control', icon: Power, label: 'Control IA' },

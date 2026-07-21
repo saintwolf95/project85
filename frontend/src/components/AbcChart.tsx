@@ -18,9 +18,9 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
     });
 
     return [
-      { name: 'Clase X (Constante)', value: counts.X, color: '#00F5FF' }, // brand-cyan
-      { name: 'Clase Y (Variable)', value: counts.Y, color: '#2563EB' }, // brand-blue
-      { name: 'Clase Z (Irregular)', value: counts.Z, color: '#94A3B8' }, // slate
+      { name: 'Clase X (Mayor inventario EUR)', value: counts.X, color: '#00F5FF' }, // brand-cyan
+      { name: 'Clase Y (Inventario EUR medio)', value: counts.Y, color: '#2563EB' }, // brand-blue
+      { name: 'Clase Z (Menor inventario EUR)', value: counts.Z, color: '#94A3B8' }, // slate
     ];
   }, [data]);
 
@@ -41,7 +41,7 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="bg-brand-surface rounded-xl border border-slate-800 p-6 flex flex-col items-center">
-      <h3 className="text-lg font-semibold text-white self-start mb-4">Distribución XYZ (Volatilidad)</h3>
+      <h3 className="text-lg font-semibold text-white self-start mb-4">Distribución XYZ (Inventario EUR)</h3>
       <div className="w-full h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>

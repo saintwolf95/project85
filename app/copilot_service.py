@@ -4,6 +4,9 @@ import re
 import base64
 import hashlib
 import hmac
+import json
+from numbers import Number
+from typing import Any
 from openai import OpenAI
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -29,6 +32,66 @@ def _export_signature(sql_b64: str) -> str:
 def build_sql_export_marker(sql_query: str) -> str:
     sql_b64 = base64.b64encode(sql_query.encode("utf-8")).decode("utf-8")
     return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64)} -->"
+
+
+def build_metrics_marker(raw_data: list, sql_query: str = "") -> str:
+    """Adjunta KPIs estructurados solo para resultados agregados de una fila."""
+    if not isinstance(raw_data, list) or len(raw_data) != 1 or not isinstance(raw_data[0], dict):
+        return ""
+    numeric_data = {
+        clave: float(valor) if isinstance(valor, Number) and not isinstance(valor, bool) else valor
+        for clave, valor in raw_data[0].items()
+        if isinstance(valor, Number) and not isinstance(valor, bool)
+    }
+    if not numeric_data:
+        return ""
+    formato = "porcentaje" if "margen_pct" in sql_query else "unidades" if "ventas_unidades" in sql_query else "eur"
+    encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato}).encode("utf-8")).decode("ascii")
+    return f"<!-- copilot_metrics: {encoded} -->"
+
+
+def build_followups_marker(intento: Any) -> str:
+    """Genera acciones de seguimiento basadas en la intención ya resuelta."""
+    tipo = getattr(intento, "tipo", "")
+    medida = getattr(intento, "medida", "")
+    periodo = getattr(intento, "periodo", None)
+    agrupacion = getattr(intento, "agrupacion", None)
+    periodo_texto = {
+        "ayer": "ayer",
+        "hoy": "hoy",
+        "mes_actual": "este mes",
+        "ultimos_7_dias": "los últimos 7 días",
+        "ultimos_30_dias": "los últimos 30 días",
+        "ultimos_60_dias": "los últimos 60 días",
+        "ultimos_90_dias": "los últimos 90 días",
+    }.get(periodo, "el mismo periodo")
+    acciones: list[dict[str, str]] = []
+
+    if tipo == "ventas":
+        if agrupacion != "familia":
+            acciones.append({"label": "Desglosar por familia", "prompt": f"Desglosa las ventas de {periodo_texto} por familia"})
+        if not getattr(intento, "comparacion", False):
+            acciones.append({"label": "Comparar periodo", "prompt": f"Compara las ventas de {periodo_texto} con el periodo anterior"})
+        if medida != "ventas_unidades":
+            acciones.append({"label": "Ver margen", "prompt": f"Dame el margen y beneficio de {periodo_texto}"})
+    elif tipo == "inventario":
+        if agrupacion != "matriz":
+            acciones.append({"label": "Ver matriz ABCXYZ", "prompt": "Desglosa el inventario actual por matriz ABCXYZ"})
+        acciones.append({"label": "Revisar sobrestock", "prompt": "¿Qué productos tienen sobrestock y cuánto capital inmovilizan?"})
+        acciones.append({"label": "Ver alertas", "prompt": "¿Qué productos tienen riesgo de rotura?"})
+    elif tipo == "rentabilidad":
+        if not getattr(intento, "comparacion", False):
+            acciones.append({"label": "Comparar margen", "prompt": f"Compara el margen de {periodo_texto} con el periodo anterior"})
+        acciones.append({"label": "Ver oportunidades", "prompt": "¿Qué productos son oportunidades comerciales?"})
+    elif tipo == "acciones":
+        acciones.append({"label": "Ver oportunidades", "prompt": "¿Qué productos son oportunidades comerciales?"})
+    elif tipo == "oportunidades":
+        acciones.append({"label": "Ver acciones prioritarias", "prompt": "¿Qué acciones debería priorizar hoy?"})
+
+    if not acciones:
+        return ""
+    encoded = base64.b64encode(json.dumps({"actions": acciones}, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    return f"<!-- copilot_followups: {encoded} -->"
 
 def extract_signed_sql_export(content: str) -> str | None:
     match = EXPORT_MARKER_PATTERN.search(content)
@@ -103,15 +166,22 @@ Tabla `registro_po` (alias recomendado: po):
 
 Tabla `producto_metricas` (alias recomendado: pm):
 - producto_id (INTEGER, FK a productos.id)
-- abc (VARCHAR) -- Clasificación ABC por valor de ventas: 'A' (top 80%), 'B' (siguiente 15%), 'C' (restante 5%)
-- xyz (VARCHAR) -- Clasificación XYZ por volatilidad de demanda: 'X' (estable), 'Y' (variable), 'Z' (errática)
+- abc (VARCHAR) -- Clasificación ABC por contribución acumulada de ventas en euros de los últimos 90 días: 'A' (top 80%), 'B' (siguiente 15%), 'C' (restante 5%)
+- xyz (VARCHAR) -- Clasificación XYZ por contribución acumulada del inventario actual en euros: 'X' (top 80%), 'Y' (siguiente 15%), 'Z' (restante 5%)
 - matriz_abc (VARCHAR) -- Cuadrante combinado: 'AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'
 - dias_cobertura (INTEGER) -- días que durará el stock actual al ritmo de ventas actual
 - riesgo_rotura (BOOLEAN) -- TRUE si hay riesgo inminente de quedarse sin stock
 
-IMPORTANTE: Las métricas dinámicas como ventas_90d o valor_inv no están guardadas, deben calcularse:
-- Ventas 90 días = SUM(vh.cantidad_vendida) filtrando fecha_venta
-- Valor inventario = p.costo_unitario * inv.stock_disponible
+DEFINICIONES DE NEGOCIO OBLIGATORIAS:
+- "ventas" significa euros facturados: SUM(vh.ingreso_total). No uses cantidad_vendida salvo que el usuario pida unidades.
+- "ventas 90 días" = SUM(vh.ingreso_total) con fecha_venta entre CURRENT_DATE - INTERVAL '89 days' y CURRENT_DATE, contando 90 fechas naturales.
+- "inventario" significa euros actuales: SUM(p.costo_unitario * inv.stock_disponible).
+- "margen" o "beneficio" = ingresos menos (unidades vendidas * costo_unitario); el porcentaje de margen es beneficio dividido entre ingresos.
+- Cuando se solicite una comparación, informa periodo actual, periodo anterior, variación absoluta y variación porcentual.
+- "oportunidad comercial" significa producto ABC A/B con stock disponible, margen positivo y ventas en los últimos 90 días; "acción prioritaria" ordena primero roturas de productos clave, después capital inmovilizado y después oportunidades.
+- "ABC" se basa en ventas EUR de los últimos 90 días; "XYZ" se basa en inventario EUR actual.
+- `cv` y `ads` representan variabilidad y velocidad de demanda para cobertura, pero no determinan la letra XYZ.
+- Para totales y sumatorias, calcula en SQL con SUM y devuelve una sola fila agregada. No limites los totales a 50 productos.
 
 EJEMPLOS DE QUERIES ÚTILES:
 -- Top productos por valor de inventario:
@@ -223,6 +293,7 @@ FORBIDDEN_SQL_KEYWORDS = re.compile(
 )
 
 TABLE_REFERENCE_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([a-zA-Z_][\w\.]*)", re.IGNORECASE)
+CTE_NAME_PATTERN = re.compile(r"(?:\bWITH\s+(?:RECURSIVE\s+)?|,\s*)([a-zA-Z_][\w]*)\s+AS\s*\(", re.IGNORECASE)
 
 def _strip_sql_comments(sql_query: str) -> str:
     return re.sub(r"(--[^\n]*|/\*.*?\*/)", " ", sql_query, flags=re.DOTALL).strip()
@@ -235,12 +306,14 @@ def validate_read_only_sql(sql_query: str, empresa_id: int):
     normalized = normalized.rstrip(";").strip()
     if ";" in normalized:
         return None, None, "Error de seguridad: solo se permite una sentencia SQL."
-    if not re.match(r"^SELECT\b", normalized, flags=re.IGNORECASE):
+    if not re.match(r"^(?:SELECT|WITH)\b", normalized, flags=re.IGNORECASE):
         return None, None, "Error de seguridad: solo se permiten consultas SELECT."
     if FORBIDDEN_SQL_KEYWORDS.search(normalized):
         return None, None, "Error de seguridad: la consulta contiene una operación no permitida."
 
     referenced_tables = {match.group(1).split(".")[-1].lower() for match in TABLE_REFERENCE_PATTERN.finditer(normalized)}
+    cte_names = {match.group(1).lower() for match in CTE_NAME_PATTERN.finditer(normalized)}
+    referenced_tables -= cte_names
     invalid_tables = referenced_tables - ALLOWED_SQL_TABLES
     if invalid_tables:
         return None, None, "Error de seguridad: la consulta referencia tablas no permitidas."
@@ -256,13 +329,16 @@ def validate_read_only_sql(sql_query: str, empresa_id: int):
     params = {"empresa_id": empresa_id}
     return safe_query, params, None
 
-def execute_sql(db: Session, sql_query: str, empresa_id: int):
+def execute_sql(db: Session, sql_query: str, empresa_id: int, extra_params: dict[str, Any] | None = None):
     query_hash = hashlib.sha256(sql_query.encode("utf-8")).hexdigest()[:12]
     logger.info(f"[AUDIT SQL] Query generada interceptada hash={query_hash}")
     safe_query, params, validation_error = validate_read_only_sql(sql_query, empresa_id)
     if validation_error:
         logger.error(f"[AUDIT SQL] Consulta bloqueada: {validation_error}")
         return None, validation_error
+
+    if extra_params:
+        params.update({clave: valor for clave, valor in extra_params.items() if clave != "empresa_id"})
 
     try:
         result = db.execute(text(safe_query), params)
@@ -384,6 +460,9 @@ Contexto del Negocio: {contexto}
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
         reply += f"\n\n{build_sql_export_marker(sql_query)}"
+    metrics_marker = build_metrics_marker(raw_data, sql_query)
+    if metrics_marker:
+        reply += f"\n\n{metrics_marker}"
         
     return reply
 
@@ -393,17 +472,37 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         
     user_message = history[-1]["content"]
     
-    # Detectar si es una pregunta conversacional (no requiere SQL)
-    if is_conversational(user_message):
+    # Las preguntas agregadas frecuentes se resuelven con SQL parametrizado y exacto.
+    from .copilot_orchestrator import analizar_intencion, crear_consulta_semantica
+
+    intento, aclaracion = analizar_intencion(history)
+    if aclaracion:
+        return aclaracion
+
+    # Las conversaciones simples no necesitan consultar el resumen empresarial.
+    if not intento and is_conversational(user_message):
         return handle_conversational(user_message, contexto)
-    
+
+    from .copilot_context import construir_resumen_operativo
+    contexto_analisis = contexto
+    resumen_operativo = construir_resumen_operativo(db, empresa_id)
+    if resumen_operativo:
+        contexto_analisis = f"{contexto}\n\n{resumen_operativo}".strip()
+
+    if intento:
+        sql_query, query_params = crear_consulta_semantica(intento)
+        raw_data, error = execute_sql(db, sql_query, empresa_id, query_params)
+        reply = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis)
+        followups = build_followups_marker(intento) if not error else ""
+        return f"{reply}\n\n{followups}" if followups else reply
+
     # Loop de reintento: si la SQL falla, se le dice a GPT qué falló para que corrija
     max_retries = 2
     retry_history = list(history)  # Copia para no mutar el original
     
     for attempt in range(max_retries + 1):
         # 1. Generar SQL
-        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto)
+        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto_analisis)
         
         # 2. Ejecutar SQL en la conexión RO
         raw_data, error = execute_sql(db, sql_query, empresa_id)
@@ -423,7 +522,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             continue
         
         # 4. Interpretar (ya sea con datos o con error final)
-        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto)
+        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis)
         return final_response
     
     return """⚠️ **No pude obtener datos para responder tu pregunta** tras varios intentos.

@@ -25,7 +25,7 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
       if (metrics[key]) {
         metrics[key].count++;
         metrics[key].inv += (item.valor_inv || 0);
-        metrics[key].sales += (item.ventas_60d || 0);
+        metrics[key].sales += (item.ventas_90d || 0);
       }
     });
 
@@ -65,7 +65,7 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm w-full mt-4">
       <h3 className="title-corporate text-sm mb-1">Distribución de Artículos por Cuadrante</h3>
       <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-        Clasificación según la importancia (A/B/C) y volatilidad (X/Y/Z).
+        Clasificación según ventas EUR 90D (A/B/C) e inventario EUR actual (X/Y/Z).
       </p>
       
       <div className="h-64 w-full">

@@ -87,7 +87,7 @@ export const Home = () => {
     if (!match) return;
     const selectedClass = match[1];
     const filtered = inventory.filter(item => item.xyz === selectedClass);
-    setModalTitle(`Productos Clase ${selectedClass} (Volatilidad)`);
+    setModalTitle(`Productos Clase ${selectedClass} (Inventario EUR)`);
     setModalProducts(filtered);
     setModalOpen(true);
   };
@@ -127,7 +127,7 @@ export const Home = () => {
     }
     
     // Evaluate frozen capital in C class
-    const frozenC = inventory.filter(i => i.matriz_abc?.includes('C') && i.unidades_venta_60d === 0);
+    const frozenC = inventory.filter(i => i.matriz_abc?.includes('C') && i.unidades_venta_90d === 0);
     if (frozenC.length > 0) {
         const valFrozen = frozenC.reduce((acc, i) => acc + i.valor_inv, 0);
         const valTotal = kpiData.valor_total_inventario || 1;

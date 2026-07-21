@@ -22,14 +22,14 @@ const EXPORT_COLUMNS = [
   { id: 'precio_unit', label: 'Precio Unitario' },
   { id: 'unidades', label: 'Unidades' },
   { id: 'valor_inv', label: 'Valor Inventario' },
-  { id: 'ventas_60d', label: 'Ventas 60D' },
-  { id: 'unidades_venta_60d', label: 'Unid. Venta 60D' },
+  { id: 'ventas_90d', label: 'Ventas 90D' },
+  { id: 'unidades_venta_90d', label: 'Unid. Venta 90D' },
   { id: 'ads', label: 'ADS' },
   { id: 'dias_cobertura', label: 'Días Cobertura' },
   { id: 'abc', label: 'Clase ABC' },
   { id: 'xyz', label: 'Clase XYZ' },
   { id: 'cv', label: 'CV' },
-  { id: 'matriz_abc', label: 'Matriz ABC' },
+  { id: 'matriz_abc', label: 'Matriz ABCXYZ' },
   { id: 'riesgos_categorizados', label: 'Riesgos' }
 ];
 
@@ -209,7 +209,7 @@ export const Intelligence = () => {
       {/* Header */}
       <div className="flex justify-between items-center shrink-0">
         <div>
-          <h1 className="title-corporate text-3xl mb-1">Inteligencia ABC</h1>
+          <h1 className="title-corporate text-3xl mb-1">Inteligencia ABCXYZ</h1>
           <p className="text-slate-500 dark:text-slate-400">Análisis predictivo de inventario.</p>
         </div>
       </div>

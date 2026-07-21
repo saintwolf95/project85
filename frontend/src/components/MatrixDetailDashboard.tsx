@@ -26,7 +26,7 @@ const getStrategy = (activeCell: string): Strategy => {
   switch (activeCell) {
     case 'AX': return {
       title: 'Core Business (AX) ⭐',
-      desc: 'Alta inversión y demanda altamente predecible. Estos artículos son el motor principal de la empresa. Riesgo casi nulo.',
+      desc: 'Mayor contribución de ventas y mayor concentración de inventario. Estos artículos son el motor principal y requieren máxima disponibilidad.',
       color: 'blue',
       textColor: 'text-blue-600 dark:text-blue-400',
       bg: 'bg-blue-50 dark:bg-blue-900/20',
@@ -37,7 +37,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'AY': return {
       title: 'Atención Moderada (AY)',
-      desc: 'Alta inversión pero con demanda variable. Es importante controlarlos de cerca para evitar sobre-stock o roturas.',
+      desc: 'Alta contribución de ventas y concentración media de inventario. Controlar cobertura, servicio y capital comprometido.',
       color: 'amber',
       textColor: 'text-yellow-600 dark:text-yellow-400',
       bg: 'bg-yellow-50 dark:bg-yellow-900/20',
@@ -48,7 +48,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'AZ': return {
       title: 'CRÍTICO: Riesgo Máximo (AZ) 🚨',
-      desc: 'Dinero bloqueado en artículos con ventas erráticas. Mayor probabilidad de obsolescencia. Situación muy tóxica.',
+      desc: 'Alta contribución de ventas y bajo inventario relativo. Vigilar el riesgo de rotura y la reposición de estos artículos.',
       color: 'red',
       textColor: 'text-red-600 dark:text-red-400',
       bg: 'bg-red-50 dark:bg-red-900/20',
@@ -59,7 +59,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'BX': return {
       title: 'Flujo Seguro (BX)',
-      desc: 'Inversión media, venta constante y segura. No dan problemas y mantienen a la empresa facturando.',
+      desc: 'Contribución media de ventas y alta concentración de inventario. Mantener rotación y cobertura bajo control.',
       color: 'emerald',
       textColor: 'text-emerald-600 dark:text-emerald-400',
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
@@ -70,7 +70,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'BY': return {
       title: 'Vigilancia Estándar (BY)',
-      desc: 'Inversión y variación medias. Un cuadrante normal. No quita el sueño pero hay que mantener control.',
+      desc: 'Contribución e inventario medios. Cuadrante equilibrado que requiere controles normales de máximos, mínimos y cobertura.',
       color: 'amber',
       textColor: 'text-yellow-600 dark:text-yellow-400',
       bg: 'bg-yellow-50 dark:bg-yellow-900/20',
@@ -81,7 +81,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'BZ': return {
       title: 'Riesgo Alto (BZ)',
-      desc: 'Inversión moderada pero ventas muy erráticas. Riesgo significativo de quedar obsoleto si cambia el mercado.',
+      desc: 'Contribución media de ventas y bajo inventario relativo. Revisar cobertura y riesgo de reposición.',
       color: 'orange',
       textColor: 'text-orange-600 dark:text-orange-400',
       bg: 'bg-orange-50 dark:bg-orange-900/20',
@@ -92,7 +92,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'CX': return {
       title: 'Automatizable (CX)',
-      desc: 'Poco valor económico y venta constante. Los típicos consumibles rápidos. Deben gestionarse sin tiempo humano.',
+      desc: 'Baja contribución de ventas y alta concentración de inventario. Revisar capital inmovilizado y velocidad de salida.',
       color: 'emerald',
       textColor: 'text-emerald-600 dark:text-emerald-400',
       bg: 'bg-emerald-50 dark:bg-emerald-900/20',
@@ -103,7 +103,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'CY': return {
       title: 'Baja Prioridad (CY)',
-      desc: 'Poco valor, venta irregular pero algo predecible. Monitoreo pasivo.',
+      desc: 'Baja contribución de ventas y concentración media de inventario. Monitoreo y compras ajustadas.',
       color: 'lime',
       textColor: 'text-lime-600 dark:text-lime-400',
       bg: 'bg-lime-50 dark:bg-lime-900/20',
@@ -114,7 +114,7 @@ const getStrategy = (activeCell: string): Strategy => {
     };
     case 'CZ': return {
       title: 'Ruido del Catálogo (CZ)',
-      desc: 'Poco valor y demanda casi nula o aleatoria. No generan beneficio. Son accesorios residuales.',
+      desc: 'Baja contribución de ventas y bajo valor de inventario. Comprar solo bajo pedido o revisar continuidad.',
       color: 'slate',
       textColor: 'text-slate-500 dark:text-slate-400',
       bg: 'bg-slate-100 dark:bg-slate-800',
@@ -152,7 +152,7 @@ export const MatrixDetailDashboard: React.FC<MatrixDetailDashboardProps> = ({ ac
   }, [data]);
 
   const totalValue = useMemo(() => data.reduce((sum, p) => sum + p.valor_inv, 0), [data]);
-  const totalVentas = useMemo(() => data.reduce((sum, p) => sum + p.ventas_60d, 0), [data]);
+  const totalVentas = useMemo(() => data.reduce((sum, p) => sum + p.ventas_90d, 0), [data]);
   const avgCobertura = useMemo(() => {
     if (!data.length) return 0;
     const validCoverage = data.filter(p => p.dias_cobertura < 999);
@@ -227,7 +227,7 @@ export const MatrixDetailDashboard: React.FC<MatrixDetailDashboardProps> = ({ ac
               <ShoppingCart size={20} />
             </div>
             <div>
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Ventas 60D</p>
+              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">Ventas 90D</p>
               <p className="text-xl font-bold text-slate-900 dark:text-white">{formatEUR(totalVentas)}</p>
             </div>
           </div>

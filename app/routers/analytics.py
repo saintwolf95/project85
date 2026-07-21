@@ -186,7 +186,8 @@ def get_dashboard_kpis(
         "family_data": family_data
     }
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from ..models import Producto, VentaHistorica
 from fastapi import HTTPException
 
@@ -206,7 +207,7 @@ def get_product_history(
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
     # Get last 60 days
-    fecha_60d = date.today() - timedelta(days=60)
+    fecha_60d = datetime.now(ZoneInfo("Europe/Madrid")).date() - timedelta(days=60)
     
     ventas = db.query(VentaHistorica).filter(
         VentaHistorica.producto_id == producto_id,

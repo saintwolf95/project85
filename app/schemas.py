@@ -51,6 +51,8 @@ class ProductMetrics(BaseModel):
     valor_inv: float
     unidades_venta_60d: float
     ventas_60d: float
+    unidades_venta_90d: float
+    ventas_90d: float
     abc: str
     xyz: str
     cv: float

@@ -17,7 +17,7 @@ from .core.rate_limit import limiter
 load_dotenv()
 
 from . import models, seed_data
-from .database import engine, get_db, SessionLocal
+from .database import engine, engine_ro, get_db, SessionLocal, IS_POSTGRES
 from .routers import analytics, copilot, inventory, settings, agents, libreria
 
 @asynccontextmanager
@@ -74,11 +74,11 @@ async def lifespan(app: FastAPI):
         # Sincronizar métricas ABC/XYZ para el Copilot
         from .services import sync_metrics_to_db
         print("[STARTUP] Sincronizando métricas ABC/XYZ (Data Mart)...", flush=True)
-        # Obtenemos la primera empresa (demo)
-        empresa = db.query(models.Empresa).first()
-        if empresa:
+        # Sincronizar cada empresa de forma independiente.
+        empresas = db.query(models.Empresa).all()
+        for empresa in empresas:
             sync_metrics_to_db(db, empresa.id)
-            print("[STARTUP] Sincronización completada.", flush=True)
+        print(f"[STARTUP] Sincronización completada para {len(empresas)} empresa(s).", flush=True)
             
     except Exception as e:
         print(f"[STARTUP] Error durante auto-seed: {e}", flush=True)
@@ -94,6 +94,31 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+@app.get("/health")
+@limiter.limit("30/minute")
+def health_check(request: Request):
+    """Health check sin credenciales ni detalles internos de conexión."""
+    from sqlalchemy import text
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        with engine_ro.connect() as connection_ro:
+            connection_ro.execute(text("SELECT 1"))
+            read_only_confirmed = True
+            if IS_POSTGRES:
+                setting = connection_ro.execute(text("SHOW default_transaction_read_only")).scalar()
+                read_only_confirmed = str(setting).lower() in ("on", "true", "1")
+        if not read_only_confirmed:
+            raise RuntimeError("La conexión RO no está en modo read-only")
+        return {
+            "status": "ok",
+            "database": "postgresql" if IS_POSTGRES else "sqlite",
+            "copilot_read_only": True,
+        }
+    except Exception:
+        raise HTTPException(status_code=503, detail="Servicio temporalmente no disponible")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

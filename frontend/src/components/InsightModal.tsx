@@ -49,7 +49,7 @@ export const InsightModal: React.FC<InsightModalProps> = ({ insight, inventory, 
       'Nombre': p.nombre_art,
       'Familia': p.familia,
       'Valor Inventario': p.valor_inv,
-      'Ventas 60D': p.ventas_60d,
+      'Ventas 90D': p.ventas_90d,
       'Clase ABC': p.matriz_abc
     })));
     const wb = XLSX.utils.book_new();

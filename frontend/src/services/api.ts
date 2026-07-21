@@ -19,6 +19,8 @@ export interface ProductMetrics {
   valor_inv: number;
   unidades_venta_60d: number;
   ventas_60d: number;
+  unidades_venta_90d: number;
+  ventas_90d: number;
   abc: string;
   xyz: string;
   cv: number;

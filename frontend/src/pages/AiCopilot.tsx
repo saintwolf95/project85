@@ -164,7 +164,7 @@ export const AiCopilot = () => {
   const defaultGreetingMessage: Message = {
     id: 'greeting',
     role: 'ai',
-    content: '¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tu base de datos en tiempo real.\n\nPuedes preguntarme sobre:\n\n- [¿Cuántas unidades tenemos en stock de los productos clase A?](#prompt:¿Cuántas unidades tenemos en stock de los productos clase A?)\n- [¿Qué productos tienen riesgo de rotura inminente?](#prompt:¿Qué productos tienen riesgo de rotura inminente?)\n- [¿Cuál es el valor total del inventario por familia?](#prompt:¿Cuál es el valor total del inventario por familia?)\n- [Hazme un resumen ejecutivo del estado del inventario hoy](#prompt:Hazme un resumen ejecutivo del estado del inventario hoy)',
+    content: `¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tu base de datos en tiempo real.\n\nPuedes preguntarme sobre:\n\n- [¿Cuántas unidades tenemos en stock de los productos clase A?](#prompt:${encodeURIComponent('¿Cuántas unidades tenemos en stock de los productos clase A?')})\n- [¿Qué productos tienen riesgo de rotura inminente?](#prompt:${encodeURIComponent('¿Qué productos tienen riesgo de rotura inminente?')})\n- [¿Cuál es el valor total del inventario por familia?](#prompt:${encodeURIComponent('¿Cuál es el valor total del inventario por familia?')})\n- [Hazme un resumen ejecutivo del estado del inventario hoy](#prompt:${encodeURIComponent('Hazme un resumen ejecutivo del estado del inventario hoy')})`,
     timestamp: now(),
   };
 

@@ -149,6 +149,7 @@ export const AiCopilot = () => {
   const [businessContext, setBusinessContext] = useState('');
   const [isSavingContext, setIsSavingContext] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
   const [showSuggestions, setShowSuggestions] = useState(true);
   // LibrerIA docs
@@ -333,14 +334,18 @@ export const AiCopilot = () => {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 1048576) { alert('El archivo excede el límite máximo de 1MB.'); return; }
+    setUploadError(null);
+    if (file.size > 1048576) { setUploadError('El archivo excede el límite máximo de 1MB.'); return; }
     try {
       setIsUploading(true);
       const response = await uploadBusinessDocument(file);
-      if (response.success) setBusinessContext(response.full_context);
+      if (response.success) {
+        setBusinessContext(response.full_context);
+        setUploadError(null);
+      }
     } catch (error: any) {
       console.error('Error subiendo archivo:', error);
-      alert(error.response?.data?.detail || 'Error subiendo el archivo.');
+      setUploadError(error.response?.data?.detail || 'Error subiendo el archivo.');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -682,6 +687,11 @@ export const AiCopilot = () => {
                   </button>
                 </div>
               </div>
+              {uploadError && (
+                <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
+                  <span>⚠️</span> {uploadError}
+                </div>
+              )}
               <textarea
                 value={businessContext}
                 onChange={(e) => setBusinessContext(e.target.value)}

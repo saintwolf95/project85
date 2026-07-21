@@ -17,6 +17,7 @@ export const Libreria = () => {
   
   // Upload state
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]);
   
@@ -50,11 +51,13 @@ export const Libreria = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       setSelectedFile(e.target.files[0]);
+      setUploadError(null);
     }
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
+    setUploadError(null);
     
     try {
       setUploading(true);
@@ -67,7 +70,7 @@ export const Libreria = () => {
       await fetchDocuments();
     } catch (error) {
       console.error("Error uploading", error);
-      alert("Hubo un error subiendo el documento. Asegúrate de que el formato sea soportado.");
+      setUploadError("Hubo un error subiendo el documento. Asegúrate de que el formato sea soportado y no exceda 5MB.");
     } finally {
       setUploading(false);
     }
@@ -138,13 +141,11 @@ export const Libreria = () => {
                   id="file-upload"
                   onChange={handleFileChange}
                   accept=".pdf,.docx,.txt,.csv"
-                  className="block w-full text-sm text-slate-500 dark:text-slate-400
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-brand-cyan/10 file:text-brand-cyan
-                    hover:file:bg-brand-cyan/20 cursor-pointer"
+                  className="hidden"
                 />
+                <label htmlFor="file-upload" className="cursor-pointer bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors inline-block w-full text-center">
+                  {selectedFile ? selectedFile.name : 'Seleccionar archivo'}
+                </label>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Departamento (Etiqueta)</label>
@@ -156,6 +157,13 @@ export const Libreria = () => {
                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
+              
+              {uploadError && (
+                <div className="px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
+                  <span>⚠️</span> {uploadError}
+                </div>
+              )}
+
               <button 
                 onClick={handleUpload}
                 disabled={!selectedFile || uploading}

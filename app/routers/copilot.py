@@ -32,14 +32,17 @@ class ContextoRequest(BaseModel):
 @router.get("/context")
 def get_context(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
+    if not empresa:
+        return {"contexto_negocio": ""}
     return {"contexto_negocio": empresa.contexto_negocio or ""}
 
 @router.put("/context")
 def update_context(payload: ContextoRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
-    if empresa:
-        empresa.contexto_negocio = payload.contexto_negocio
-        db.commit()
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+    empresa.contexto_negocio = payload.contexto_negocio
+    db.commit()
     return {"success": True}
 
 @router.post("/context/upload")
@@ -73,6 +76,7 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
         else:
             raise HTTPException(status_code=400, detail="Formato de archivo no soportado. Usa .txt, .csv, .pdf o .docx")
             
+        new_context = ""
         empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
         if empresa:
             current_context = empresa.contexto_negocio or ""

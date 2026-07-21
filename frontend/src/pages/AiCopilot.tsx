@@ -192,7 +192,7 @@ export const AiCopilot = () => {
       // Si era un chat nuevo, el backend nos devuelve el nuevo ID asignado
       if (!currentChatId && response.data.chat_id) {
         setCurrentChatId(response.data.chat_id);
-        loadChats(); // Recargar la lista de chats para que aparezca
+        loadChats().catch(console.error); // Recargar la lista de chats para que aparezca
       } else {
         // Actualizar el orden en la UI (poner de primero)
         setChats(prev => {
@@ -350,10 +350,7 @@ export const AiCopilot = () => {
         </div>
       </div>
 
-      {/* Overlay Móvil */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-10 lg:hidden" onClick={toggleSidebar} />
-      )}
+
 
       {/* Main Chat Area */}
       <div className="flex-1 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg dark:shadow-[0_0_20px_rgba(0,245,255,0.02)]">

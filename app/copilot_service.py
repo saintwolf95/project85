@@ -296,8 +296,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         # 3. Si hay error y quedan reintentos, pedirle a GPT que corrija
         if error and attempt < max_retries:
             logger.warning(f"[AUDIT SQL] Reintento {attempt + 1}/{max_retries}. SQL fallida: {sql_query}")
-            # Añadir el contexto del error para que GPT corrija
-            retry_history = list(history)  # Reset al historial original
+            # Acumular el error en retry_history (NO resetear) para que GPT vea todos los intentos fallidos
             retry_history.append({
                 "role": "assistant",
                 "content": sql_query

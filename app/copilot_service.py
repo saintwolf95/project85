@@ -83,21 +83,18 @@ Tabla `producto_metricas` (alias recomendado: pm):
 - abc (VARCHAR) -- Clasificación ABC por valor de ventas: 'A' (top 80%), 'B' (siguiente 15%), 'C' (restante 5%)
 - xyz (VARCHAR) -- Clasificación XYZ por volatilidad de demanda: 'X' (estable), 'Y' (variable), 'Z' (errática)
 - matriz_abc (VARCHAR) -- Cuadrante combinado: 'AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'
-- dias_cobertura (FLOAT) -- días que durará el stock actual al ritmo de ventas actual
+- dias_cobertura (INTEGER) -- días que durará el stock actual al ritmo de ventas actual
 - riesgo_rotura (BOOLEAN) -- TRUE si hay riesgo inminente de quedarse sin stock
-- ventas_60d (FLOAT) -- ingresos totales en euros de los últimos 60 días
-- ventas_90d (FLOAT) -- ingresos totales en euros de los últimos 90 días
-- valor_inv (FLOAT) -- valor económico del inventario actual (stock * coste unitario)
-- ads (FLOAT) -- Average Daily Sales: ventas diarias promedio en unidades
-- unidades_venta_60d (INTEGER) -- unidades vendidas en los últimos 60 días
-- precio_unit (FLOAT) -- precio de venta unitario
-- unidades (INTEGER) -- stock disponible actual (igual que inventario_snapshot.stock_disponible)
+
+IMPORTANTE: Las métricas dinámicas como ventas_90d o valor_inv no están guardadas, deben calcularse:
+- Ventas 90 días = SUM(vh.cantidad_vendida) filtrando fecha_venta
+- Valor inventario = p.costo_unitario * inv.stock_disponible
 
 EJEMPLOS DE QUERIES ÚTILES:
 -- Top productos por valor de inventario:
-SELECT p.nombre, pm.valor_inv, pm.matriz_abc FROM productos p JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 ORDER BY pm.valor_inv DESC LIMIT 10;
+SELECT p.nombre, (p.costo_unitario * inv.stock_disponible) as valor_inv, pm.matriz_abc FROM productos p JOIN inventario_snapshot inv ON p.id = inv.producto_id LEFT JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 ORDER BY valor_inv DESC LIMIT 10;
 -- Productos con riesgo de rotura clase A:
-SELECT p.nombre, pm.dias_cobertura, pm.ventas_90d FROM productos p JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 AND pm.abc = 'A' AND pm.riesgo_rotura = TRUE ORDER BY pm.dias_cobertura ASC;
+SELECT p.nombre, pm.dias_cobertura, (SELECT SUM(cantidad_vendida) FROM ventas_historicas WHERE producto_id = p.id) as ventas_totales FROM productos p JOIN producto_metricas pm ON p.id = pm.producto_id WHERE p.empresa_id = 1 AND pm.abc = 'A' AND pm.riesgo_rotura = TRUE ORDER BY pm.dias_cobertura ASC;
 """
 
 CONVERSATIONAL_KEYWORDS = [

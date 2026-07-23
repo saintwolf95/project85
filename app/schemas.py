@@ -106,7 +106,7 @@ class AgentChatMessage(BaseModel):
 
 class AgentChatRequest(BaseModel):
     chat_id: Optional[int] = None
-    history: List[AgentChatMessage] = Field(..., max_length=20)
+    history: List[AgentChatMessage] = Field(..., min_length=1, max_length=20)
 
 class LibreriaDocumentoResponse(BaseModel):
     id: int

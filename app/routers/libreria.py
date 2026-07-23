@@ -18,6 +18,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 MAX_LIBRERIA_FILE_SIZE = 1_048_576
 MAX_LIBRERIA_TEXT_CHARS = 200_000
+MAX_LIBRERIA_DOCUMENT_PAGES = 50
+MAX_LIBRERIA_DOCS_FOR_CONTEXT = 20
+MAX_LIBRERIA_DOC_CHARS_FOR_PROMPT = 10_000
+MAX_LIBRERIA_PROMPT_CHARS = 50_000
+MAX_COPILOT_DOCUMENT_IDS = 10
+MAX_LIBRERIA_DOCUMENTS_LIST = 100
 ALLOWED_LIBRERIA_EXTENSIONS = (".txt", ".csv", ".pdf", ".docx")
 
 async def extract_text_from_upload(file: UploadFile) -> str:
@@ -36,6 +42,8 @@ async def extract_text_from_upload(file: UploadFile) -> str:
     try:
         if filename.endswith('.pdf'):
             reader = PdfReader(io.BytesIO(content))
+            if len(reader.pages) > MAX_LIBRERIA_DOCUMENT_PAGES:
+                raise HTTPException(status_code=400, detail="El documento supera el mÃ¡ximo de 50 pÃ¡ginas.")
             for page in reader.pages:
                 text += (page.extract_text() or "") + "\n"
         elif filename.endswith('.docx'):
@@ -93,7 +101,9 @@ async def get_documents(
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return db.query(LibreriaDocumento).filter(LibreriaDocumento.empresa_id == current_user.empresa_id).order_by(LibreriaDocumento.upload_date.desc()).all()
+    return db.query(LibreriaDocumento).filter(
+        LibreriaDocumento.empresa_id == current_user.empresa_id
+    ).order_by(LibreriaDocumento.upload_date.desc()).limit(MAX_LIBRERIA_DOCUMENTS_LIST).all()
 
 @router.delete("/documents/{doc_id}")
 async def delete_document(
@@ -122,7 +132,7 @@ async def ask_libreria(
     if payload.department_filter and payload.department_filter != "all":
         query = query.filter(LibreriaDocumento.department == payload.department_filter)
         
-    docs = query.all()
+    docs = query.order_by(LibreriaDocumento.upload_date.desc()).limit(MAX_LIBRERIA_DOCS_FOR_CONTEXT).all()
     
     if not docs:
         return LibreriaChatResponse(answer="No hay documentos subidos para este departamento. Sube algunos archivos primero para que pueda leerlos.", context_docs=0)
@@ -131,12 +141,12 @@ async def ask_libreria(
     context = ""
     for doc in docs:
         context += f"\n--- INICIO DEL DOCUMENTO: {doc.filename} (Departamento: {doc.department}) ---\n"
-        context += doc.content_text[:MAX_LIBRERIA_TEXT_CHARS]
+        context += doc.content_text[:MAX_LIBRERIA_DOC_CHARS_FOR_PROMPT]
         context += f"\n--- FIN DEL DOCUMENTO: {doc.filename} ---\n"
         
     # Limitar el contexto groseramente si es absurdamente gigante (ej: más de 200k caracteres)
-    if len(context) > 200000:
-        context = context[:200000] + "\n...[Texto truncado por límite de memoria]..."
+    if len(context) > MAX_LIBRERIA_PROMPT_CHARS:
+        context = context[:MAX_LIBRERIA_PROMPT_CHARS] + "\n...[Texto truncado por límite de memoria]..."
         
     client = get_openai_client()
     if not client:
@@ -170,9 +180,14 @@ async def get_documents_for_copilot(
     db: Session = Depends(get_db)
 ):
     try:
-        ids = [int(i.strip()) for i in doc_ids.split(',') if i.strip().isdigit()]
+        raw_ids = [item.strip() for item in doc_ids.split(',') if item.strip()]
+        if any(not item.isdigit() for item in raw_ids):
+            raise HTTPException(status_code=400, detail="La lista de documentos no es valida.")
+        ids = list(dict.fromkeys(int(item) for item in raw_ids))
         if not ids:
             return {"context": "", "count": 0}
+        if len(ids) > MAX_COPILOT_DOCUMENT_IDS:
+            raise HTTPException(status_code=400, detail="No se pueden seleccionar más de 10 documentos.")
         docs = db.query(LibreriaDocumento).filter(
             LibreriaDocumento.empresa_id == current_user.empresa_id,
             LibreriaDocumento.id.in_(ids)
@@ -183,6 +198,8 @@ async def get_documents_for_copilot(
         for doc in docs:
             context_parts.append(f"--- Documento: {doc.filename} ({doc.department}) ---\n{doc.content_text[:3000]}\n")
         return {"context": "\n\n".join(context_parts), "count": len(docs)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error recuperando docs para Copilot: {e}")
-        return {"context": "", "count": 0}
+        raise HTTPException(status_code=500, detail="No se pudieron cargar los documentos de referencia.") from e

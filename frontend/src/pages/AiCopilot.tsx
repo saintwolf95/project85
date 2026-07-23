@@ -8,6 +8,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
 
 const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const MAX_SELECTED_LIB_DOCS = 10;
 
 const THINKING_MESSAGES = [
   'Entendiendo tu pregunta...',
@@ -285,6 +286,7 @@ export const AiCopilot = () => {
   const [selectedLibDocIds, setSelectedLibDocIds] = useState<number[]>([]);
   const [showLibPanel, setShowLibPanel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const now = () => new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -331,6 +333,7 @@ export const AiCopilot = () => {
   };
 
   const selectChat = async (chatId: number) => {
+    if (isLoading || chatId === currentChatId) return;
     setCurrentChatId(chatId);
     setShowSuggestions(false);
     setChatError(null);
@@ -359,6 +362,7 @@ export const AiCopilot = () => {
   };
 
   const startNewChat = () => {
+    if (isLoading) return;
     setCurrentChatId(null);
     setMessages([defaultGreetingMessage]);
     setShowSuggestions(true);
@@ -429,10 +433,12 @@ export const AiCopilot = () => {
       }
     } catch (error) {
       console.error('Error calling copilot API:', error);
+      setMessages(prev => prev.filter(message => message.id !== newUserMsg.id));
       setChatError(getCopilotErrorMessage(error));
       setLastFailedQuestion(userText);
     } finally {
       setIsLoading(false);
+      inputRef.current?.focus();
     }
   };
 
@@ -456,7 +462,10 @@ export const AiCopilot = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && input.trim()) handleSend();
+    if (e.key === 'Enter' && !e.shiftKey && input.trim()) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const handleSaveContext = async () => {
@@ -496,8 +505,15 @@ export const AiCopilot = () => {
 
   const toggleLibDoc = (docId: number) => {
     setSelectedLibDocIds(prev =>
-      prev.includes(docId) ? prev.filter(id => id !== docId) : [...prev, docId]
+      prev.includes(docId)
+        ? prev.filter(id => id !== docId)
+        : prev.length >= MAX_SELECTED_LIB_DOCS
+          ? prev
+          : [...prev, docId]
     );
+    if (!selectedLibDocIds.includes(docId) && selectedLibDocIds.length >= MAX_SELECTED_LIB_DOCS) {
+      setChatError(`Puedes seleccionar como máximo ${MAX_SELECTED_LIB_DOCS} documentos de LibrerIA.`);
+    }
   };
 
   const activeModel = MODEL_OPTIONS.find(m => m.value === modelPreference)!;
@@ -536,9 +552,9 @@ export const AiCopilot = () => {
       )}
 
       {/* Sidebar Historial */}
-      <div className={`absolute lg:relative z-20 h-full w-72 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-2xl lg:shadow-lg transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`}>
+      <div className={`absolute lg:relative z-20 h-full w-72 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-2xl lg:shadow-lg transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`} aria-label="Historial de chats">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-          <button onClick={startNewChat} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors font-medium text-sm">
+          <button onClick={startNewChat} disabled={isLoading} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors font-medium text-sm disabled:cursor-not-allowed disabled:opacity-50">
             <Plus size={16} /> Nuevo Chat
           </button>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden ml-2 p-2 text-slate-500 hover:text-slate-800 dark:hover:text-white">
@@ -556,7 +572,11 @@ export const AiCopilot = () => {
               <div
                 key={chat.id}
                 onClick={() => selectChat(chat.id)}
-                className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${currentChatId === chat.id ? 'bg-brand-blue/10 dark:bg-brand-cyan/10 border border-brand-blue/20 dark:border-brand-cyan/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'}`}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectChat(chat.id); } }}
+                role="button"
+                tabIndex={isLoading ? -1 : 0}
+                aria-current={currentChatId === chat.id ? 'page' : undefined}
+                className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${currentChatId === chat.id ? 'bg-brand-blue/10 dark:bg-brand-cyan/10 border border-brand-blue/20 dark:border-brand-cyan/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'} ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
               >
                 <div className="flex items-center gap-3 overflow-hidden">
                   <MessageSquare size={16} className={currentChatId === chat.id ? 'text-brand-blue dark:text-brand-cyan' : 'text-slate-400 dark:text-slate-500'} />
@@ -794,6 +814,7 @@ export const AiCopilot = () => {
                 <button
                   key={opt.value}
                   onClick={() => setModelPreference(opt.value)}
+                  aria-pressed={modelPreference === opt.value}
                   title={opt.desc}
                   className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                     modelPreference === opt.value
@@ -810,9 +831,11 @@ export const AiCopilot = () => {
 
           <div className="relative flex items-end">
             <textarea
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
+              aria-busy={isLoading}
               placeholder="Pregunta por ventas, inventario, alertas o ABCXYZ..."
               aria-label="Pregunta al AI Copilot"
               maxLength={2000}

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
+import logging
 from ..database import get_db
 from ..copilot_service import process_copilot_chat, cleanup_old_chats, extract_signed_sql_export
 from ..models import Usuario, CopilotChat, CopilotMessage
@@ -11,18 +12,24 @@ from ..core.rate_limit import limiter
 from .. import models
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
+logger = logging.getLogger(__name__)
 MAX_CONTEXT_FILE_SIZE = 1_048_576
 MAX_CONTEXT_CHARS = 200_000
+MAX_CHAT_CONTEXT_MESSAGES = 20
+MAX_CHAT_HISTORY_MESSAGES = 100
+MAX_CHAT_LIST = 100
+MAX_LIBRERIA_DOCS_PER_QUERY = 10
+MAX_DOCUMENT_PAGES = 50
 
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
+    role: Literal["user"]
     content: str = Field(..., max_length=2000)
 
 class ChatRequest(BaseModel):
     chat_id: Optional[int] = None
-    history: List[ChatMessage] = Field(..., max_length=20)
+    history: List[ChatMessage] = Field(..., min_length=1, max_length=MAX_CHAT_CONTEXT_MESSAGES)
     model_preference: Literal["fast", "thinking", "ultra_thinking"] = "fast"
-    libreria_doc_ids: Optional[List[int]] = None
+    libreria_doc_ids: Optional[List[int]] = Field(default=None, max_length=MAX_LIBRERIA_DOCS_PER_QUERY)
 
 class ChatResponse(BaseModel):
     reply: str
@@ -68,6 +75,8 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
             from pypdf import PdfReader
             import io
             reader = PdfReader(io.BytesIO(content))
+            if len(reader.pages) > MAX_DOCUMENT_PAGES:
+                raise HTTPException(status_code=400, detail="El documento supera el mÃ¡ximo de 50 pÃ¡ginas.")
             for page in reader.pages:
                 text_content += (page.extract_text() or "") + "\n"
         elif filename.endswith(".docx"):
@@ -93,14 +102,15 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
     except HTTPException:
         raise
     except Exception as e:
-        import logging
-        logging.error(f"[COPILOT UPLOAD] Error processing file {raw_filename}: {e}", exc_info=True)
+        logger.error(f"[COPILOT UPLOAD] Error processing file {raw_filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error procesando el archivo. Comprueba que el formato sea correcto.")
 
 @router.get("/chats")
 def get_chats(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     cleanup_old_chats(db, current_user.id)
-    chats = db.query(CopilotChat).filter(CopilotChat.usuario_id == current_user.id).order_by(CopilotChat.actualizado_en.desc()).all()
+    chats = db.query(CopilotChat).filter(
+        CopilotChat.usuario_id == current_user.id
+    ).order_by(CopilotChat.actualizado_en.desc()).limit(MAX_CHAT_LIST).all()
     return [{"id": c.id, "titulo": c.titulo, "actualizado_en": c.actualizado_en} for c in chats]
 
 @router.post("/chats")
@@ -120,7 +130,10 @@ def get_chat_history(chat_id: int, db: Session = Depends(get_db), current_user: 
     if not chat:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Chat no encontrado")
-    mensajes = db.query(CopilotMessage).filter(CopilotMessage.chat_id == chat_id).order_by(CopilotMessage.creado_en.asc()).all()
+    mensajes = db.query(CopilotMessage).filter(
+        CopilotMessage.chat_id == chat_id
+    ).order_by(CopilotMessage.creado_en.desc()).limit(MAX_CHAT_HISTORY_MESSAGES).all()
+    mensajes.reverse()
     return [{"id": m.id, "role": m.rol, "content": m.contenido, "creado_en": m.creado_en} for m in mensajes]
 
 @router.delete("/chats/{chat_id}")
@@ -145,16 +158,20 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         else:
             chat_id = payload.chat_id
             chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
-            if chat and len(payload.history) == 1:
+            if not chat:
+                raise HTTPException(status_code=404, detail="Chat no encontrado")
+            if len(payload.history) == 1:
                 chat.titulo = payload.history[-1].content[:30] + "..."
-            if chat:
-                chat.actualizado_en = datetime.utcnow()
-                db.commit()
+            chat.actualizado_en = datetime.utcnow()
+            db.commit()
 
         # Extraer el historial para procesar (formato para process_copilot_chat)
         # Podríamos usar el de la BD, pero process_copilot_chat requiere history de dicts
         # Reconstruimos la historia completa desde la BBDD + el nuevo mensaje
-        mensajes_previos = db.query(CopilotMessage).filter(CopilotMessage.chat_id == chat_id).order_by(CopilotMessage.creado_en.asc()).all()
+        mensajes_previos = db.query(CopilotMessage).filter(
+            CopilotMessage.chat_id == chat_id
+        ).order_by(CopilotMessage.creado_en.desc()).limit(MAX_CHAT_CONTEXT_MESSAGES).all()
+        mensajes_previos.reverse()
         
         # El payload.history normalmente trae solo el nuevo mensaje si el frontend está bien diseñado, 
         # pero si envía todo el historial, guardamos solo el último para evitar duplicados.
@@ -186,8 +203,7 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
                         lib_ctx += f"--- {doc.filename} ({doc.department}) ---\n{doc.content_text[:3000]}\n\n"
                     contexto_negocio = (contexto_negocio or "") + lib_ctx
             except Exception as e_lib:
-                import logging as _log
-                _log.warning(f"Error cargando docs LibrerIA: {e_lib}")
+                logger.warning(f"Error cargando docs LibrerIA: {e_lib}")
 
         # DB RO para queries analíticas de la IA
         from ..database import SessionLocalRO
@@ -209,10 +225,12 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
         db.commit()
 
         return {"reply": reply, "chat_id": chat_id, "message_id": assistant_msg_db.id}
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
-        import logging
-        logging.error(f"[COPILOT CHAT] Error procesando chat: {e}", exc_info=True)
+        logger.error(f"[COPILOT CHAT] Error procesando chat: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno procesando el chat.")
 
 @router.get("/chat/message/{message_id}/export")
@@ -238,14 +256,15 @@ def download_message_export(
         raise HTTPException(status_code=404, detail="Mensaje no encontrado")
         
     # 2. Extraer el SQL firmado
-    sql_query = extract_signed_sql_export(msg.contenido)
-    if not sql_query:
+    signed_export = extract_signed_sql_export(msg.contenido)
+    if not signed_export:
         raise HTTPException(status_code=400, detail="Este mensaje no contiene datos exportables.")
+    sql_query, trusted_query = signed_export
         
     # 3. Re-ejecutar SQL en read-only
     db_ro = SessionLocalRO()
     try:
-        raw_data, error = execute_sql(db_ro, sql_query, current_user.empresa_id)
+        raw_data, error = execute_sql(db_ro, sql_query, current_user.empresa_id, trusted_query=trusted_query)
         if error or not raw_data:
             raise HTTPException(status_code=500, detail="Error ejecutando la consulta original o sin datos.")
             

@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -24,14 +25,24 @@ if not logger.handlers:
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-EXPORT_MARKER_PATTERN = re.compile(r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64}) -->")
+MAX_CONTEXT_PROMPT_CHARS = 50_000
+MAX_SQL_RESULT_ROWS = 1_000
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 45.0
 
-def _export_signature(sql_b64: str) -> str:
-    return hmac.new(SUPABASE_JWT_SECRET.encode("utf-8"), sql_b64.encode("utf-8"), hashlib.sha256).hexdigest()
+EXPORT_MARKER_PATTERN = re.compile(r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64})(?:\.(trusted|untrusted))? -->")
 
-def build_sql_export_marker(sql_query: str) -> str:
+def _export_signature(sql_b64: str, trusted_query: bool = False) -> str:
+    scope = "trusted" if trusted_query else "untrusted"
+    return hmac.new(
+        SUPABASE_JWT_SECRET.encode("utf-8"),
+        f"{scope}:{sql_b64}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+def build_sql_export_marker(sql_query: str, trusted_query: bool = False) -> str:
     sql_b64 = base64.b64encode(sql_query.encode("utf-8")).decode("utf-8")
-    return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64)} -->"
+    scope = "trusted" if trusted_query else "untrusted"
+    return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64, trusted_query)}.{scope} -->"
 
 
 def build_metrics_marker(raw_data: list, sql_query: str = "") -> str:
@@ -93,21 +104,39 @@ def build_followups_marker(intento: Any) -> str:
     encoded = base64.b64encode(json.dumps({"actions": acciones}, ensure_ascii=False).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_followups: {encoded} -->"
 
-def extract_signed_sql_export(content: str) -> str | None:
+def extract_signed_sql_export(content: str) -> tuple[str, bool] | None:
     match = EXPORT_MARKER_PATTERN.search(content)
     if not match:
         return None
-    sql_b64, signature = match.groups()
-    if not hmac.compare_digest(signature, _export_signature(sql_b64)):
+    sql_b64, signature, scope = match.groups()
+    if scope is None:
+        # Legacy markers are revalidated as untrusted queries below.
+        valid = hmac.compare_digest(signature, hmac.new(
+            SUPABASE_JWT_SECRET.encode("utf-8"), sql_b64.encode("utf-8"), hashlib.sha256
+        ).hexdigest())
+        trusted_query = False
+    else:
+        trusted_query = scope == "trusted"
+        valid = hmac.compare_digest(signature, _export_signature(sql_b64, trusted_query))
+    if not valid:
         return None
-    return base64.b64decode(sql_b64).decode("utf-8")
+    try:
+        sql_query = base64.b64decode(sql_b64, validate=True).decode("utf-8")
+    except (binascii.Error, ValueError, UnicodeDecodeError):
+        return None
+    return sql_query, trusted_query
 
 def get_openai_client():
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
     try:
-        return OpenAI(api_key=api_key)
+        try:
+            timeout = float(os.environ.get("OPENAI_TIMEOUT_SECONDS", DEFAULT_OPENAI_TIMEOUT_SECONDS))
+        except (TypeError, ValueError):
+            timeout = DEFAULT_OPENAI_TIMEOUT_SECONDS
+        timeout = max(5.0, min(timeout, 120.0))
+        return OpenAI(api_key=api_key, timeout=timeout, max_retries=1)
     except Exception:
         return None
 
@@ -295,11 +324,17 @@ FORBIDDEN_SQL_KEYWORDS = re.compile(
 
 TABLE_REFERENCE_PATTERN = re.compile(r"\b(?:FROM|JOIN)\s+([a-zA-Z_][\w\.]*)", re.IGNORECASE)
 CTE_NAME_PATTERN = re.compile(r"(?:\bWITH\s+(?:RECURSIVE\s+)?|,\s*)([a-zA-Z_][\w]*)\s+AS\s*\(", re.IGNORECASE)
+SET_OPERATOR_PATTERN = re.compile(r"\b(UNION|INTERSECT|EXCEPT)\b", re.IGNORECASE)
+SUBQUERY_PATTERN = re.compile(r"\(\s*(?:SELECT|WITH)\b", re.IGNORECASE)
+PRODUCT_ALIAS_PATTERN = re.compile(
+    r"\b(?:FROM|JOIN)\s+(?:public\.)?productos\s+(?:AS\s+)?([a-zA-Z_][\w]*)\b",
+    re.IGNORECASE,
+)
 
 def _strip_sql_comments(sql_query: str) -> str:
     return re.sub(r"(--[^\n]*|/\*.*?\*/)", " ", sql_query, flags=re.DOTALL).strip()
 
-def validate_read_only_sql(sql_query: str, empresa_id: int):
+def validate_read_only_sql(sql_query: str, empresa_id: int, trusted_query: bool = False):
     if not isinstance(sql_query, str) or not sql_query.strip():
         return None, None, "La consulta SQL está vacía."
 
@@ -312,7 +347,37 @@ def validate_read_only_sql(sql_query: str, empresa_id: int):
     if FORBIDDEN_SQL_KEYWORDS.search(normalized):
         return None, None, "Error de seguridad: la consulta contiene una operación no permitida."
 
-    referenced_tables = {match.group(1).split(".")[-1].lower() for match in TABLE_REFERENCE_PATTERN.finditer(normalized)}
+    if SET_OPERATOR_PATTERN.search(normalized):
+        return None, None, "Error de seguridad: no se permiten UNION, INTERSECT ni EXCEPT."
+
+    # Las consultas semanticas son plantillas internas revisadas. Las consultas
+    # generadas por el modelo quedan limitadas a un SELECT simple y sin ramas
+    # alternativas para impedir que un filtro de empresa se pueda sortear.
+    if not trusted_query:
+        if not re.match(r"^SELECT\b", normalized, flags=re.IGNORECASE):
+            return None, None, "Error de seguridad: las consultas generadas deben ser SELECT simples."
+        if re.search(r"\bOR\b", normalized, flags=re.IGNORECASE) or SUBQUERY_PATTERN.search(normalized):
+            return None, None, "Error de seguridad: la consulta contiene una rama no permitida."
+        aliases = [alias.lower() for alias in PRODUCT_ALIAS_PATTERN.findall(normalized)]
+        if aliases != ["p"]:
+            return None, None, "Error de seguridad: la consulta debe usar una unica relacion productos con alias p."
+        if not re.search(
+            r"\bWHERE\b[\s\S]*?\bp\.empresa_id\s*=\s*(?::empresa_id|\d+)\b",
+            normalized,
+            flags=re.IGNORECASE,
+        ):
+            return None, None, "Error de seguridad: el filtro de empresa debe estar dentro de WHERE."
+
+    raw_references = [match.group(1).lower() for match in TABLE_REFERENCE_PATTERN.finditer(normalized)]
+    invalid_schemas = {
+        reference.split(".")[-2]
+        for reference in raw_references
+        if "." in reference and reference.split(".")[-2] != "public"
+    }
+    if invalid_schemas:
+        return None, None, "Error de seguridad: la consulta referencia un esquema no permitido."
+
+    referenced_tables = {reference.split(".")[-1] for reference in raw_references}
     cte_names = {match.group(1).lower() for match in CTE_NAME_PATTERN.finditer(normalized)}
     referenced_tables -= cte_names
     invalid_tables = referenced_tables - ALLOWED_SQL_TABLES
@@ -330,10 +395,16 @@ def validate_read_only_sql(sql_query: str, empresa_id: int):
     params = {"empresa_id": empresa_id}
     return safe_query, params, None
 
-def execute_sql(db: Session, sql_query: str, empresa_id: int, extra_params: dict[str, Any] | None = None):
+def execute_sql(
+    db: Session,
+    sql_query: str,
+    empresa_id: int,
+    extra_params: dict[str, Any] | None = None,
+    trusted_query: bool = False,
+):
     query_hash = hashlib.sha256(sql_query.encode("utf-8")).hexdigest()[:12]
     logger.info(f"[AUDIT SQL] Query generada interceptada hash={query_hash}")
-    safe_query, params, validation_error = validate_read_only_sql(sql_query, empresa_id)
+    safe_query, params, validation_error = validate_read_only_sql(sql_query, empresa_id, trusted_query)
     if validation_error:
         logger.error(f"[AUDIT SQL] Consulta bloqueada: {validation_error}")
         return None, validation_error
@@ -343,7 +414,7 @@ def execute_sql(db: Session, sql_query: str, empresa_id: int, extra_params: dict
 
     try:
         result = db.execute(text(safe_query), params)
-        rows = result.fetchall()
+        rows = result.fetchmany(MAX_SQL_RESULT_ROWS)
         columns = result.keys()
         data = [dict(zip(columns, row)) for row in rows]
         return data, None
@@ -352,7 +423,15 @@ def execute_sql(db: Session, sql_query: str, empresa_id: int, extra_params: dict
         # M2: Do not expose raw exception string to the client
         return None, "La consulta SQL no pudo ejecutarse. Verifica que los nombres de las tablas y columnas sean correctos."
 
-def interpret_results(history: list, sql_query: str, raw_data: any, error: str = None, model_preference: str = "fast", contexto: str = "") -> str:
+def interpret_results(
+    history: list,
+    sql_query: str,
+    raw_data: any,
+    error: str = None,
+    model_preference: str = "fast",
+    contexto: str = "",
+    trusted_query: bool = False,
+) -> str:
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
 
@@ -460,7 +539,7 @@ Contexto del Negocio: {contexto}
     reply = response.choices[0].message.content.strip()
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
-        reply += f"\n\n{build_sql_export_marker(sql_query)}"
+        reply += f"\n\n{build_sql_export_marker(sql_query, trusted_query)}"
     metrics_marker = build_metrics_marker(raw_data, sql_query)
     if metrics_marker:
         reply += f"\n\n{metrics_marker}"
@@ -485,15 +564,24 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         return handle_conversational(user_message, contexto)
 
     from .copilot_context import construir_resumen_operativo
-    contexto_analisis = contexto
+    contexto_analisis = (contexto or "")[:MAX_CONTEXT_PROMPT_CHARS]
     resumen_operativo = construir_resumen_operativo(db, empresa_id)
     if resumen_operativo:
-        contexto_analisis = f"{contexto}\n\n{resumen_operativo}".strip()
+        contexto_analisis = f"{contexto_analisis}\n\n{resumen_operativo}".strip()
+    contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
         sql_query, query_params = crear_consulta_semantica(intento)
-        raw_data, error = execute_sql(db, sql_query, empresa_id, query_params)
-        reply = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis)
+        raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
+        reply = interpret_results(
+            history,
+            sql_query,
+            raw_data,
+            error,
+            model_preference,
+            contexto_analisis,
+            trusted_query=True,
+        )
         followups = build_followups_marker(intento) if not error else ""
         return f"{reply}\n\n{followups}" if followups else reply
 

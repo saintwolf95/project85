@@ -2,9 +2,9 @@ import json
 import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database import SessionLocalRO
-from app.models import AgentInsights
-from app.copilot_service import get_openai_client, validate_read_only_sql
+from .database import SessionLocalRO
+from .models import AgentInsights
+from .copilot_service import get_openai_client, validate_read_only_sql
 
 logger = logging.getLogger(__name__)
 

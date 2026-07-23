@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 import logging
-from app.database import get_db
-from app.models import Usuario, AgentSettings, AgentInsights
-from app.api.deps import get_current_user
-from app.schemas import AgentInsightResponse
-from app.agents_service import execute_agents_workflow
-from app.core.rate_limit import limiter
+from ..database import get_db
+from ..models import Usuario, AgentSettings, AgentInsights
+from ..api.deps import get_current_user
+from ..schemas import AgentInsightResponse
+from ..agents_service import execute_agents_workflow
+from ..core.rate_limit import limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+MAX_AGENT_INSIGHTS_HISTORY = 100
+MAX_AGENT_CHAT_MESSAGES = 100
 ALLOWED_AGENT_NAMES = {"maria", "maría", "lucia", "lucía", "mattia", "ceo"}
 
 def validate_agent_name(agent_name: str) -> str:
@@ -45,12 +47,14 @@ def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Se
 from typing import List
 @router.get("/agents/insights/history", response_model=List[AgentInsightResponse])
 def get_all_insights(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
-    insights = db.query(AgentInsights).filter(AgentInsights.empresa_id == current_user.empresa_id).order_by(AgentInsights.fecha.desc()).all()
+    insights = db.query(AgentInsights).filter(
+        AgentInsights.empresa_id == current_user.empresa_id
+    ).order_by(AgentInsights.fecha.desc()).limit(MAX_AGENT_INSIGHTS_HISTORY).all()
     return insights
 
-from app.models import AgentChat, AgentMessage
-from app.schemas import AgentChatRequest
-from app.agents_service import process_agent_chat
+from ..models import AgentChat, AgentMessage
+from ..schemas import AgentChatRequest
+from ..agents_service import process_agent_chat
 
 @router.get("/agents/{agent_name}/chat")
 def get_agent_chat(agent_name: str, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -62,7 +66,10 @@ def get_agent_chat(agent_name: str, current_user: Usuario = Depends(get_current_
     if not chat:
         return []
     
-    mensajes = db.query(AgentMessage).filter(AgentMessage.chat_id == chat.id).order_by(AgentMessage.creado_en.asc()).all()
+    mensajes = db.query(AgentMessage).filter(
+        AgentMessage.chat_id == chat.id
+    ).order_by(AgentMessage.creado_en.desc()).limit(MAX_AGENT_CHAT_MESSAGES).all()
+    mensajes.reverse()
     return [{"role": m.rol, "content": m.contenido} for m in mensajes]
 
 @router.post("/agents/{agent_name}/chat")
@@ -86,7 +93,10 @@ def chat_with_agent(request: Request, agent_name: str, payload: AgentChatRequest
     db.add(user_msg)
     db.commit()
 
-    mensajes_previos = db.query(AgentMessage).filter(AgentMessage.chat_id == chat.id).order_by(AgentMessage.creado_en.asc()).all()
+    mensajes_previos = db.query(AgentMessage).filter(
+        AgentMessage.chat_id == chat.id
+    ).order_by(AgentMessage.creado_en.desc()).limit(MAX_AGENT_CHAT_MESSAGES).all()
+    mensajes_previos.reverse()
     history_dicts = [{"role": m.rol, "content": m.contenido} for m in mensajes_previos]
 
     reply = process_agent_chat(db, current_user.empresa_id, agent_name, history_dicts)

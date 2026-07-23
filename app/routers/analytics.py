@@ -13,7 +13,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 @router.get("/inventory-abc", response_model=schemas.InventoryAnalyticsResponse)
 def get_inventory_abc(
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1),
+    limit: int = Query(50, ge=1, le=500),
     search: Optional[str] = Query(None),
     matriz_abc: Optional[str] = Query(None),
     stock_out_risk: Optional[bool] = Query(None),
@@ -212,7 +212,7 @@ def get_product_history(
     ventas = db.query(VentaHistorica).filter(
         VentaHistorica.producto_id == producto_id,
         VentaHistorica.fecha_venta >= fecha_60d
-    ).order_by(VentaHistorica.fecha_venta.asc()).all()
+    ).order_by(VentaHistorica.fecha_venta.asc()).limit(1000).all()
 
     historico = []
     for v in ventas:

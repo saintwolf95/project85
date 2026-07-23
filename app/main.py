@@ -2,9 +2,11 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 from .api.deps import get_current_active_admin
+from .core.security import IS_PRODUCTION
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 import os
+import logging
 import uvicorn
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -20,8 +22,16 @@ from . import models, seed_data
 from .database import engine, engine_ro, get_db, SessionLocal, IS_POSTGRES
 from .routers import analytics, copilot, inventory, settings, agents, libreria
 
+logger = logging.getLogger(__name__)
+ALLOW_SCHEMA_INIT = os.getenv("ALLOW_SCHEMA_INIT", "false" if IS_PRODUCTION else "true").strip().lower() in {"1", "true", "yes"}
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if IS_PRODUCTION and not ALLOW_SCHEMA_INIT:
+        logger.info("[STARTUP] Produccion: se omiten create_all, auto-seed, migraciones manuales y sincronizacion de arranque.")
+        yield
+        return
+
     # Inicializa las tablas al iniciar la aplicación
     models.Base.metadata.create_all(bind=engine)
     
@@ -106,11 +116,34 @@ def health_check(request: Request):
             connection.execute(text("SELECT 1"))
         with engine_ro.connect() as connection_ro:
             connection_ro.execute(text("SELECT 1"))
-            read_only_confirmed = True
             if IS_POSTGRES:
-                setting = connection_ro.execute(text("SHOW default_transaction_read_only")).scalar()
-                read_only_confirmed = str(setting).lower() in ("on", "true", "1")
+                transaction_setting = connection_ro.execute(text("SHOW transaction_read_only")).scalar()
+                has_write_privileges = connection_ro.execute(text(
+                    """
+                    SELECT has_schema_privilege(current_user, 'public', 'CREATE')
+                       OR EXISTS (
+                           SELECT 1
+                           FROM pg_class c
+                           JOIN pg_namespace n ON n.oid = c.relnamespace
+                           WHERE n.nspname = 'public'
+                             AND c.relkind IN ('r', 'p')
+                             AND (
+                                 has_table_privilege(current_user, c.oid, 'INSERT')
+                                 OR has_table_privilege(current_user, c.oid, 'UPDATE')
+                                 OR has_table_privilege(current_user, c.oid, 'DELETE')
+                                 OR has_table_privilege(current_user, c.oid, 'TRUNCATE')
+                             )
+                       )
+                    """
+                )).scalar()
+                read_only_confirmed = (
+                    str(transaction_setting).lower() in ("on", "true", "1")
+                    or not bool(has_write_privileges)
+                )
+            else:
+                read_only_confirmed = True
         if not read_only_confirmed:
+            logger.error("[HEALTH] RO connection has write privileges.")
             raise RuntimeError("La conexión RO no está en modo read-only")
         return {
             "status": "ok",
@@ -118,6 +151,7 @@ def health_check(request: Request):
             "copilot_read_only": True,
         }
     except Exception:
+        logger.exception("[HEALTH] Database readiness check failed")
         raise HTTPException(status_code=503, detail="Servicio temporalmente no disponible")
 
 app.state.limiter = limiter
@@ -133,12 +167,16 @@ async def add_security_headers(request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
-DEFAULT_CORS_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:4000",
-    "http://localhost:5173",
-    "https://fivemin-xi.vercel.app",
-]
+DEFAULT_CORS_ORIGINS = (
+    ["https://fivemin-xi.vercel.app"]
+    if IS_PRODUCTION
+    else [
+        "http://localhost:3000",
+        "http://localhost:4000",
+        "http://localhost:5173",
+        "https://fivemin-xi.vercel.app",
+    ]
+)
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS)).split(",")
@@ -149,8 +187,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 app.include_router(analytics.router, prefix="/api/v1")

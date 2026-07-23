@@ -19,6 +19,9 @@ const THINKING_MESSAGES = [
 ];
 
 const QUICK_SUGGESTIONS = [
+  { label: 'Ventas año fiscal', prompt: '¿Cuáles son las ventas acumuladas del año fiscal?' },
+  { label: 'MGD por sección', prompt: 'Dame el MGD del año fiscal agrupado por sección' },
+  { label: 'Ventas por PM', prompt: 'Compara las ventas del año fiscal por Product Manager' },
   { label: 'Top 10 por ventas 90D', prompt: '¿Cuáles son los 10 productos con más ventas en los últimos 90 días?' },
   { label: 'Riesgo de rotura', prompt: '¿Qué productos tienen riesgo de rotura de stock inmediato?' },
   { label: 'Qué priorizar hoy', prompt: '¿Qué acciones debería priorizar hoy en inventario y ventas?' },

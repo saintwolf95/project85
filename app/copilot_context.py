@@ -18,6 +18,7 @@ RESUMENES_CACHE = TTLCache(maxsize=128, ttl=60)
 
 def _fechas_negocio() -> dict[str, date]:
     hoy = datetime.now(ZONA_NEGOCIO).date()
+    inicio_anio_fiscal = date(hoy.year if hoy.month >= 5 else hoy.year - 1, 5, 1)
     return {
         "hoy": hoy,
         "ayer": hoy - timedelta(days=1),
@@ -26,6 +27,7 @@ def _fechas_negocio() -> dict[str, date]:
         "inicio_30d_anterior": hoy - timedelta(days=59),
         "fin_30d_anterior": hoy - timedelta(days=30),
         "inicio_mes": hoy.replace(day=1),
+        "inicio_anio_fiscal": inicio_anio_fiscal,
     }
 
 
@@ -50,6 +52,14 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
         """
         WITH ventas AS (
             SELECT
+                COUNT(vh.id) AS registros_ventas,
+                COUNT(DISTINCT vh.producto_id) AS productos_con_ventas,
+                MIN(vh.fecha_venta) AS primera_fecha_venta,
+                MAX(vh.fecha_venta) AS ultima_fecha_venta,
+                COALESCE(SUM(vh.ingreso_total), 0) AS ventas_cargadas,
+                COALESCE(SUM(vh.cantidad_vendida), 0) AS unidades_cargadas,
+                COALESCE(SUM(vh.margen_bruto_eur), 0) AS margen_cargado,
+                COALESCE(SUM(vh.margen_destino_eur), 0) AS margen_destino_cargado,
                 COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :inicio_90d AND :hoy THEN vh.ingreso_total ELSE 0 END), 0) AS ventas_90d,
                 COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :inicio_30d AND :hoy THEN vh.ingreso_total ELSE 0 END), 0) AS ventas_30d,
                 COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :inicio_30d_anterior AND :fin_30d_anterior THEN vh.ingreso_total ELSE 0 END), 0) AS ventas_30d_anterior,
@@ -113,6 +123,15 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
         margen_destino_90d = float(resumen.get("margen_destino_90d") or 0)
         ventas_30d = float(resumen.get("ventas_30d") or 0)
         ventas_30d_anterior = float(resumen.get("ventas_30d_anterior") or 0)
+        ventas_cargadas = float(resumen.get("ventas_cargadas") or 0)
+        resumen["margen_pct_cargado"] = (
+            float(resumen.get("margen_cargado") or 0) / ventas_cargadas * 100
+            if ventas_cargadas else 0
+        )
+        resumen["margen_destino_pct_cargado"] = (
+            float(resumen.get("margen_destino_cargado") or 0) / ventas_cargadas * 100
+            if ventas_cargadas else 0
+        )
         resumen["margen_pct_90d"] = (margen_90d / ventas_90d * 100) if ventas_90d else 0
         resumen["margen_destino_pct_90d"] = (margen_destino_90d / ventas_90d * 100) if ventas_90d else 0
         resumen["variacion_ventas_30d_pct"] = (
@@ -129,6 +148,15 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
                 "30_dias_anteriores": f"{fechas['inicio_30d_anterior'].isoformat()} a {fechas['fin_30d_anterior'].isoformat()}",
                 "ultimos_90_dias": f"{fechas['inicio_90d'].isoformat()} a {fechas['hoy'].isoformat()}",
                 "mes_actual": f"{fechas['inicio_mes'].isoformat()} a {fechas['hoy'].isoformat()}",
+                "anio_fiscal": f"{fechas['inicio_anio_fiscal'].isoformat()} a {fechas['hoy'].isoformat()}",
+            },
+            "cobertura_datos_ventas": {
+                "origen": "fivemin_ventas",
+                "primera_fecha": resumen.get("primera_fecha_venta"),
+                "ultima_fecha": resumen.get("ultima_fecha_venta"),
+                "registros": resumen.get("registros_ventas", 0),
+                "productos": resumen.get("productos_con_ventas", 0),
+                "nota": "No infieras ventas fuera de este rango cargado.",
             },
             "totales": resumen,
             "matriz_abcxyz": matriz,
@@ -136,8 +164,11 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
         resultado = (
             "=== RESUMEN OPERATIVO PRIVADO ===\n"
             "Usa estos valores agregados como referencia exacta. Las ventas son euros facturados; "
-            "MG es el margen bruto y MGD es el margen en destino. El inventario solo está disponible "
-            "cuando existen snapshots cargados. No muestres nombres tecnicos de tablas.\n"
+            "MG es el margen bruto y MGD es el margen en destino. Los datos oficiales de ventas "
+            "proceden de fivemin_ventas; incluyen Fecha, Ventas, Unidades Venta, MG, MGD, SKU, "
+            "marca, familia, sección y Product Manager. El año fiscal comienza el 1 de mayo. "
+            "El inventario solo está disponible cuando existen snapshots cargados. No muestres "
+            "nombres técnicos de tablas y no supongas datos fuera de la cobertura indicada.\n"
             + json.dumps(payload, ensure_ascii=False, default=str)
         )
         RESUMENES_CACHE[cache_key] = resultado

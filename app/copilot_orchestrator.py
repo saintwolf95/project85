@@ -43,6 +43,20 @@ def _fecha_hoy() -> date:
     return datetime.now(ZONA_NEGOCIO).date()
 
 
+def _inicio_anio_fiscal(fecha: date) -> date:
+    """El ejercicio de Five Minutes comienza el 1 de mayo."""
+    return date(fecha.year if fecha.month >= 5 else fecha.year - 1, 5, 1)
+
+
+def _parsear_fecha(valor: str) -> date | None:
+    for formato in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(valor, formato).date()
+        except ValueError:
+            continue
+    return None
+
+
 def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, date | None, date | None]:
     """Resuelve periodos naturales usando siempre la zona horaria de Madrid."""
     normalizado = normalizar_texto(texto)
@@ -55,6 +69,19 @@ def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, d
         return "hoy", fecha_hoy, fecha_hoy
     if _contiene(normalizado, ("mes actual", "este mes", "mes en curso")):
         return "mes_actual", fecha_hoy.replace(day=1), fecha_hoy
+    if _contiene(normalizado, ("ano fiscal", "ejercicio fiscal", "inicio fiscal", "acumulado fiscal")):
+        return "anio_fiscal", _inicio_anio_fiscal(fecha_hoy), fecha_hoy
+
+    rango = re.search(
+        r"\bdesde\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2})"
+        r"(?:\s+(?:hasta|al)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{1,2}-\d{1,2}))?",
+        normalizado,
+    )
+    if rango:
+        inicio = _parsear_fecha(rango.group(1))
+        fin = _parsear_fecha(rango.group(2)) if rango.group(2) else fecha_hoy
+        if inicio and fin and inicio <= fin:
+            return "rango_personalizado", inicio, min(fin, fecha_hoy)
 
     dias = re.search(r"\b(?:ultimos?\s*)?(7|30|60|90)\s*(?:dias|d)\b", normalizado)
     if dias:
@@ -133,6 +160,12 @@ def detectar_medida(texto: str) -> tuple[str | None, str | None]:
 
 def detectar_agrupacion(texto: str) -> str | None:
     normalizado = normalizar_texto(texto)
+    if _contiene(normalizado, ("por familia/marca", "por familia marca", "por familia y marca")):
+        return "familia_marca"
+    if _contiene(normalizado, ("por seccion", "por secciones", "cada seccion")):
+        return "seccion"
+    if _contiene(normalizado, ("por product manager", "por pm", "cada product manager", "cada pm")):
+        return "product_manager"
     if _contiene(normalizado, ("por familia", "por familias", "cada familia", "cada familias")):
         return "familia"
     if _contiene(normalizado, ("por marca", "por marcas", "cada marca", "cada marcas")):
@@ -163,16 +196,24 @@ def detectar_filtros(texto: str) -> dict[str, str]:
     if sku:
         filtros["sku"] = sku.group(1).strip()
 
-    for campo in ("familia", "marca"):
-        campo_en_texto = re.search(rf"\b{campo}\b", texto, flags=re.IGNORECASE)
+    campos = {
+        "familia": ("familia",),
+        "marca": ("marca",),
+        "familia_marca": ("familia/marca", "familia marca"),
+        "seccion": ("seccion", "sección"),
+        "product_manager": ("product manager", "pm"),
+    }
+    for campo, alias in campos.items():
+        etiqueta = "(?:" + "|".join(re.escape(nombre) for nombre in alias) + ")"
+        campo_en_texto = re.search(rf"\b{etiqueta}\b", texto, flags=re.IGNORECASE)
         if campo_en_texto and re.search(r"\bpor\s+$", texto[:campo_en_texto.start()], flags=re.IGNORECASE):
             continue
-        citado = re.search(rf"\b{campo}\b\s*(?:es|:)?\s*[\"']([^\"']+)[\"']", texto, flags=re.IGNORECASE)
+        citado = re.search(rf"\b{etiqueta}\b\s*(?:es|:)?\s*[\"']([^\"']+)[\"']", texto, flags=re.IGNORECASE)
         if citado:
             filtros[campo] = citado.group(1).strip()
             continue
         sin_comillas = re.search(
-            rf"\b{campo}\b\s*(?:es|:)?\s+(.+?)(?=\s+(?:de|en|por|para|durante|ayer|hoy|este|mes|ultimos?|los|las)\b|[?,.;]|$)",
+            rf"\b{etiqueta}\b\s*(?:es|:)?\s+(.+?)(?=\s+(?:de|en|por|para|durante|ayer|hoy|este|mes|ultimos?|los|las)\b|[?,.;]|$)",
             texto,
             flags=re.IGNORECASE,
         )
@@ -192,7 +233,7 @@ def _es_seguimiento(texto: str) -> bool:
     if re.match(r"^(compara|comparalo|compararlo)\b", normalizado):
         return True
     return _contiene(normalizado, (
-        "por familia", "por marca", "por matriz", "en euros", "en unidades", "lo mismo", "desglosado", "desglosada"
+        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por matriz", "en euros", "en unidades", "lo mismo", "desglosado", "desglosada"
     ))
 
 
@@ -204,7 +245,7 @@ def _tiene_filtro_no_soportado(texto: str) -> bool:
         return False
     if _contiene(normalizado, ("producto", "articulo")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
         return True
-    if _contiene(normalizado, ("familia", "marca")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
+    if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
         return True
     if _contiene(normalizado, ("sku",)) and not detectar_filtros(texto):
         return True
@@ -330,7 +371,7 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
 
 def _condiciones_sql(intento: IntentoSemantico, incluir_periodo: bool = False) -> str:
     condiciones = ["p.empresa_id = :empresa_id"]
-    for campo in ("familia", "marca", "sku"):
+    for campo in ("familia", "marca", "familia_marca", "seccion", "product_manager", "sku"):
         if campo in intento.parametros:
             condiciones.append(f"p.{campo} = :{campo}")
     for campo in ("abc", "xyz", "matriz_abc"):
@@ -484,6 +525,12 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             agrupacion = "COALESCE(p.familia, 'Sin familia')"
         elif intento.agrupacion == "marca":
             agrupacion = "COALESCE(p.marca, 'Sin marca')"
+        elif intento.agrupacion == "familia_marca":
+            agrupacion = "COALESCE(p.familia_marca, 'Sin familia/marca')"
+        elif intento.agrupacion == "seccion":
+            agrupacion = "COALESCE(p.seccion, 'Sin seccion')"
+        elif intento.agrupacion == "product_manager":
+            agrupacion = "COALESCE(p.product_manager, 'Sin Product Manager')"
         elif intento.agrupacion == "matriz":
             agrupacion = "COALESCE(pm.matriz_abc, 'Sin clasificar')"
         else:
@@ -559,6 +606,12 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         agrupacion = "COALESCE(p.familia, 'Sin familia')"
     elif intento.agrupacion == "marca":
         agrupacion = "COALESCE(p.marca, 'Sin marca')"
+    elif intento.agrupacion == "familia_marca":
+        agrupacion = "COALESCE(p.familia_marca, 'Sin familia/marca')"
+    elif intento.agrupacion == "seccion":
+        agrupacion = "COALESCE(p.seccion, 'Sin seccion')"
+    elif intento.agrupacion == "product_manager":
+        agrupacion = "COALESCE(p.product_manager, 'Sin Product Manager')"
     elif intento.agrupacion == "matriz":
         agrupacion = "COALESCE(pm.matriz_abc, 'Sin clasificar')"
     else:

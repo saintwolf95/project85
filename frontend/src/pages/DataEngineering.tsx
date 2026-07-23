@@ -86,6 +86,8 @@ export const DataEngineering = () => {
   const [isValidating, setIsValidating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadStage, setUploadStage] = useState<'validation' | 'load' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -129,6 +131,8 @@ export const DataEngineering = () => {
     setValidation(null);
     setResult(null);
     setError(null);
+    setUploadProgress(null);
+    setUploadStage(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -158,14 +162,18 @@ export const DataEngineering = () => {
     if (!file) return;
     try {
       setIsValidating(true);
+      setUploadStage('validation');
+      setUploadProgress(0);
       setError(null);
       setResult(null);
-      setValidation(await validateDataImport(dataset, file));
+      setValidation(await validateDataImport(dataset, file, setUploadProgress));
     } catch (validationError) {
       setValidation(null);
       setError(apiErrorMessage(validationError));
     } finally {
       setIsValidating(false);
+      setUploadProgress(null);
+      setUploadStage(null);
     }
   };
 
@@ -173,11 +181,14 @@ export const DataEngineering = () => {
     if (!file || !validation?.valid) return;
     try {
       setIsLoading(true);
+      setUploadStage('load');
+      setUploadProgress(0);
       setError(null);
       const importResult = await loadDataImport(
         dataset,
         file,
         (dataset === 'products' || dataset === 'sales') && replaceExisting,
+        setUploadProgress,
       );
       setResult(importResult);
       await refreshStatus();
@@ -185,6 +196,8 @@ export const DataEngineering = () => {
       setError(apiErrorMessage(loadError));
     } finally {
       setIsLoading(false);
+      setUploadProgress(null);
+      setUploadStage(null);
     }
   };
 
@@ -378,6 +391,25 @@ export const DataEngineering = () => {
               Cargar en producción
             </button>
           </div>
+
+          {uploadProgress !== null && uploadStage && (
+            <div className="mt-4" role="status" aria-live="polite">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
+                <span>
+                  {uploadProgress < 100
+                    ? uploadStage === 'validation' ? 'Subiendo archivo para validar' : 'Subiendo archivo para cargar'
+                    : uploadStage === 'validation' ? 'Validando archivo en el servidor' : 'Procesando la carga en el servidor'}
+                </span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden bg-slate-200 dark:bg-slate-800" aria-hidden="true">
+                <div
+                  className="h-full bg-brand-blue transition-[width] duration-200 dark:bg-brand-cyan"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="mt-4 flex items-start gap-2 border-l-2 border-red-500 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300" role="alert">

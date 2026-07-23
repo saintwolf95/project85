@@ -124,6 +124,13 @@ export interface DataImportResult {
   replace_existing: boolean;
 }
 
+type UploadProgressHandler = (percentage: number) => void;
+
+const reportUploadProgress = (loaded: number, total: number | undefined, onProgress?: UploadProgressHandler) => {
+  if (!onProgress || !total) return;
+  onProgress(Math.min(100, Math.round((loaded / total) * 100)));
+};
+
 export const getDataImportStatus = async (): Promise<DataImportStatus> => {
   const response = await api.get('/data-import/status');
   return response.data;
@@ -132,12 +139,14 @@ export const getDataImportStatus = async (): Promise<DataImportStatus> => {
 export const validateDataImport = async (
   dataset: DataImportDataset,
   file: File,
+  onProgress?: UploadProgressHandler,
 ): Promise<DataImportValidation> => {
   const formData = new FormData();
   formData.append('dataset', dataset);
   formData.append('file', file);
   const response = await api.post('/data-import/validate', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: event => reportUploadProgress(event.loaded, event.total, onProgress),
   });
   return response.data;
 };
@@ -146,6 +155,7 @@ export const loadDataImport = async (
   dataset: DataImportDataset,
   file: File,
   replaceExisting: boolean,
+  onProgress?: UploadProgressHandler,
 ): Promise<DataImportResult> => {
   const formData = new FormData();
   formData.append('dataset', dataset);
@@ -154,6 +164,7 @@ export const loadDataImport = async (
   formData.append('sales_mode', 'upsert_keys');
   const response = await api.post('/data-import/load', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: event => reportUploadProgress(event.loaded, event.total, onProgress),
   });
   return response.data;
 };

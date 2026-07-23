@@ -223,6 +223,9 @@ Tabla `producto_metricas` (alias recomendado: pm):
 DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - "ventas" significa euros facturados: SUM(vh.ingreso_total). No uses cantidad_vendida salvo que el usuario pida unidades.
 - "ventas 90 días" = SUM(vh.ingreso_total) con fecha_venta entre CURRENT_DATE - INTERVAL '89 days' y CURRENT_DATE, contando 90 fechas naturales.
+- La fuente oficial de ventas es la carga `fivemin_ventas`. Sus dimensiones de análisis son `p.familia`, `p.marca`, `p.familia_marca`, `p.seccion` y `p.product_manager`.
+- El año fiscal empieza el 1 de mayo. Para preguntas de "año fiscal" usa desde el 1 de mayo correspondiente hasta hoy, siempre en Europe/Madrid.
+- Si el resumen operativo indica una cobertura de datos, no inventes resultados fuera de esas fechas; explica con claridad la limitación.
 - "inventario" significa euros actuales: SUM(p.costo_unitario * inv.stock_disponible).
 - "margen", "MG" o "beneficio" = SUM(vh.margen_bruto_eur); su porcentaje agregado es SUM(margen_bruto_eur) / SUM(ingreso_total) * 100.
 - "MGD" o "margen en destino" = SUM(vh.margen_destino_eur); su porcentaje agregado es SUM(margen_destino_eur) / SUM(ingreso_total) * 100.

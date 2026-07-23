@@ -99,6 +99,7 @@ export interface DataImportValidation {
   columns: string[];
   unknown_columns: string[];
   errors: DataImportError[];
+  warnings: DataImportError[];
   date_min?: string;
   date_max?: string;
 }

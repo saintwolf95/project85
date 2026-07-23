@@ -419,6 +419,18 @@ export const DataEngineering = () => {
                   ))}
                 </div>
               )}
+              {validation.warnings.length > 0 && (
+                <div className="mt-3 max-h-52 overflow-y-auto border-t border-amber-200 dark:border-amber-500/20 pt-2">
+                  <p className="mb-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                    Advertencias de calidad: estos valores se omitirán, pero el archivo se puede cargar.
+                  </p>
+                  {validation.warnings.map((item, index) => (
+                    <p key={`${item.line}-${index}`} className="py-1 text-xs text-amber-700 dark:text-amber-300">
+                      Fila {item.line}: {item.message}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

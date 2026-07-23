@@ -36,6 +36,7 @@ MAX_XLSX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024
 MAX_IMPORT_ROWS = 100_000
 MAX_IMPORT_COLUMNS = 64
 MAX_REPORTED_ERRORS = 100
+MAX_REPORTED_WARNINGS = 100
 SUPPORTED_DATASETS = {"products", "inventory", "sales"}
 
 DATASET_CONFIG = {
@@ -272,6 +273,10 @@ def _parse_integer(value: Any, field: str, required: bool = True) -> int | None:
     return int(parsed)
 
 
+class PercentageOutOfRange(ValueError):
+    """Porcentaje no fiable: se conserva la fila, pero se omite el dato puntual."""
+
+
 def _parse_percentage(value: Any, field: str, required: bool = False) -> float | None:
     raw = str(value or "").strip()
     if not raw:
@@ -285,7 +290,7 @@ def _parse_percentage(value: Any, field: str, required: bool = False) -> float |
     if not has_percent_sign and abs(parsed) <= 1:
         parsed *= 100
     if not -1000 <= parsed <= 1000:
-        raise ValueError(f"{field} contiene un porcentaje fuera de rango")
+        raise PercentageOutOfRange(f"{field} contiene un porcentaje fuera de rango")
     return parsed
 
 
@@ -448,9 +453,13 @@ async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[
     return _read_xlsx(content, dataset) if extension == "xlsx" else _read_csv(content, dataset)
 
 
-def _validate_rows(dataset: str, rows: list[dict[str, str]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _validate_rows(
+    dataset: str,
+    rows: list[dict[str, str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     valid_rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
     seen_skus: set[str] = set()
 
     for index, row in enumerate(rows, start=2):
@@ -500,9 +509,23 @@ def _validate_rows(dataset: str, rows: list[dict[str, str]]) -> tuple[list[dict[
                 precio = _parse_number(row.get("precio_unitario"), "precio_unitario", required=False)
                 ingreso = _parse_number(row.get("ingreso_total"), "Ventas")
                 margen_bruto_eur = _parse_number(row.get("margen_bruto_eur"), "Margen", required=False)
-                margen_bruto_pct = _parse_percentage(row.get("margen_bruto_pct"), "% MG", required=False)
+                margen_bruto_pct_omitido = False
+                try:
+                    margen_bruto_pct = _parse_percentage(row.get("margen_bruto_pct"), "% MG", required=False)
+                except PercentageOutOfRange as exc:
+                    margen_bruto_pct = None
+                    margen_bruto_pct_omitido = True
+                    if len(warnings) < MAX_REPORTED_WARNINGS:
+                        warnings.append({"line": index, "message": f"{exc}; se ha omitido ese porcentaje."})
                 margen_destino_eur = _parse_number(row.get("margen_destino_eur"), "MGD", required=False)
-                margen_destino_pct = _parse_percentage(row.get("margen_destino_pct"), "% MGD", required=False)
+                margen_destino_pct_omitido = False
+                try:
+                    margen_destino_pct = _parse_percentage(row.get("margen_destino_pct"), "% MGD", required=False)
+                except PercentageOutOfRange as exc:
+                    margen_destino_pct = None
+                    margen_destino_pct_omitido = True
+                    if len(warnings) < MAX_REPORTED_WARNINGS:
+                        warnings.append({"line": index, "message": f"{exc}; se ha omitido ese porcentaje."})
                 stock = _parse_integer(row.get("stock_disponible"), "stock_disponible", required=False)
                 if precio is not None and precio < 0:
                     raise ValueError("precio_unitario no puede ser negativo")
@@ -512,11 +535,11 @@ def _validate_rows(dataset: str, rows: list[dict[str, str]]) -> tuple[list[dict[
                     precio = float(ingreso) / cantidad if cantidad else 0.0
                 if margen_bruto_eur is None and margen_bruto_pct is not None:
                     margen_bruto_eur = float(ingreso) * margen_bruto_pct / 100
-                if margen_bruto_pct is None and ingreso and margen_bruto_eur is not None:
+                if not margen_bruto_pct_omitido and margen_bruto_pct is None and ingreso and margen_bruto_eur is not None:
                     margen_bruto_pct = margen_bruto_eur / float(ingreso) * 100
                 if margen_destino_eur is None and margen_destino_pct is not None:
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
-                if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
+                if not margen_destino_pct_omitido and margen_destino_pct is None and ingreso and margen_destino_eur is not None:
                     margen_destino_pct = margen_destino_eur / float(ingreso) * 100
                 valid_rows.append({
                     "sku": sku,
@@ -542,7 +565,7 @@ def _validate_rows(dataset: str, rows: list[dict[str, str]]) -> tuple[list[dict[
             if len(errors) < MAX_REPORTED_ERRORS:
                 errors.append({"line": index, "message": str(exc)})
 
-    return valid_rows, errors
+    return valid_rows, errors, warnings
 
 
 def _validation_response(
@@ -550,6 +573,7 @@ def _validation_response(
     source_rows: list[dict[str, str]],
     valid_rows: list[dict[str, Any]],
     errors: list[dict[str, Any]],
+    warnings: list[dict[str, Any]],
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
     response = {
@@ -559,6 +583,7 @@ def _validation_response(
         "rows_valid": len(valid_rows),
         "rows_invalid": len(source_rows) - len(valid_rows),
         "errors": errors,
+        "warnings": warnings,
         **metadata,
     }
     if dataset == "sales" and valid_rows:
@@ -639,8 +664,8 @@ async def validate_import(
     current_user: Usuario = Depends(get_current_active_admin),
 ):
     source_rows, metadata = await _read_tabular_file(file, dataset)
-    valid_rows, errors = _validate_rows(dataset, source_rows)
-    return _validation_response(dataset, source_rows, valid_rows, errors, metadata)
+    valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
+    return _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
 
 
 @router.post("/load")
@@ -658,8 +683,8 @@ async def load_import(
         raise HTTPException(status_code=400, detail="Modo de actualizacion de ventas no soportado.")
 
     source_rows, metadata = await _read_tabular_file(file, dataset)
-    valid_rows, errors = _validate_rows(dataset, source_rows)
-    validation = _validation_response(dataset, source_rows, valid_rows, errors, metadata)
+    valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
+    validation = _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
     if errors:
         raise HTTPException(status_code=400, detail=validation)
 

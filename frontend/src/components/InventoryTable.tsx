@@ -32,6 +32,9 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
 
   const getRowClasses = (item: ProductMetrics) => {
     const risks = item.riesgos_categorizados || [];
+    if (!item.inventario_disponible) {
+      return "bg-slate-50/60 hover:bg-slate-100 dark:bg-slate-900/20 dark:hover:bg-slate-800/40 border-l-4 border-l-slate-300 dark:border-l-slate-700";
+    }
     if (risks.includes("Alerta Rotura")) {
       return "bg-red-50/80 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 border-l-4 border-l-red-500";
     }
@@ -66,7 +69,7 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
     return 0;
   });
 
-  const SortIcon = ({ columnKey }: { columnKey: keyof ProductMetrics }) => {
+  const sortIcon = (columnKey: keyof ProductMetrics) => {
     if (sortConfig.key !== columnKey) return <span className="ml-1 opacity-20">↕</span>;
     return sortConfig.direction === 'asc' ? <span className="ml-1">↑</span> : <span className="ml-1">↓</span>;
   };
@@ -82,20 +85,20 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
         <table className="w-full text-left border-collapse">
           <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
             <tr>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('cod_art')}>CodArt <SortIcon columnKey="cod_art" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>NombreArt <SortIcon columnKey="nombre_art" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Familia <SortIcon columnKey="familia" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('seccion')}>Sección <SortIcon columnKey="seccion" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('marca')}>Marca <SortIcon columnKey="marca" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('product_manager')}>PM <SortIcon columnKey="product_manager" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('precio_unit')}>PrecioUnit <SortIcon columnKey="precio_unit" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades <SortIcon columnKey="unidades" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>ValorInv <SortIcon columnKey="valor_inv" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades_venta_90d')}>U. Venta (90D) <SortIcon columnKey="unidades_venta_90d" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas (90D) <SortIcon columnKey="ventas_90d" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ads')}>ADS <SortIcon columnKey="ads" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('dias_cobertura')}>Días Cob. <SortIcon columnKey="dias_cobertura" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-brand-blue dark:text-brand-cyan uppercase tracking-wider whitespace-nowrap text-center cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('matriz_abc')}>Matriz ABCXYZ <SortIcon columnKey="matriz_abc" /></th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('cod_art')}>CodArt {sortIcon('cod_art')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>NombreArt {sortIcon('nombre_art')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Familia {sortIcon('familia')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('seccion')}>Sección {sortIcon('seccion')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('marca')}>Marca {sortIcon('marca')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('product_manager')}>PM {sortIcon('product_manager')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('precio_unit')}>PrecioUnit {sortIcon('precio_unit')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades {sortIcon('unidades')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>ValorInv {sortIcon('valor_inv')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades_venta_90d')}>U. Venta (90D) {sortIcon('unidades_venta_90d')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas (90D) {sortIcon('ventas_90d')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ads')}>ADS {sortIcon('ads')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('dias_cobertura')}>Días Cob. {sortIcon('dias_cobertura')}</th>
+              <th className="px-4 py-3 text-xs font-medium text-brand-blue dark:text-brand-cyan uppercase tracking-wider whitespace-nowrap text-center cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('matriz_abc')}>Matriz ABCXYZ {sortIcon('matriz_abc')}</th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Estado / Riesgos</th>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Acciones</th>
             </tr>
@@ -113,12 +116,14 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.marca}</td>
                 <td className="px-4 py-4 text-sm font-bold text-brand-blue dark:text-brand-cyan whitespace-nowrap">{item.product_manager || '-'}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.precio_unit)}</td>
-                <td className="px-4 py-4 text-sm text-slate-800 dark:text-slate-200 whitespace-nowrap text-right font-medium">{item.unidades}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.valor_inv)}</td>
+                <td className="px-4 py-4 text-sm text-slate-800 dark:text-slate-200 whitespace-nowrap text-right font-medium">{item.inventario_disponible ? item.unidades : '—'}</td>
+                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.inventario_disponible ? formatEUR(item.valor_inv) : '—'}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.unidades_venta_90d}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{formatEUR(item.ventas_90d)}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.ads.toFixed(1)}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">{item.dias_cobertura >= 999 ? '>999' : item.dias_cobertura.toFixed(0)}</td>
+                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap text-right">
+                  {item.inventario_disponible ? (item.dias_cobertura >= 999 ? '>999' : item.dias_cobertura.toFixed(0)) : '—'}
+                </td>
                 <td className="px-4 py-4 text-sm text-center whitespace-nowrap">
                   <span className={`font-bold px-2.5 py-1 rounded-md text-xs shadow-sm ${
                     item.matriz_abc === 'AZ' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-500/30' :

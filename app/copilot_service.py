@@ -56,7 +56,17 @@ def build_metrics_marker(raw_data: list, sql_query: str = "") -> str:
     }
     if not numeric_data:
         return ""
-    formato = "porcentaje" if "margen_pct" in sql_query else "unidades" if "ventas_unidades" in sql_query else "eur"
+    is_percentage_metric = bool(
+        re.search(r"\bAS\s+(?:margen_pct|mgd_pct)\b", sql_query, flags=re.IGNORECASE)
+        or "NULLIF(SUM(vh.ingreso_total), 0) * 100" in sql_query
+    )
+    formato = (
+        "porcentaje"
+        if is_percentage_metric
+        else "unidades"
+        if "ventas_unidades" in sql_query
+        else "eur"
+    )
     encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato}).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_metrics: {encoded} -->"
 
@@ -85,14 +95,18 @@ def build_followups_marker(intento: Any) -> str:
             acciones.append({"label": "Comparar periodo", "prompt": f"Compara las ventas de {periodo_texto} con el periodo anterior"})
         if medida != "ventas_unidades":
             acciones.append({"label": "Ver margen", "prompt": f"Dame el margen y beneficio de {periodo_texto}"})
+            acciones.append({"label": "Ver MGD", "prompt": f"Dame el MGD de {periodo_texto}"})
     elif tipo == "inventario":
         if agrupacion != "matriz":
             acciones.append({"label": "Ver matriz ABCXYZ", "prompt": "Desglosa el inventario actual por matriz ABCXYZ"})
         acciones.append({"label": "Revisar sobrestock", "prompt": "¿Qué productos tienen sobrestock y cuánto capital inmovilizan?"})
         acciones.append({"label": "Ver alertas", "prompt": "¿Qué productos tienen riesgo de rotura?"})
     elif tipo == "rentabilidad":
+        metrica = "MGD" if medida.startswith("mgd") else "margen"
         if not getattr(intento, "comparacion", False):
-            acciones.append({"label": "Comparar margen", "prompt": f"Compara el margen de {periodo_texto} con el periodo anterior"})
+            acciones.append({"label": f"Comparar {metrica}", "prompt": f"Compara el {metrica} de {periodo_texto} con el periodo anterior"})
+        if not medida.startswith("mgd"):
+            acciones.append({"label": "Ver MGD", "prompt": f"Dame el MGD de {periodo_texto}"})
         acciones.append({"label": "Ver oportunidades", "prompt": "¿Qué productos son oportunidades comerciales?"})
     elif tipo == "acciones":
         acciones.append({"label": "Ver oportunidades", "prompt": "¿Qué productos son oportunidades comerciales?"})
@@ -170,6 +184,7 @@ Tabla `productos` (alias recomendado: p):
 - lead_time_dias (INTEGER) -- días de plazo de entrega del proveedor
 - familia (VARCHAR) -- categoría de producto (ej: 'Portátiles', 'Procesadores')
 - marca (VARCHAR) -- marca del producto
+- familia_marca (VARCHAR) -- agrupación combinada procedente de Familia/Marca
 - product_manager (VARCHAR) -- responsable del producto
 - seccion (VARCHAR) -- sección o subcategoría
 
@@ -182,8 +197,12 @@ Tabla `ventas_historicas` (alias recomendado: vh):
 - producto_id (INTEGER, FK a productos.id)
 - fecha_venta (DATE) -- fecha de la venta (formato YYYY-MM-DD)
 - cantidad_vendida (INTEGER) -- unidades vendidas
-- precio_unitario (FLOAT)
+- precio_unitario (FLOAT) -- Ventas / Unidades Venta
 - ingreso_total (FLOAT) -- ingresos en euros de esa línea de venta
+- margen_bruto_eur (FLOAT) -- columna Margen: margen bruto en euros
+- margen_bruto_pct (FLOAT) -- columna % MG
+- margen_destino_eur (FLOAT) -- columna MGD: margen puesto en destino en euros
+- margen_destino_pct (FLOAT) -- columna % MGD
 
 Tabla `registro_po` (alias recomendado: po):
 - id (INTEGER, Primary Key)
@@ -205,7 +224,9 @@ DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - "ventas" significa euros facturados: SUM(vh.ingreso_total). No uses cantidad_vendida salvo que el usuario pida unidades.
 - "ventas 90 días" = SUM(vh.ingreso_total) con fecha_venta entre CURRENT_DATE - INTERVAL '89 days' y CURRENT_DATE, contando 90 fechas naturales.
 - "inventario" significa euros actuales: SUM(p.costo_unitario * inv.stock_disponible).
-- "margen" o "beneficio" = ingresos menos (unidades vendidas * costo_unitario); el porcentaje de margen es beneficio dividido entre ingresos.
+- "margen", "MG" o "beneficio" = SUM(vh.margen_bruto_eur); su porcentaje agregado es SUM(margen_bruto_eur) / SUM(ingreso_total) * 100.
+- "MGD" o "margen en destino" = SUM(vh.margen_destino_eur); su porcentaje agregado es SUM(margen_destino_eur) / SUM(ingreso_total) * 100.
+- No recalcules MG o MGD desde el catálogo cuando existen estas columnas de ventas: son la fuente económica oficial.
 - Cuando se solicite una comparación, informa periodo actual, periodo anterior, variación absoluta y variación porcentual.
 - "oportunidad comercial" significa producto ABC A/B con stock disponible, margen positivo y ventas en los últimos 90 días; "acción prioritaria" ordena primero roturas de productos clave, después capital inmovilizado y después oportunidades.
 - "ABC" se basa en ventas EUR de los últimos 90 días; "XYZ" se basa en inventario EUR actual.
@@ -571,6 +592,28 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
+        if intento.tipo == "inventario" or intento.medida in {
+            "matriz_productos",
+            "productos_alerta",
+            "productos_sobrestock",
+        }:
+            inventory_count = db.execute(
+                text(
+                    """
+                    SELECT COUNT(*)
+                    FROM inventario_snapshot inv
+                    JOIN productos p ON p.id = inv.producto_id
+                    WHERE p.empresa_id = :empresa_id
+                    """
+                ),
+                {"empresa_id": empresa_id},
+            ).scalar() or 0
+            if inventory_count == 0:
+                return (
+                    "Todavía no hay datos reales de inventario cargados. "
+                    "Puedo analizar ventas, unidades, MG, MGD y clasificación ABC; "
+                    "XYZ, stock, cobertura y alertas se activarán cuando cargues el inventario."
+                )
         sql_query, query_params = crear_consulta_semantica(intento)
         raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
         reply = interpret_results(

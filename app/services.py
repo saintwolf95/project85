@@ -14,10 +14,13 @@ metrics_cache = TTLCache(maxsize=10, ttl=300)
 def metrics_cache_key(db: Session, empresa_id: int):
     return hash(empresa_id)
 
+def invalidate_metrics_cache(empresa_id: int) -> None:
+    metrics_cache.pop(hash(empresa_id), None)
+
 @cached(metrics_cache, key=metrics_cache_key)
 def calculate_inventory_metrics(db: Session, empresa_id: int):
     # Obtener productos e inventario
-    productos = db.query(Producto, InventarioSnapshot).join(
+    productos = db.query(Producto, InventarioSnapshot).outerjoin(
         InventarioSnapshot, Producto.id == InventarioSnapshot.producto_id
     ).filter(Producto.empresa_id == empresa_id).all()
 
@@ -62,7 +65,8 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         "marca": p.Producto.marca or "",
         "product_manager": p.Producto.product_manager or "",
         "seccion": p.Producto.seccion or "",
-        "stock_disponible": p.InventarioSnapshot.stock_disponible
+        "stock_disponible": p.InventarioSnapshot.stock_disponible if p.InventarioSnapshot else 0,
+        "inventario_disponible": p.InventarioSnapshot is not None,
     } for p in productos])
     
     if df_ventas.empty:
@@ -114,13 +118,19 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
 
     # XYZ: inventario actual en euros al último día disponible.
     df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
-    total_inventario = df["valor_inv"].sum()
-    df = df.sort_values(by="valor_inv", ascending=False).reset_index(drop=True)
-    df["porcentaje_inventario"] = df["valor_inv"] / total_inventario if total_inventario > 0 else 0
-    df["acum_inventario"] = df["porcentaje_inventario"].cumsum()
-    df["xyz"] = df["acum_inventario"].apply(
-        lambda acumulado: clasificar_por_contribucion(acumulado, "X", "Y", "Z")
-    )
+    df["xyz"] = "N/D"
+    inventario_conocido = df["inventario_disponible"]
+    if inventario_conocido.any():
+        df = df.sort_values(by="valor_inv", ascending=False).reset_index(drop=True)
+        total_inventario = df.loc[df["inventario_disponible"], "valor_inv"].sum()
+        if total_inventario > 0:
+            porcentajes = df.loc[df["inventario_disponible"], "valor_inv"] / total_inventario
+            acumulados = porcentajes.cumsum()
+            df.loc[df["inventario_disponible"], "xyz"] = acumulados.apply(
+                lambda acumulado: clasificar_por_contribucion(acumulado, "X", "Y", "Z")
+            )
+        else:
+            df.loc[df["inventario_disponible"], "xyz"] = "Z"
 
     # 4. Variabilidad de demanda interna para ADS y cobertura; no define XYZ.
     import numpy as np
@@ -157,7 +167,10 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         df["cv"] = np.nan
         df["ads"] = 0.0
 
-    df["matriz_abc"] = df["abc"] + df["xyz"]
+    df["matriz_abc"] = df.apply(
+        lambda row: row["abc"] + row["xyz"] if row["xyz"] in {"X", "Y", "Z"} else f"{row['abc']}-",
+        axis=1,
+    )
 
     # 4 & 5. Días de Cobertura y Riesgos Categorizados
     def calcular_riesgos(row):
@@ -166,7 +179,10 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
         lead_time = row["lead_time_dias"]
         riesgos = []
 
-        if stock <= 1:
+        if not row["inventario_disponible"]:
+            dias_cobertura = 0
+            riesgos.append("Inventario no disponible")
+        elif stock <= 1:
             dias_cobertura = 0 if stock == 0 else int(stock / ads if ads > 0 else 999)
             riesgos.append("Alerta Rotura")
         elif ads == 0:
@@ -206,7 +222,7 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     # Preparar el resultado como diccionarios
     columnas_finales = [
         "producto_id", "fecha", "nombre_art", "cod_art", "pn", "ean", "costo_unit", "peso", 
-        "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "unidades_venta_60d", "ventas_60d", "unidades_venta_90d", "ventas_90d",
+        "familia", "marca", "product_manager", "seccion", "precio_unit", "unidades", "valor_inv", "inventario_disponible", "unidades_venta_60d", "ventas_60d", "unidades_venta_90d", "ventas_90d",
         "abc", "xyz", "cv", "matriz_abc", "ads", "dias_cobertura", "riesgos_categorizados"
     ]
     df_final = df[columnas_finales]
@@ -322,3 +338,4 @@ def sync_metrics_to_db(db: Session, empresa_id: int):
     except Exception as e:
         logger.error(f"Error sincronizando métricas: {e}")
         db.rollback()
+        raise

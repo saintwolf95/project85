@@ -43,7 +43,7 @@ async def extract_text_from_upload(file: UploadFile) -> str:
         if filename.endswith('.pdf'):
             reader = PdfReader(io.BytesIO(content))
             if len(reader.pages) > MAX_LIBRERIA_DOCUMENT_PAGES:
-                raise HTTPException(status_code=400, detail="El documento supera el mÃ¡ximo de 50 pÃ¡ginas.")
+                raise HTTPException(status_code=400, detail="El documento supera el máximo de 50 páginas.")
             for page in reader.pages:
                 text += (page.extract_text() or "") + "\n"
         elif filename.endswith('.docx'):

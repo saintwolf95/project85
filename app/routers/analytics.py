@@ -216,7 +216,11 @@ def get_product_history(
 
     historico = []
     for v in ventas:
-        inventario_eur = v.stock_disponible * producto.costo_unitario
+        inventario_eur = (
+            v.stock_disponible * producto.costo_unitario
+            if producto.inventario is not None
+            else None
+        )
         historico.append({
             "fecha": v.fecha_venta.isoformat(),
             "ventas_eur": v.ingreso_total,

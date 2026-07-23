@@ -36,6 +36,7 @@ class Producto(Base):
     peso = Column(Float, nullable=True)
     familia = Column(String, nullable=True)
     marca = Column(String, nullable=True)
+    familia_marca = Column(String, nullable=True)
     product_manager = Column(String, nullable=True)
     seccion = Column(String, nullable=True)
     
@@ -69,6 +70,10 @@ class VentaHistorica(Base):
     cantidad_vendida = Column(Integer, nullable=False)
     precio_unitario = Column(Float, nullable=False)
     ingreso_total = Column(Float, nullable=False)
+    margen_bruto_eur = Column(Float, nullable=False, default=0.0)
+    margen_bruto_pct = Column(Float, nullable=True)
+    margen_destino_eur = Column(Float, nullable=False, default=0.0)
+    margen_destino_pct = Column(Float, nullable=True)
     stock_disponible = Column(Integer, nullable=False, default=0)
 
 class CopilotChat(Base):

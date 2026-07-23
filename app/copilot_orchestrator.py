@@ -108,11 +108,15 @@ def detectar_medida(texto: str) -> tuple[str | None, str | None]:
         return "productos_oportunidad", "oportunidades"
     if _contiene(normalizado, ("productos con sobrestock", "sobrestock", "exceso de stock", "capital inmovilizado")):
         return "productos_sobrestock", "inventario"
-    if _contiene(normalizado, ("margen porcentual", "porcentaje de margen", "margen en porcentaje", "% de margen")):
+    if re.search(r"(?:%\s*mgd|mgd\s*%)", normalizado) or _contiene(normalizado, ("porcentaje mgd", "mgd porcentual", "porcentaje de mgd", "porcentaje de margen en destino")):
+        return "mgd_pct", "rentabilidad"
+    if _contiene(normalizado, ("mgd", "margen en destino", "margen destino")):
+        return "mgd_eur", "rentabilidad"
+    if re.search(r"(?:%\s*mg\b|mg\s*%)", normalizado) or _contiene(normalizado, ("margen porcentual", "porcentaje de margen", "margen en porcentaje", "% de margen")):
         return "margen_pct", "rentabilidad"
     if _contiene(normalizado, ("beneficio", "beneficios", "ganancia", "ganancias")):
         return "beneficio_eur", "rentabilidad"
-    if _contiene(normalizado, ("margen", "rentabilidad")):
+    if _contiene(normalizado, ("mg", "margen", "rentabilidad")):
         return "margen_eur", "rentabilidad"
     if _contiene(normalizado, ("unidades en stock", "unidades de stock", "stock en unidades", "stock disponible en unidades", "inventario en unidades")) or re.search(
         r"\bunidades\b.*\b(?:stock|inventario)\b", normalizado
@@ -347,14 +351,14 @@ def _expresiones_comparativas(intento: IntentoSemantico, expresion: str) -> tupl
     anterior = (
         f"COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN {expresion} ELSE 0 END), 0)"
     )
-    if intento.medida == "margen_pct":
+    if intento.medida in ("margen_pct", "mgd_pct"):
         ingresos_actual = "COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.ingreso_total ELSE 0 END), 0)"
         ingresos_anterior = "COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.ingreso_total ELSE 0 END), 0)"
         actual = f"CASE WHEN {ingresos_actual} = 0 THEN 0 ELSE {actual} / NULLIF({ingresos_actual}, 0) * 100 END"
         anterior = f"CASE WHEN {ingresos_anterior} = 0 THEN 0 ELSE {anterior} / NULLIF({ingresos_anterior}, 0) * 100 END"
     variacion = f"({actual}) - ({anterior})"
     variacion_pct = f"CASE WHEN ABS({anterior}) = 0 THEN 0 ELSE ({variacion}) / ABS({anterior}) * 100 END"
-    variacion_pp = variacion if intento.medida == "margen_pct" else None
+    variacion_pp = variacion if intento.medida in ("margen_pct", "mgd_pct") else None
     return actual, anterior, variacion, variacion_pct, variacion_pp
 
 
@@ -382,7 +386,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             WITH ventas_90 AS (
                 SELECT vh.producto_id,
                        COALESCE(SUM(vh.ingreso_total), 0) AS ventas_90d,
-                       COALESCE(SUM(vh.ingreso_total - (vh.cantidad_vendida * p.costo_unitario)), 0) AS beneficio_90d
+                       COALESCE(SUM(vh.margen_bruto_eur), 0) AS beneficio_90d
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
                 WHERE p.empresa_id = :empresa_id
@@ -458,21 +462,24 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         elif intento.medida == "ventas_unidades":
             expresion = "vh.cantidad_vendida"
             alias = "ventas_unidades"
-        elif intento.medida == "beneficio_eur":
-            expresion = "vh.ingreso_total - (vh.cantidad_vendida * p.costo_unitario)"
-            alias = "beneficio_eur"
+        elif intento.medida in ("beneficio_eur", "margen_eur", "margen_pct"):
+            expresion = "vh.margen_bruto_eur"
+            alias = "beneficio_eur" if intento.medida == "beneficio_eur" else "margen_eur"
+        elif intento.medida in ("mgd_eur", "mgd_pct"):
+            expresion = "vh.margen_destino_eur"
+            alias = "mgd_eur"
         else:
-            expresion = "vh.ingreso_total - (vh.cantidad_vendida * p.costo_unitario)"
-            alias = "margen_eur"
+            expresion = "vh.margen_bruto_eur"
+            alias = "beneficio_eur"
         condiciones = _condiciones_sql(intento, incluir_periodo=True)
-        es_porcentaje = intento.medida == "margen_pct"
+        es_porcentaje = intento.medida in ("margen_pct", "mgd_pct")
         expresion_agregada = (
             "CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0 "
             f"ELSE COALESCE(SUM({expresion}), 0) / NULLIF(SUM(vh.ingreso_total), 0) * 100 END"
             if es_porcentaje
             else f"COALESCE(SUM({expresion}), 0)"
         )
-        alias_agregado = "margen_pct" if es_porcentaje else alias
+        alias_agregado = intento.medida if es_porcentaje else alias
         if intento.agrupacion == "familia":
             agrupacion = "COALESCE(p.familia, 'Sin familia')"
         elif intento.agrupacion == "marca":

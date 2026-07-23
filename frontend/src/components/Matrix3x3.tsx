@@ -29,6 +29,33 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
     return `€${value.toFixed(0)}`;
   };
 
+  if (!data.some(item => item.inventario_disponible)) {
+    const abcOnly = {
+      A: data.filter(item => item.abc === 'A'),
+      B: data.filter(item => item.abc === 'B'),
+      C: data.filter(item => item.abc === 'C'),
+    };
+    return (
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+        <h3 className="title-corporate text-sm">Clasificación ABC por ventas EUR 90D</h3>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          XYZ se activará cuando exista una carga real de inventario.
+        </p>
+        <div className="mt-4 grid grid-cols-3 divide-x divide-slate-200 dark:divide-slate-800">
+          {(['A', 'B', 'C'] as const).map(abcClass => (
+            <div key={abcClass} className="px-3 text-center">
+              <p className="text-lg font-bold text-slate-900 dark:text-white">{abcOnly[abcClass].length.toLocaleString('es-ES')}</p>
+              <p className="text-xs font-semibold text-brand-blue dark:text-brand-cyan">Clase {abcClass}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {formatEuro(abcOnly[abcClass].reduce((total, item) => total + (item.ventas_90d || 0), 0))}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const getCellColor = (matriz: string) => {
     switch(matriz) {
       case 'AX': return 'bg-blue-50 dark:bg-blue-500/20 border-blue-200 dark:border-blue-500/50 text-blue-600 dark:text-blue-400';
@@ -87,10 +114,12 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
           {cells.map(cell => {
             const m = metrics[cell as keyof typeof metrics];
             return (
-            <div 
-              key={cell} 
-              onClick={() => onCellClick && onCellClick(cell)}
-              className={`relative flex flex-col items-center justify-center py-1.5 px-0.5 sm:py-2 sm:px-1 rounded-lg border-2 transition-all
+            <button
+              key={cell}
+              type="button"
+              disabled={!onCellClick}
+              onClick={() => onCellClick?.(cell)}
+              className={`relative flex flex-col items-center justify-center py-1.5 px-0.5 sm:py-2 sm:px-1 rounded-lg border-2 transition-all text-inherit
                 ${getCellColor(cell)} 
                 ${onCellClick ? 'cursor-pointer hover:shadow-md' : ''}
                 ${activeCell === cell ? 'ring-2 ring-brand-blue dark:ring-brand-cyan shadow-md' : ''}
@@ -107,7 +136,7 @@ export const Matrix3x3 = ({ data, onCellClick, activeCell }: MatrixProps) => {
                 <span className="truncate w-full px-0.5">Inv: {formatEuro(m.inv)}</span>
                 <span className="truncate w-full px-0.5">Vtas: {formatEuro(m.sales)}</span>
               </div>
-            </div>
+            </button>
             );
           })}
         </div>

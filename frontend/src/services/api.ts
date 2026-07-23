@@ -17,6 +17,7 @@ export interface ProductMetrics {
   precio_unit: number;
   unidades: number;
   valor_inv: number;
+  inventario_disponible: boolean;
   unidades_venta_60d: number;
   ventas_60d: number;
   unidades_venta_90d: number;
@@ -71,7 +72,7 @@ export interface LibreriaChatResponse {
 export interface ProductHistoryDaily {
   fecha: string;
   ventas_eur: number;
-  inventario_eur: number;
+  inventario_eur: number | null;
 }
 
 export interface ProductHistoryResponse {
@@ -79,6 +80,94 @@ export interface ProductHistoryResponse {
   nombre: string;
   historico: ProductHistoryDaily[];
 }
+
+export type DataImportDataset = 'products' | 'inventory' | 'sales';
+
+export interface DataImportError {
+  line: number;
+  message: string;
+}
+
+export interface DataImportValidation {
+  dataset: DataImportDataset;
+  valid: boolean;
+  rows_total: number;
+  rows_valid: number;
+  rows_invalid: number;
+  encoding: string;
+  delimiter: string;
+  columns: string[];
+  unknown_columns: string[];
+  errors: DataImportError[];
+  date_min?: string;
+  date_max?: string;
+}
+
+export interface DataImportStatus {
+  products: number;
+  inventory_records: number;
+  sales_records: number;
+  sales_date_min: string | null;
+  sales_date_max: string | null;
+}
+
+export interface DataImportResult {
+  success: boolean;
+  dataset: DataImportDataset;
+  rows_received: number;
+  records_affected: number;
+  created: number;
+  updated: number;
+  products_created: number;
+  products_updated: number;
+  replace_existing: boolean;
+}
+
+export const getDataImportStatus = async (): Promise<DataImportStatus> => {
+  const response = await api.get('/data-import/status');
+  return response.data;
+};
+
+export const validateDataImport = async (
+  dataset: DataImportDataset,
+  file: File,
+): Promise<DataImportValidation> => {
+  const formData = new FormData();
+  formData.append('dataset', dataset);
+  formData.append('file', file);
+  const response = await api.post('/data-import/validate', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const loadDataImport = async (
+  dataset: DataImportDataset,
+  file: File,
+  replaceExisting: boolean,
+): Promise<DataImportResult> => {
+  const formData = new FormData();
+  formData.append('dataset', dataset);
+  formData.append('file', file);
+  formData.append('replace_existing', String(replaceExisting));
+  formData.append('sales_mode', 'upsert_keys');
+  const response = await api.post('/data-import/load', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+export const downloadDataImportTemplate = async (dataset: DataImportDataset): Promise<void> => {
+  const response = await api.get(`/data-import/template/${dataset}`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = dataset === 'sales' ? 'fivemin_ventas.csv' : `plantilla_${dataset}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
 
 export const uploadLibreriaDocument = async (file: File, department: string) => {
   const formData = new FormData();

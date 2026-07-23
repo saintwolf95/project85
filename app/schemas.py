@@ -49,6 +49,7 @@ class ProductMetrics(BaseModel):
     precio_unit: float
     unidades: int
     valor_inv: float
+    inventario_disponible: bool
     unidades_venta_60d: float
     ventas_60d: float
     unidades_venta_90d: float
@@ -81,7 +82,7 @@ class DashboardKPIsResponse(BaseModel):
 class ProductHistoryDaily(BaseModel):
     fecha: str
     ventas_eur: float
-    inventario_eur: float
+    inventario_eur: Optional[float] = None
 
 class ProductHistoryResponse(BaseModel):
     producto_id: int

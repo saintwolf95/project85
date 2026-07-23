@@ -33,6 +33,14 @@ const QUICK_SUGGESTIONS = [
 const SQL_EXPORT_PATTERN = /<!-- sql_export: [\s\S]*? -->/g;
 const METRICS_MARKER_PATTERN = /<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->/;
 const FOLLOWUPS_MARKER_PATTERN = /<!-- copilot_followups: ([A-Za-z0-9+/=]+) -->/;
+const decodeBase64Utf8 = (encoded: string) => {
+  try {
+    const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+};
 const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').replace(METRICS_MARKER_PATTERN, '').replace(FOLLOWUPS_MARKER_PATTERN, '').trim();
 const hasCopilotExport = (content: string) => /<!-- sql_export: [\s\S]*? -->/.test(content);
 
@@ -42,7 +50,9 @@ const parseCopilotMetrics = (content: string): CopilotMetricPayload | null => {
   const match = METRICS_MARKER_PATTERN.exec(content);
   if (!match) return null;
   try {
-    const parsed = JSON.parse(atob(match[1])) as CopilotMetricPayload;
+    const decoded = decodeBase64Utf8(match[1]);
+    if (!decoded) return null;
+    const parsed = JSON.parse(decoded) as CopilotMetricPayload;
     return parsed?.data ? parsed : null;
   } catch {
     return null;
@@ -57,6 +67,8 @@ const METRIC_LABELS: Record<string, string> = {
   beneficio_eur: 'Beneficio',
   margen_eur: 'Margen',
   margen_pct: 'Margen %',
+  mgd_eur: 'Margen en destino',
+  mgd_pct: 'Margen en destino %',
   periodo_actual: 'Periodo actual',
   periodo_anterior: 'Periodo anterior',
   variacion_absoluta: 'Variación',
@@ -108,7 +120,9 @@ const parseCopilotFollowups = (content: string): CopilotFollowup[] => {
   const match = FOLLOWUPS_MARKER_PATTERN.exec(content);
   if (!match) return [];
   try {
-    const parsed = JSON.parse(atob(match[1])) as { actions?: CopilotFollowup[] };
+    const decoded = decodeBase64Utf8(match[1]);
+    if (!decoded) return [];
+    const parsed = JSON.parse(decoded) as { actions?: CopilotFollowup[] };
     return Array.isArray(parsed?.actions) ? parsed.actions.filter(action => action?.label && action?.prompt).slice(0, 4) : [];
   } catch {
     return [];

@@ -20,7 +20,7 @@ load_dotenv()
 
 from . import models, seed_data
 from .database import engine, engine_ro, get_db, SessionLocal, IS_POSTGRES
-from .routers import analytics, copilot, inventory, settings, agents, libreria
+from .routers import analytics, copilot, data_import, inventory, settings, agents, libreria
 
 logger = logging.getLogger(__name__)
 ALLOW_SCHEMA_INIT = os.getenv("ALLOW_SCHEMA_INIT", "false" if IS_PRODUCTION else "true").strip().lower() in {"1", "true", "yes"}
@@ -197,6 +197,7 @@ app.include_router(inventory.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(agents.router, prefix="/api/v1")
 app.include_router(libreria.router, prefix="/api/v1/libreria")
+app.include_router(data_import.router, prefix="/api/v1")
 
 @app.post("/api/v1/seed", status_code=status.HTTP_201_CREATED)
 @limiter.limit("1/minute")

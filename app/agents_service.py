@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .database import SessionLocalRO
@@ -356,34 +357,42 @@ Formato obligatorio de salida (Markdown):
 
 def run_mattia_agent(db: Session, empresa_id: int):
     alertas = []
+    query_params = {"empresa_id": empresa_id, "fecha_90d": date.today() - timedelta(days=89)}
     
     # 1. Margen negativo
     sql_margen = """
-        SELECT p.nombre, p.precio_venta, p.costo_unitario
+        SELECT p.nombre, SUM(vh.ingreso_total) AS ventas, SUM(vh.margen_bruto_eur) AS margen
         FROM productos p
+        JOIN ventas_historicas vh ON vh.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
-        AND p.precio_venta <= p.costo_unitario
+        AND vh.fecha_venta >= :fecha_90d
+        GROUP BY p.id, p.nombre
+        HAVING SUM(vh.margen_bruto_eur) <= 0
         LIMIT 10
     """
-    result_margen = db.execute(text(sql_margen), {"empresa_id": empresa_id}).fetchall()
+    result_margen = db.execute(text(sql_margen), query_params).fetchall()
     for row in result_margen:
-        alertas.append(f"Mattia (Finanzas): ¡Pérdida detectada! Producto '{row[0]}' se vende a ${row[1]} pero cuesta ${row[2]}.")
+        alertas.append(f"Mattia (Finanzas): ¡Pérdida detectada! '{row[0]}' facturó €{row[1]:.2f} con margen bruto de €{row[2]:.2f}.")
         
     # 2. Margen estrecho en productos VIP
     sql_margen_estrecho = """
-        SELECT p.nombre, p.precio_venta, p.costo_unitario
+        SELECT p.nombre, SUM(vh.ingreso_total) AS ventas, SUM(vh.margen_bruto_eur) AS margen
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
+        JOIN ventas_historicas vh ON vh.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
         AND pm.abc = 'A'
-        AND p.precio_venta < (p.costo_unitario * 1.10)
-        AND p.precio_venta > p.costo_unitario
+        AND vh.fecha_venta >= :fecha_90d
+        GROUP BY p.id, p.nombre
+        HAVING SUM(vh.ingreso_total) > 0
+        AND SUM(vh.margen_bruto_eur) / SUM(vh.ingreso_total) > 0
+        AND SUM(vh.margen_bruto_eur) / SUM(vh.ingreso_total) < 0.10
         LIMIT 10
     """
-    result_margen_estrecho = db.execute(text(sql_margen_estrecho), {"empresa_id": empresa_id}).fetchall()
+    result_margen_estrecho = db.execute(text(sql_margen_estrecho), query_params).fetchall()
     for row in result_margen_estrecho:
-        margen_pct = ((row[1] - row[2]) / row[1]) * 100
-        alertas.append(f"Mattia (Finanzas): [ALERTA MARGEN] Producto Estrella '{row[0]}' tiene un margen muy estrecho ({margen_pct:.1f}%). Precio: ${row[1]}, Costo: ${row[2]}.")
+        margen_pct = (row[2] / row[1]) * 100
+        alertas.append(f"Mattia (Finanzas): [ALERTA MARGEN] Producto Estrella '{row[0]}' tiene un margen bruto estrecho ({margen_pct:.1f}%). Ventas: €{row[1]:.2f}.")
 
     # 3. Capital estancado
     sql_estancado = """
@@ -402,18 +411,22 @@ def run_mattia_agent(db: Session, empresa_id: int):
         
     # 4. Gemas de Margen (Alta Rentabilidad)
     sql_alta_rentabilidad = """
-        SELECT p.nombre, p.precio_venta, p.costo_unitario
+        SELECT p.nombre, SUM(vh.ingreso_total) AS ventas, SUM(vh.margen_bruto_eur) AS margen
         FROM producto_metricas pm
         JOIN productos p ON p.id = pm.producto_id
         JOIN inventario_snapshot i ON i.producto_id = p.id
+        JOIN ventas_historicas vh ON vh.producto_id = p.id
         WHERE p.empresa_id = :empresa_id 
-        AND p.precio_venta > (p.costo_unitario * 2)
         AND i.stock_disponible > 0
+        AND vh.fecha_venta >= :fecha_90d
+        GROUP BY p.id, p.nombre
+        HAVING SUM(vh.ingreso_total) > 0
+        AND SUM(vh.margen_bruto_eur) / SUM(vh.ingreso_total) >= 0.50
         LIMIT 10
     """
-    result_alta_rentabilidad = db.execute(text(sql_alta_rentabilidad), {"empresa_id": empresa_id}).fetchall()
+    result_alta_rentabilidad = db.execute(text(sql_alta_rentabilidad), query_params).fetchall()
     for row in result_alta_rentabilidad:
-        margen_pct = ((row[1] - row[2]) / row[1]) * 100
+        margen_pct = (row[2] / row[1]) * 100
         alertas.append(f"Mattia (Finanzas): [OPORTUNIDAD] El producto '{row[0]}' concentra inventario y tiene un margen altísimo del {margen_pct:.1f}%. Revisar inversión y rotación.")
 
     sys_prompt = """Eres Mattia, CFO. Eres analítico, conservador y mides todo en ROI, márgenes y flujo de caja.
@@ -576,7 +589,7 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
             "type": "function",
             "function": {
                 "name": "ejecutar_consulta_sql",
-                "description": "Ejecuta una consulta SQL SELECT en la base de datos para responder a las preguntas del usuario. ABC usa ventas EUR de los últimos 90 días y XYZ usa inventario EUR actual. Tablas: productos (id, nombre, empresa_id, precio_venta, costo_unitario, marca, familia), producto_metricas (producto_id, dias_cobertura, abc, xyz, riesgo_rotura), inventario_snapshot (producto_id, stock_disponible), ventas_historicas (fecha_venta, cantidad_vendida, ingreso_total).",
+                "description": "Ejecuta una consulta SQL SELECT en la base de datos para responder a las preguntas del usuario. ABC usa ventas EUR de los últimos 90 días y XYZ usa inventario EUR actual. MG es margen bruto y MGD es margen en destino. Tablas: productos (id, nombre, empresa_id, precio_venta, costo_unitario, marca, familia), producto_metricas (producto_id, dias_cobertura, abc, xyz, riesgo_rotura), inventario_snapshot (producto_id, stock_disponible), ventas_historicas (fecha_venta, cantidad_vendida, ingreso_total, margen_bruto_eur, margen_bruto_pct, margen_destino_eur, margen_destino_pct).",
                 "parameters": {
                     "type": "object",
                     "properties": {

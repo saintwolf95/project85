@@ -76,7 +76,7 @@ async def upload_context_document(file: UploadFile = File(...), db: Session = De
             import io
             reader = PdfReader(io.BytesIO(content))
             if len(reader.pages) > MAX_DOCUMENT_PAGES:
-                raise HTTPException(status_code=400, detail="El documento supera el mÃ¡ximo de 50 pÃ¡ginas.")
+                raise HTTPException(status_code=400, detail="El documento supera el máximo de 50 páginas.")
             for page in reader.pages:
                 text_content += (page.extract_text() or "") + "\n"
         elif filename.endswith(".docx"):

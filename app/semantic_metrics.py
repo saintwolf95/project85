@@ -7,6 +7,8 @@ CORTE_SECUNDARIO = 0.95
 DEFINICIONES_METRICAS = {
     "ventas": "Suma de ingreso_total en euros.",
     "ventas_unidades": "Suma de cantidad_vendida.",
+    "margen": "Suma de margen_bruto_eur; el porcentaje agregado se pondera sobre ventas.",
+    "mgd": "Suma de margen_destino_eur; el porcentaje agregado se pondera sobre ventas.",
     "inventario": "Stock disponible multiplicado por costo_unitario en euros.",
     "abc": "Contribución acumulada de ventas en euros de los últimos 90 días: A 80%, B 15%, C 5%.",
     "xyz": "Contribución acumulada del inventario actual en euros: X 80%, Y 15%, Z 5%.",

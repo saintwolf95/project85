@@ -71,6 +71,18 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 if expectativa:
                     self.assertIn(expectativa, intento.parametros)
 
+    def test_desglose_hereda_el_anio_fiscal_de_la_consulta_anterior(self):
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "¿Cuáles son las ventas acumuladas del año fiscal?"},
+            {"role": "assistant", "content": "Las ventas acumuladas son 100 €."},
+            {"role": "user", "content": "Desglosa las ventas del mismo periodo por familia"},
+        ])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.periodo, "anio_fiscal")
+        self.assertEqual(intento.agrupacion, "familia")
+
 
 if __name__ == "__main__":
     unittest.main()

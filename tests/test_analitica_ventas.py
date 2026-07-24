@@ -1,4 +1,6 @@
 import unittest
+import base64
+import json
 from datetime import date
 
 from sqlalchemy import create_engine, text
@@ -11,10 +13,23 @@ from app.analitica_ventas import (
     respuesta_analitica_cumple_contrato,
 )
 from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica
-from app.copilot_service import build_sql_export_marker, extract_signed_sql_export
+from app.copilot_service import build_followups_marker, build_sql_export_marker, extract_signed_sql_export
 
 
 class AnaliticaVentasTests(unittest.TestCase):
+    def test_accion_de_desglose_explica_el_anio_fiscal(self):
+        marker = build_followups_marker(IntentoSemantico(
+            tipo="ventas",
+            medida="ventas_eur",
+            periodo="anio_fiscal",
+            fecha_inicio=date(2026, 5, 1),
+            fecha_fin=date(2026, 7, 24),
+        ))
+
+        payload = marker.removeprefix("<!-- copilot_followups: ").removesuffix(" -->")
+        acciones = json.loads(base64.b64decode(payload))['actions']
+        self.assertIn("año fiscal actual", acciones[0]['prompt'])
+
     def test_exportacion_preserva_parametros_firmados(self):
         marker = build_sql_export_marker(
             "SELECT * FROM ventas_historicas WHERE fecha_venta BETWEEN :fecha_inicio AND :fecha_fin",

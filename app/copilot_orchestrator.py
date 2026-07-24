@@ -245,7 +245,7 @@ def _es_seguimiento(texto: str) -> bool:
     if re.match(r"^(compara|comparalo|compararlo)\b", normalizado):
         return True
     return _contiene(normalizado, (
-        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por matriz", "en euros", "en unidades", "lo mismo", "desglosado", "desglosada"
+        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por matriz", "en euros", "en unidades", "lo mismo", "mismo periodo", "desglosa", "desglosar", "desglosado", "desglosada"
     ))
 
 

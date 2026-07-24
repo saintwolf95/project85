@@ -91,11 +91,19 @@ def build_followups_marker(intento: Any) -> str:
         "ayer": "ayer",
         "hoy": "hoy",
         "mes_actual": "este mes",
+        "anio_fiscal": "el año fiscal actual",
         "ultimos_7_dias": "los últimos 7 días",
         "ultimos_30_dias": "los últimos 30 días",
         "ultimos_60_dias": "los últimos 60 días",
         "ultimos_90_dias": "los últimos 90 días",
-    }.get(periodo, "el mismo periodo")
+    }.get(periodo)
+    if not periodo_texto:
+        fecha_inicio = getattr(intento, "fecha_inicio", None)
+        fecha_fin = getattr(intento, "fecha_fin", None)
+        if fecha_inicio and fecha_fin:
+            periodo_texto = f"el periodo del {fecha_inicio:%d/%m/%Y} al {fecha_fin:%d/%m/%Y}"
+        else:
+            periodo_texto = "el mismo periodo"
     acciones: list[dict[str, str]] = []
 
     if tipo == "ventas":

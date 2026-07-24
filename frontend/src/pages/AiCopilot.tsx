@@ -184,7 +184,7 @@ const CopilotChartRenderer = ({ config }: { config: any }) => {
               <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
               <YAxis stroke="#64748b" fontSize={12} />
               <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
-              <Bar dataKey={yKey} fill={baseColor} radius={[4, 4, 0, 0]} />
+              <Bar dataKey={yKey} fill={baseColor} radius={[4, 4, 0, 0]} isAnimationActive={false} />
             </BarChart>
           ) : type === 'line' ? (
             <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
@@ -192,13 +192,13 @@ const CopilotChartRenderer = ({ config }: { config: any }) => {
               <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
               <YAxis stroke="#64748b" fontSize={12} />
               <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
-              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
             </LineChart>
           ) : type === 'pie' ? (
             <PieChart>
               <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend />
-              <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={80} fill={baseColor} label>
+              <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={80} fill={baseColor} label isAnimationActive={false}>
                 {data.map((_: any, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}

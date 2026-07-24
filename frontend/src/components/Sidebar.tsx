@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power, BookOpen } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { VERSION_APP } from '../config/version';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -40,7 +41,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           <div className="flex items-center gap-3 mb-4">
             <img src="/logo-fivemin.png" alt="five-minutes logo" className="h-16 md:h-20 w-auto object-contain" />
             <span className="mt-4 px-2 py-0.5 rounded text-[10px] font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
-              V1.01
+              {VERSION_APP}
             </span>
           </div>
           <button onClick={onClose} className="md:hidden text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">

@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
 from datetime import datetime
 import logging
+import re
 from ..database import get_db
 from ..copilot_service import process_copilot_chat, cleanup_old_chats, extract_signed_sql_export
 from ..models import Usuario, CopilotChat, CopilotMessage
@@ -281,12 +282,24 @@ def download_message_export(
     signed_export = extract_signed_sql_export(msg.contenido)
     if not signed_export:
         raise HTTPException(status_code=400, detail="Este mensaje no contiene datos exportables.")
-    sql_query, trusted_query = signed_export
+    sql_query, trusted_query, query_params = signed_export
+    parametros_requeridos = set(re.findall(r":([A-Za-z_][A-Za-z0-9_]*)", sql_query)) - {"empresa_id"}
+    if parametros_requeridos and not query_params:
+        raise HTTPException(
+            status_code=409,
+            detail="Esta respuesta se generó antes de guardar los parámetros de exportación. Repite la consulta para descargarla.",
+        )
         
     # 3. Re-ejecutar SQL en read-only
     db_ro = SessionLocalRO()
     try:
-        raw_data, error = execute_sql(db_ro, sql_query, current_user.empresa_id, trusted_query=trusted_query)
+        raw_data, error = execute_sql(
+            db_ro,
+            sql_query,
+            current_user.empresa_id,
+            query_params,
+            trusted_query=trusted_query,
+        )
         if error or not raw_data:
             raise HTTPException(status_code=500, detail="Error ejecutando la consulta original o sin datos.")
             

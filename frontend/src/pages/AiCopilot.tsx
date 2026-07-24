@@ -495,7 +495,7 @@ export const AiCopilot = () => {
       link.parentNode?.removeChild(link);
     } catch (error) {
       console.error('Error descargando archivo', error);
-      setChatError('No se pudo preparar la exportación. Inténtalo de nuevo.');
+      setChatError(getCopilotErrorMessage(error));
     } finally {
       setExportingMessage(null);
     }

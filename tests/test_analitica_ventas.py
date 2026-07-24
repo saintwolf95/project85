@@ -11,9 +11,31 @@ from app.analitica_ventas import (
     respuesta_analitica_cumple_contrato,
 )
 from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica
+from app.copilot_service import build_sql_export_marker, extract_signed_sql_export
 
 
 class AnaliticaVentasTests(unittest.TestCase):
+    def test_exportacion_preserva_parametros_firmados(self):
+        marker = build_sql_export_marker(
+            "SELECT * FROM ventas_historicas WHERE fecha_venta BETWEEN :fecha_inicio AND :fecha_fin",
+            trusted_query=True,
+            query_params={"fecha_inicio": date(2026, 5, 1), "fecha_fin": date(2026, 7, 24)},
+        )
+
+        exportacion = extract_signed_sql_export(marker)
+
+        self.assertIsNotNone(exportacion)
+        sql_query, trusted_query, parametros = exportacion
+        self.assertIn(":fecha_inicio", sql_query)
+        self.assertTrue(trusted_query)
+        self.assertEqual(parametros, {"fecha_fin": "2026-07-24", "fecha_inicio": "2026-05-01"})
+
+    def test_exportacion_rechaza_parametros_manipulados(self):
+        marker = build_sql_export_marker("SELECT 1", query_params={"familia": "Portátiles"})
+        marker_manipulado = marker.replace("UG9ydMOhdGlsZXM", "TGVub3Zv")
+
+        self.assertIsNone(extract_signed_sql_export(marker_manipulado))
+
     def test_rango_abc_contiene_noventa_dias(self):
         inicio, fin = rango_clasificacion_abc(date(2026, 7, 24))
 

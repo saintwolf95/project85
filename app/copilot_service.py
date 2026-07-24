@@ -30,20 +30,29 @@ MAX_CONTEXT_PROMPT_CHARS = 50_000
 MAX_SQL_RESULT_ROWS = 1_000
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 45.0
 
-EXPORT_MARKER_PATTERN = re.compile(r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64})(?:\.(trusted|untrusted))? -->")
+EXPORT_MARKER_PATTERN = re.compile(
+    r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64})(?:\.(trusted|untrusted)(?:\.([A-Za-z0-9+/=]+))?)? -->"
+)
 
-def _export_signature(sql_b64: str, trusted_query: bool = False) -> str:
+def _export_signature(sql_b64: str, trusted_query: bool = False, params_b64: str | None = None) -> str:
     scope = "trusted" if trusted_query else "untrusted"
+    payload = f"{scope}:{sql_b64}" if params_b64 is None else f"{scope}:{sql_b64}:{params_b64}"
     return hmac.new(
         SUPABASE_JWT_SECRET.encode("utf-8"),
-        f"{scope}:{sql_b64}".encode("utf-8"),
+        payload.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
 
-def build_sql_export_marker(sql_query: str, trusted_query: bool = False) -> str:
+def build_sql_export_marker(
+    sql_query: str,
+    trusted_query: bool = False,
+    query_params: dict[str, Any] | None = None,
+) -> str:
     sql_b64 = base64.b64encode(sql_query.encode("utf-8")).decode("utf-8")
     scope = "trusted" if trusted_query else "untrusted"
-    return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64, trusted_query)}.{scope} -->"
+    params_json = json.dumps(query_params or {}, ensure_ascii=False, sort_keys=True, default=str, separators=(",", ":"))
+    params_b64 = base64.b64encode(params_json.encode("utf-8")).decode("utf-8")
+    return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64, trusted_query, params_b64)}.{scope}.{params_b64} -->"
 
 
 def build_metrics_marker(raw_data: list, sql_query: str = "") -> str:
@@ -130,11 +139,11 @@ def build_dynamic_followups_marker(dossier: dict[str, Any]) -> str:
     encoded = base64.b64encode(json.dumps({"actions": acciones}, ensure_ascii=False).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_followups: {encoded} -->"
 
-def extract_signed_sql_export(content: str) -> tuple[str, bool] | None:
+def extract_signed_sql_export(content: str) -> tuple[str, bool, dict[str, Any]] | None:
     match = EXPORT_MARKER_PATTERN.search(content)
     if not match:
         return None
-    sql_b64, signature, scope = match.groups()
+    sql_b64, signature, scope, params_b64 = match.groups()
     if scope is None:
         # Legacy markers are revalidated as untrusted queries below.
         valid = hmac.compare_digest(signature, hmac.new(
@@ -143,14 +152,22 @@ def extract_signed_sql_export(content: str) -> tuple[str, bool] | None:
         trusted_query = False
     else:
         trusted_query = scope == "trusted"
-        valid = hmac.compare_digest(signature, _export_signature(sql_b64, trusted_query))
+        valid = hmac.compare_digest(signature, _export_signature(sql_b64, trusted_query, params_b64))
     if not valid:
         return None
     try:
         sql_query = base64.b64decode(sql_b64, validate=True).decode("utf-8")
     except (binascii.Error, ValueError, UnicodeDecodeError):
         return None
-    return sql_query, trusted_query
+    if not params_b64:
+        return sql_query, trusted_query, {}
+    try:
+        query_params = json.loads(base64.b64decode(params_b64, validate=True).decode("utf-8"))
+    except (binascii.Error, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(query_params, dict) or "empresa_id" in query_params:
+        return None
+    return sql_query, trusted_query, query_params
 
 def get_openai_client():
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -467,6 +484,7 @@ def interpret_results(
     model_preference: str = "fast",
     contexto: str = "",
     trusted_query: bool = False,
+    export_params: dict[str, Any] | None = None,
 ) -> str:
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
@@ -601,7 +619,7 @@ Contexto del Negocio: {contexto}
         return renderizar_respuesta_analitica(raw_data)
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
-        reply += f"\n\n{build_sql_export_marker(sql_query, trusted_query)}"
+        reply += f"\n\n{build_sql_export_marker(sql_query, trusted_query, export_params)}"
     metrics_marker = build_metrics_marker(raw_data, sql_query)
     if metrics_marker:
         reply += f"\n\n{metrics_marker}"
@@ -721,6 +739,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             model_preference,
             contexto_analisis,
             trusted_query=True,
+            export_params=query_params,
         )
         followups = build_followups_marker(intento) if not error else ""
         return f"{reply}\n\n{followups}" if followups else reply

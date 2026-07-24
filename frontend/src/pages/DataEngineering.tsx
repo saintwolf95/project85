@@ -78,6 +78,7 @@ const apiErrorMessage = (error: unknown) => {
 
 export const DataEngineering = () => {
   const [dataset, setDataset] = useState<DataImportDataset>('sales');
+  const [salesImportScope, setSalesImportScope] = useState<'operativa' | 'fiscal_anterior'>('operativa');
   const [status, setStatus] = useState<DataImportStatus | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [validation, setValidation] = useState<DataImportValidation | null>(null);
@@ -138,6 +139,7 @@ export const DataEngineering = () => {
 
   const changeDataset = (nextDataset: DataImportDataset) => {
     setDataset(nextDataset);
+    setSalesImportScope('operativa');
     setReplaceExisting(false);
     resetFile();
   };
@@ -308,6 +310,38 @@ export const DataEngineering = () => {
             </div>
           </div>
 
+          {dataset === 'sales' && (
+            <section className="mb-5 border border-brand-blue/20 bg-brand-blue/5 p-4 dark:border-brand-cyan/25 dark:bg-brand-cyan/5" aria-label="Alcance de la carga de ventas">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">¿Qué ventas vas a incorporar?</p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Ambas cargas usan <code>fivemin_ventas</code> y se guardan por SKU y fecha. No hace falta crear otra fuente ni otra tabla.</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSalesImportScope('operativa')}
+                  aria-pressed={salesImportScope === 'operativa'}
+                  className={`border p-3 text-left transition-colors ${salesImportScope === 'operativa' ? 'border-brand-blue bg-white dark:border-brand-cyan dark:bg-slate-900' : 'border-slate-200 bg-white/50 dark:border-slate-700 dark:bg-slate-900/40'}`}
+                >
+                  <span className="block text-sm font-medium text-slate-900 dark:text-white">Ventas operativas actuales</span>
+                  <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">Carga habitual de datos del ejercicio vigente.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setSalesImportScope('fiscal_anterior'); setReplaceExisting(false); }}
+                  aria-pressed={salesImportScope === 'fiscal_anterior'}
+                  className={`border p-3 text-left transition-colors ${salesImportScope === 'fiscal_anterior' ? 'border-brand-blue bg-white dark:border-brand-cyan dark:bg-slate-900' : 'border-slate-200 bg-white/50 dark:border-slate-700 dark:bg-slate-900/40'}`}
+                >
+                  <span className="block text-sm font-medium text-slate-900 dark:text-white">Histórico del año fiscal anterior</span>
+                  <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">Permite comparativas interanuales de ventas, margen, MGD, familias, marcas y SKU.</span>
+                </button>
+              </div>
+              {salesImportScope === 'fiscal_anterior' && (
+                <p className="mt-3 border-l-2 border-emerald-500 pl-3 text-xs text-emerald-800 dark:text-emerald-300">
+                  Carga el archivo del FY anterior con sus fechas reales. Se añadirá al histórico sin eliminar el ejercicio actual; no actives la sustitución de datos.
+                </p>
+              )}
+            </section>
+          )}
+
           <div
             className="border border-dashed border-slate-300 dark:border-slate-700 px-5 py-8 text-center"
             onDragOver={event => event.preventDefault()}
@@ -349,7 +383,7 @@ export const DataEngineering = () => {
             )}
           </div>
 
-          {(dataset === 'products' || dataset === 'sales') && (
+          {(dataset === 'products' || (dataset === 'sales' && salesImportScope === 'operativa')) && (
             <div className="mt-4 flex items-start gap-3 border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-3">
               <input
                 id="replace-existing-catalog"
@@ -388,7 +422,7 @@ export const DataEngineering = () => {
               className="inline-flex items-center gap-2 rounded-lg bg-brand-blue dark:bg-brand-cyan px-4 py-2 text-sm font-medium text-white dark:text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? <Loader2 size={17} className="animate-spin" /> : <Database size={17} />}
-              Cargar en producción
+              {dataset === 'sales' && salesImportScope === 'fiscal_anterior' ? 'Incorporar histórico FY anterior' : 'Cargar en producción'}
             </button>
           </div>
 
@@ -478,6 +512,11 @@ export const DataEngineering = () => {
               {dataset === 'sales' && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                   Catálogo: {formatNumber(result.products_created)} SKU creados · {formatNumber(result.products_updated)} actualizados.
+                </p>
+              )}
+              {dataset === 'sales' && salesImportScope === 'fiscal_anterior' && (
+                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">
+                  Histórico fiscal incorporado: ya está disponible para comparativas interanuales del Copilot.
                 </p>
               )}
               <button onClick={resetFile} className="mt-3 text-sm font-medium text-brand-blue dark:text-brand-cyan hover:underline">

@@ -132,6 +132,8 @@ def _rango_anterior(periodo: str | None, inicio: date, fin: date) -> tuple[date,
     if periodo == "mes_actual":
         fin_anterior = inicio - timedelta(days=1)
         return fin_anterior.replace(day=1), fin_anterior
+    if periodo == "anio_fiscal":
+        return inicio.replace(year=inicio.year - 1), fin.replace(year=fin.year - 1)
     dias = (fin - inicio).days + 1
     fin_anterior = inicio - timedelta(days=1)
     return fin_anterior - timedelta(days=dias - 1), fin_anterior

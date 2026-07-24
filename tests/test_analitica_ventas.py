@@ -12,11 +12,17 @@ from app.analitica_ventas import (
     renderizar_respuesta_analitica,
     respuesta_analitica_cumple_contrato,
 )
-from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica
+from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica, resolver_periodo_anterior
 from app.copilot_service import build_followups_marker, build_sql_export_marker, extract_signed_sql_export
 
 
 class AnaliticaVentasTests(unittest.TestCase):
+    def test_anio_fiscal_compara_con_el_mismo_tramo_del_ejercicio_anterior(self):
+        inicio, fin = resolver_periodo_anterior("anio_fiscal", date(2026, 5, 1), date(2026, 7, 24))
+
+        self.assertEqual(inicio, date(2025, 5, 1))
+        self.assertEqual(fin, date(2025, 7, 24))
+
     def test_accion_de_desglose_explica_el_anio_fiscal(self):
         marker = build_followups_marker(IntentoSemantico(
             tipo="ventas",

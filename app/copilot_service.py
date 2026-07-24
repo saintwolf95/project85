@@ -6,6 +6,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import time
 from numbers import Number
 from typing import Any
 from openai import OpenAI
@@ -118,6 +119,17 @@ def build_followups_marker(intento: Any) -> str:
     encoded = base64.b64encode(json.dumps({"actions": acciones}, ensure_ascii=False).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_followups: {encoded} -->"
 
+
+def build_dynamic_followups_marker(dossier: dict[str, Any]) -> str:
+    """Adjunta preguntas de seguimiento basadas en los hallazgos del dossier."""
+    from .analitica_ventas import crear_acciones_seguimiento
+
+    acciones = crear_acciones_seguimiento(dossier)
+    if not acciones:
+        return ""
+    encoded = base64.b64encode(json.dumps({"actions": acciones}, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    return f"<!-- copilot_followups: {encoded} -->"
+
 def extract_signed_sql_export(content: str) -> tuple[str, bool] | None:
     match = EXPORT_MARKER_PATTERN.search(content)
     if not match:
@@ -214,7 +226,7 @@ Tabla `registro_po` (alias recomendado: po):
 
 Tabla `producto_metricas` (alias recomendado: pm):
 - producto_id (INTEGER, FK a productos.id)
-- abc (VARCHAR) -- Clasificación ABC por contribución acumulada de ventas en euros de los últimos 90 días: 'A' (top 80%), 'B' (siguiente 15%), 'C' (restante 5%)
+- abc (VARCHAR) -- Copia sincronizada de ABC. El análisis comercial del Copilot calcula ABC dinámicamente con ventas reales para no depender de inventario.
 - xyz (VARCHAR) -- Clasificación XYZ por contribución acumulada del inventario actual en euros: 'X' (top 80%), 'Y' (siguiente 15%), 'Z' (restante 5%)
 - matriz_abc (VARCHAR) -- Cuadrante combinado: 'AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'
 - dias_cobertura (INTEGER) -- días que durará el stock actual al ritmo de ventas actual
@@ -232,8 +244,8 @@ DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - No recalcules MG o MGD desde el catálogo cuando existen estas columnas de ventas: son la fuente económica oficial.
 - Cuando se solicite una comparación, informa periodo actual, periodo anterior, variación absoluta y variación porcentual.
 - "oportunidad comercial" significa producto ABC A/B con stock disponible, margen positivo y ventas en los últimos 90 días; "acción prioritaria" ordena primero roturas de productos clave, después capital inmovilizado y después oportunidades.
-- "ABC" se basa en ventas EUR de los últimos 90 días; "XYZ" se basa en inventario EUR actual.
-- "clase A/B/C" significa filtrar `pm.abc = 'A'/'B'/'C'`; "clase X/Y/Z" significa filtrar `pm.xyz = 'X'/'Y'/'Z'`. Para un cuadrante concreto usa `pm.matriz_abc` (por ejemplo, `AX`).
+- "ABC" se basa en ventas EUR de los últimos 90 días y no requiere inventario; "XYZ" se basa en inventario EUR actual.
+- Para preguntas comerciales de clase A/B/C, prioriza la clasificación ABC calculada sobre ventas. Las clases X/Y/Z y los cuadrantes ABCXYZ usan `producto_metricas`.
 - `cv` y `ads` representan variabilidad y velocidad de demanda para cobertura, pero no determinan la letra XYZ.
 - Para totales y sumatorias, calcula en SQL con SUM y devuelve una sola fila agregada. No limites los totales a 50 productos.
 
@@ -459,6 +471,14 @@ def interpret_results(
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
 
+    from .analitica_ventas import (
+        contrato_respuesta_analitica,
+        es_dossier_analitico,
+        renderizar_respuesta_analitica,
+        respuesta_analitica_cumple_contrato,
+    )
+
+    es_dossier = es_dossier_analitico(raw_data)
     total_records = len(raw_data) if isinstance(raw_data, list) else 0
     raw_data_truncated = raw_data[:50] if isinstance(raw_data, list) else raw_data
     
@@ -468,9 +488,12 @@ def interpret_results(
 
     client = get_openai_client()
     if not client:
+        if es_dossier:
+            return renderizar_respuesta_analitica(raw_data)
         return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
     if model_preference in ["thinking", "ultra_thinking"]:
+        contrato_dossier = contrato_respuesta_analitica() if es_dossier else ""
         INTERPRET_PROMPT = f"""
 Eres SupplyChain AI, un **Analista de Negocio y Científico de Datos Senior** experto en operaciones, cadena de suministro y finanzas corporativas.
 Como estás operando con un modelo de razonamiento avanzado, tu objetivo es realizar un análisis **profundo, exhaustivo y altamente inteligente**.
@@ -498,6 +521,7 @@ REGLAS ESTRICTAS PARA MODO AVANZADO:
 8. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
 9. **Moneda:** Usa siempre el formato europeo para importes: €1.234,56 con punto como separador de miles y coma como decimal.
 10. **Tablas:** Cuando los datos sean una lista de artículos o comparativa, formatea la respuesta como tabla Markdown.
+{contrato_dossier}
 
 Contexto Técnico Interno (OCULTO AL USUARIO):
 Consulta SQL ejecutada: {sql_query}
@@ -518,6 +542,8 @@ Contexto del Negocio: {contexto}
             if "model_not_found" in error_msg or "does not exist" in error_msg:
                 return "⚠️ **Nivel de API Insuficiente:** Tu clave de OpenAI no tiene permisos para acceder a los modelos avanzados de razonamiento (`o1` u `o3-mini`). Por favor, cambia al modo **Fast (gpt-4o)** en la barra inferior."
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación Thinking): {error_msg}", exc_info=True)
+            if es_dossier:
+                return renderizar_respuesta_analitica(raw_data)
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     else:
         INTERPRET_PROMPT = f"""
@@ -561,6 +587,18 @@ Contexto del Negocio: {contexto}
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
     reply = response.choices[0].message.content.strip()
+    usage = getattr(response, "usage", None)
+    if usage:
+        logger.info(
+            "[AUDIT IA] Interpretacion modelo=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            model_name,
+            getattr(usage, "prompt_tokens", None),
+            getattr(usage, "completion_tokens", None),
+            getattr(usage, "total_tokens", None),
+        )
+    if es_dossier and not respuesta_analitica_cumple_contrato(reply):
+        logger.warning("La interpretación analítica no cumplió el contrato; se usa el respaldo determinista.")
+        return renderizar_respuesta_analitica(raw_data)
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
         reply += f"\n\n{build_sql_export_marker(sql_query, trusted_query)}"
@@ -617,6 +655,62 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
                     "Puedo analizar ventas, unidades, MG, MGD y clasificación ABC; "
                     "XYZ, stock, cobertura y alertas se activarán cuando cargues el inventario."
                 )
+        from .analitica_ventas import crear_plan_analitico_ventas, es_pregunta_gerencial
+
+        usar_plan_analitico = (
+            model_preference in {"thinking", "ultra_thinking"}
+            and intento.tipo in {"ventas", "rentabilidad"}
+            and (intento.comparacion or es_pregunta_gerencial(user_message))
+        )
+        if usar_plan_analitico:
+            plan_analitico = crear_plan_analitico_ventas(intento)
+            if plan_analitico:
+                inicio_plan = time.perf_counter()
+                bloques_fallidos: list[str] = []
+                dossier: dict[str, Any] = {
+                    "periodo_actual": {
+                        "inicio": plan_analitico.periodo_actual[0].isoformat(),
+                        "fin": plan_analitico.periodo_actual[1].isoformat(),
+                    },
+                    "periodo_anterior": {
+                        "inicio": plan_analitico.periodo_anterior[0].isoformat(),
+                        "fin": plan_analitico.periodo_anterior[1].isoformat(),
+                    },
+                    "resultados": {},
+                }
+                for consulta in plan_analitico.consultas:
+                    datos, error = execute_sql(
+                        db,
+                        consulta.sql,
+                        empresa_id,
+                        consulta.parametros,
+                        trusted_query=True,
+                    )
+                    if error:
+                        logger.warning("No se pudo ejecutar el bloque analitico %s: %s", consulta.nombre, error)
+                        bloques_fallidos.append(consulta.nombre)
+                        continue
+                    dossier["resultados"][consulta.nombre] = datos
+                if dossier["resultados"]:
+                    respuesta = interpret_results(
+                        history,
+                        "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
+                        dossier,
+                        model_preference=model_preference,
+                        contexto=contexto_analisis,
+                        trusted_query=True,
+                    )
+                    seguimiento = build_dynamic_followups_marker(dossier)
+                    logger.info(
+                        "[AUDIT ANALITICA] empresa_id=%s modelo=%s bloques_ok=%s bloques_fallidos=%s latencia_ms=%s",
+                        empresa_id,
+                        model_preference,
+                        len(dossier["resultados"]),
+                        ",".join(bloques_fallidos) or "ninguno",
+                        round((time.perf_counter() - inicio_plan) * 1000),
+                    )
+                    return f"{respuesta}\n\n{seguimiento}" if seguimiento else respuesta
+
         sql_query, query_params = crear_consulta_semantica(intento)
         raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
         reply = interpret_results(

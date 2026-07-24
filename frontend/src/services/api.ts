@@ -281,8 +281,19 @@ export interface CopilotMessage {
   creado_en: string;
 }
 
+export interface CopilotCapabilities {
+  inventario_disponible: boolean;
+  ventas_disponibles: boolean;
+  abc_ventas_disponible: boolean;
+}
+
 export const getCopilotChats = async (): Promise<CopilotChat[]> => {
   const response = await api.get('/copilot/chats');
+  return response.data;
+};
+
+export const getCopilotCapabilities = async (): Promise<CopilotCapabilities> => {
+  const response = await api.get('/copilot/capabilities');
   return response.data;
 };
 

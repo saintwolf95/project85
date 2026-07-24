@@ -7,6 +7,8 @@ import unicodedata
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .analitica_ventas import crear_cte_abc_ventas, es_pregunta_gerencial, rango_clasificacion_abc
+
 
 ZONA_NEGOCIO = ZoneInfo("Europe/Madrid")
 
@@ -179,6 +181,14 @@ def detectar_filtros(texto: str) -> dict[str, str]:
     """Extrae filtros concretos que se convierten siempre en parametros SQL."""
     filtros: dict[str, str] = {}
     normalizado = normalizar_texto(texto)
+    agrupacion_solicitada = detectar_agrupacion(texto)
+    campos_agrupados = {
+        "familia": {"familia"},
+        "marca": {"marca"},
+        "familia_marca": {"familia", "marca", "familia_marca"},
+        "seccion": {"seccion"},
+        "product_manager": {"product_manager"},
+    }.get(agrupacion_solicitada, set())
 
     # "Clase A/B/C" se refiere a ABC (ventas EUR) y "clase X/Y/Z" a XYZ
     # (inventario EUR). Tambien aceptamos expresiones como "ABC A" o "XYZ X".
@@ -204,6 +214,8 @@ def detectar_filtros(texto: str) -> dict[str, str]:
         "product_manager": ("product manager", "pm"),
     }
     for campo, alias in campos.items():
+        if campo in campos_agrupados:
+            continue
         etiqueta = "(?:" + "|".join(re.escape(nombre) for nombre in alias) + ")"
         campo_en_texto = re.search(rf"\b{etiqueta}\b", texto, flags=re.IGNORECASE)
         if campo_en_texto and re.search(r"\bpor\s+$", texto[:campo_en_texto.start()], flags=re.IGNORECASE):
@@ -291,6 +303,13 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
     periodo, fecha_inicio, fecha_fin = resolver_periodo(actual)
     comparar = detectar_comparacion(actual)
     medida, tipo = detectar_medida(actual)
+    analisis_gerencial = es_pregunta_gerencial(actual)
+    if analisis_gerencial and not medida:
+        medida, tipo = "ventas_eur", "ventas"
+    if analisis_gerencial and not periodo:
+        periodo, fecha_inicio, fecha_fin = resolver_periodo("mes actual")
+    if analisis_gerencial:
+        comparar = True
     intento_anterior = None
 
     if len(mensajes_usuario) > 1 and _es_seguimiento(actual):
@@ -348,6 +367,12 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
         }.items()
         if valor is not None
     }
+    if "abc" in filtros:
+        fecha_abc_inicio, fecha_abc_fin = rango_clasificacion_abc(_fecha_hoy())
+        parametros.update({
+            "fecha_abc_inicio": fecha_abc_inicio,
+            "fecha_abc_fin": fecha_abc_fin,
+        })
     if medida in ("acciones_prioritarias", "productos_oportunidad"):
         hoy_operativo = _fecha_hoy()
         parametros.update({
@@ -369,12 +394,18 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
     ), None
 
 
-def _condiciones_sql(intento: IntentoSemantico, incluir_periodo: bool = False) -> str:
+def _condiciones_sql(
+    intento: IntentoSemantico,
+    incluir_periodo: bool = False,
+    campo_abc: str = "pm.abc",
+) -> str:
     condiciones = ["p.empresa_id = :empresa_id"]
     for campo in ("familia", "marca", "familia_marca", "seccion", "product_manager", "sku"):
         if campo in intento.parametros:
             condiciones.append(f"p.{campo} = :{campo}")
-    for campo in ("abc", "xyz", "matriz_abc"):
+    if "abc" in intento.parametros:
+        condiciones.append(f"{campo_abc} = :abc")
+    for campo in ("xyz", "matriz_abc"):
         if campo in intento.parametros:
             condiciones.append(f"pm.{campo} = :{campo}")
     if incluir_periodo:
@@ -512,7 +543,9 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         else:
             expresion = "vh.margen_bruto_eur"
             alias = "beneficio_eur"
-        condiciones = _condiciones_sql(intento, incluir_periodo=True)
+        usa_abc_dinamico = "abc" in intento.parametros
+        campo_abc = "ca.abc" if usa_abc_dinamico else "pm.abc"
+        condiciones = _condiciones_sql(intento, incluir_periodo=True, campo_abc=campo_abc)
         es_porcentaje = intento.medida in ("margen_pct", "mgd_pct")
         expresion_agregada = (
             "CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0 "
@@ -538,9 +571,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
 
         join_metricas = (
             " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id"
-            if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("abc", "xyz", "matriz_abc"))
+            if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("xyz", "matriz_abc"))
             else ""
         )
+        prefijo_abc = crear_cte_abc_ventas() if usa_abc_dinamico else ""
+        join_abc = " LEFT JOIN clasificacion_abc ca ON ca.producto_id = p.id" if usa_abc_dinamico else ""
         if intento.comparacion:
             actual_sql, anterior_sql, variacion_sql, variacion_pct_sql, variacion_pp_sql = _expresiones_comparativas(intento, expresion)
             columnas_comparacion = (
@@ -551,45 +586,49 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                 columnas_comparacion += f", {variacion_pp_sql} AS variacion_pp"
             productos_actuales = "COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END)"
             if agrupacion:
-                sql = f"""
+                sql = f"""{prefijo_abc}
                     SELECT {agrupacion} AS agrupacion,
                            {columnas_comparacion},
                            {productos_actuales} AS productos
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
                     GROUP BY {agrupacion}
                     ORDER BY variacion_pct DESC
                 """
             else:
-                sql = f"""
+                sql = f"""{prefijo_abc}
                     SELECT {columnas_comparacion},
                            {productos_actuales} AS productos
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
                 """
             return sql, dict(intento.parametros)
         if agrupacion:
-            sql = f"""
+            sql = f"""{prefijo_abc}
                 SELECT {agrupacion} AS agrupacion,
                        {expresion_agregada} AS {alias_agregado},
                        COUNT(DISTINCT vh.producto_id) AS productos
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
+                {join_abc}
                 {join_metricas}
                 WHERE {condiciones}
                 GROUP BY {agrupacion}
                 ORDER BY {alias_agregado} DESC
             """
         else:
-            sql = f"""
+            sql = f"""{prefijo_abc}
                    SELECT {expresion_agregada} AS {alias_agregado},
                           COUNT(DISTINCT vh.producto_id) AS productos
                    FROM ventas_historicas vh
                    JOIN productos p ON p.id = vh.producto_id
+                   {join_abc}
                    {join_metricas}
                    WHERE {condiciones}
                """

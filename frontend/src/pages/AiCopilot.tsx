@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments } from '../services/api';
-import type { CopilotChat, LibreriaDocument } from '../services/api';
+import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments, getCopilotCapabilities } from '../services/api';
+import type { CopilotCapabilities, CopilotChat, LibreriaDocument } from '../services/api';
 import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -18,18 +18,20 @@ const THINKING_MESSAGES = [
   'Preparando una respuesta clara...',
 ];
 
-const QUICK_SUGGESTIONS = [
+const SALES_SUGGESTIONS = [
   { label: 'Ventas año fiscal', prompt: '¿Cuáles son las ventas acumuladas del año fiscal?' },
-  { label: 'MGD por sección', prompt: 'Dame el MGD del año fiscal agrupado por sección' },
+  { label: 'Cómo va la empresa', prompt: '¿Cómo va la empresa?' },
+  { label: 'Caídas del mes', prompt: 'Compara las ventas de este mes con el mes anterior y muestra los 5 SKU que más explican la caída' },
+  { label: 'Margen y MGD', prompt: 'Compara ventas, margen y MGD de este mes con el mes anterior por familia' },
+  { label: 'Productos A en caída', prompt: 'Identifica los productos clase A que más han caído en los últimos 30 días' },
   { label: 'Ventas por PM', prompt: 'Compara las ventas del año fiscal por Product Manager' },
-  { label: 'Top 10 por ventas 90D', prompt: '¿Cuáles son los 10 productos con más ventas en los últimos 90 días?' },
+];
+
+const INVENTORY_SUGGESTIONS = [
   { label: 'Riesgo de rotura', prompt: '¿Qué productos tienen riesgo de rotura de stock inmediato?' },
-  { label: 'Qué priorizar hoy', prompt: '¿Qué acciones debería priorizar hoy en inventario y ventas?' },
+  { label: 'Inventario por familia', prompt: 'Dame un resumen del inventario agrupado por familia de producto' },
   { label: 'Artículos AZ críticos', prompt: 'Muéstrame los artículos AZ con más ventas y menos inventario disponible' },
-  { label: 'Resumen por familia', prompt: 'Dame un resumen del inventario agrupado por familia de producto' },
-  { label: 'Tendencia de ventas', prompt: 'Compara las ventas de los últimos 30 días con los 30 días anteriores y explícame la tendencia' },
   { label: 'Capital clase C', prompt: '¿Cuánto inventario en euros tenemos en productos clase C?' },
-  { label: 'Oportunidades comerciales', prompt: '¿Qué productos son oportunidades comerciales según ventas, margen y stock disponible?' },
   { label: 'Días cobertura A', prompt: 'Listado de productos clase A con menos de 15 días de cobertura' },
 ];
 
@@ -298,6 +300,7 @@ export const AiCopilot = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [capabilities, setCapabilities] = useState<CopilotCapabilities | null>(null);
   // LibrerIA docs
   const [libDocs, setLibDocs] = useState<LibreriaDocument[]>([]);
   const [selectedLibDocIds, setSelectedLibDocIds] = useState<number[]>([]);
@@ -308,11 +311,20 @@ export const AiCopilot = () => {
 
   const now = () => new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 
-  const defaultGreetingMessage: Message = {
+  const suggestions = capabilities?.inventario_disponible
+    ? [...SALES_SUGGESTIONS, ...INVENTORY_SUGGESTIONS]
+    : SALES_SUGGESTIONS;
+
+  const createGreetingMessage = (): Message => {
+    const intro = capabilities?.inventario_disponible
+      ? 'También tengo inventario disponible para analizar cobertura, roturas y capital inmovilizado.'
+      : 'Actualmente trabajaré con ventas, rentabilidad y ABC comercial. Las funciones de stock, cobertura y ABCXYZ se activarán cuando cargues inventario.';
+    return {
     id: 'greeting',
     role: 'ai',
-    content: `¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tu base de datos en tiempo real.\n\nPuedes preguntarme sobre:\n\n- [¿Cuántas unidades tenemos en stock de los productos clase A?](#prompt:${encodeURIComponent('¿Cuántas unidades tenemos en stock de los productos clase A?')})\n- [¿Qué productos tienen riesgo de rotura inminente?](#prompt:${encodeURIComponent('¿Qué productos tienen riesgo de rotura inminente?')})\n- [¿Cuál es el valor total del inventario por familia?](#prompt:${encodeURIComponent('¿Cuál es el valor total del inventario por familia?')})\n- [Hazme un resumen ejecutivo del estado del inventario hoy](#prompt:${encodeURIComponent('Hazme un resumen ejecutivo del estado del inventario hoy')})`,
+    content: `¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tus datos en tiempo real.\n\n${intro}\n\n- [¿Cómo va la empresa este mes?](#prompt:${encodeURIComponent('¿Cómo va la empresa este mes?')})\n- [¿Qué familias y SKU explican las mayores caídas?](#prompt:${encodeURIComponent('Compara las ventas de este mes con el mes anterior y muestra qué familias y SKU explican las mayores caídas')})\n- [¿Qué productos clase A necesitan revisión comercial?](#prompt:${encodeURIComponent('Identifica los productos clase A que más han caído en los últimos 30 días')})`,
     timestamp: now(),
+  };
   };
 
   const scrollToBottom = useCallback(() => {
@@ -320,6 +332,17 @@ export const AiCopilot = () => {
   }, []);
 
   useEffect(() => { loadChats(); }, []);
+  useEffect(() => {
+    getCopilotCapabilities().then(setCapabilities).catch(console.error);
+  }, []);
+  useEffect(() => {
+    if (!capabilities || currentChatId !== null) return;
+    setMessages(previous => (
+      previous.length === 1 && previous[0].id === 'greeting'
+        ? [createGreetingMessage()]
+        : previous
+    ));
+  }, [capabilities, currentChatId]);
   useEffect(() => { scrollToBottom(); }, [messages, isLoading, scrollToBottom]);
 
   // Cargar documentos LibrerIA disponibles
@@ -336,7 +359,7 @@ export const AiCopilot = () => {
       if (data.length > 0 && currentChatId === null) {
         selectChat(data[0].id);
       } else if (data.length === 0) {
-        setMessages([defaultGreetingMessage]);
+          setMessages([createGreetingMessage()]);
         setShowSuggestions(true);
       }
       const ctx = await getBusinessContext();
@@ -359,7 +382,7 @@ export const AiCopilot = () => {
     try {
       const history = await getCopilotChatHistory(chatId);
       if (history.length === 0) {
-        setMessages([defaultGreetingMessage]);
+        setMessages([createGreetingMessage()]);
         setShowSuggestions(true);
       } else {
         const formatted: Message[] = history.map(h => ({
@@ -381,7 +404,7 @@ export const AiCopilot = () => {
   const startNewChat = () => {
     if (isLoading) return;
     setCurrentChatId(null);
-    setMessages([defaultGreetingMessage]);
+    setMessages([createGreetingMessage()]);
     setShowSuggestions(true);
     setSelectedLibDocIds([]);
     setChatError(null);
@@ -788,7 +811,7 @@ export const AiCopilot = () => {
           {/* Chips de sugerencias */}
           {showSuggestions && !isLoading && (
             <div className="flex flex-wrap gap-2 py-2">
-              {QUICK_SUGGESTIONS.map((s) => (
+              {suggestions.map((s) => (
                 <button
                   key={s.label}
                   onClick={() => handleSend(s.prompt)}

@@ -39,12 +39,34 @@ class ChatResponse(BaseModel):
 class ContextoRequest(BaseModel):
     contexto_negocio: str = Field(..., max_length=MAX_CONTEXT_CHARS)
 
+
+class CopilotCapabilitiesResponse(BaseModel):
+    inventario_disponible: bool
+    ventas_disponibles: bool
+    abc_ventas_disponible: bool
+
 @router.get("/context")
 def get_context(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     empresa = db.query(models.Empresa).filter(models.Empresa.id == current_user.empresa_id).first()
     if not empresa:
         return {"contexto_negocio": ""}
     return {"contexto_negocio": empresa.contexto_negocio or ""}
+
+
+@router.get("/capabilities", response_model=CopilotCapabilitiesResponse)
+def get_capabilities(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    """Expone solo la disponibilidad de datos necesaria para orientar el Copilot."""
+    inventario_disponible = db.query(models.InventarioSnapshot.producto_id).join(
+        models.Producto, models.Producto.id == models.InventarioSnapshot.producto_id
+    ).filter(models.Producto.empresa_id == current_user.empresa_id).first() is not None
+    ventas_disponibles = db.query(models.VentaHistorica.id).join(
+        models.Producto, models.Producto.id == models.VentaHistorica.producto_id
+    ).filter(models.Producto.empresa_id == current_user.empresa_id).first() is not None
+    return {
+        "inventario_disponible": inventario_disponible,
+        "ventas_disponibles": ventas_disponibles,
+        "abc_ventas_disponible": ventas_disponibles,
+    }
 
 @router.put("/context")
 def update_context(payload: ContextoRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):

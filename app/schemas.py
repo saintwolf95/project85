@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime
 
 class Token(BaseModel):
@@ -102,7 +102,7 @@ class AgentSettingsResponse(BaseModel):
         from_attributes = True
 
 class AgentChatMessage(BaseModel):
-    role: str
+    role: Literal["user", "assistant"]
     content: str = Field(..., max_length=2000)
 
 class AgentChatRequest(BaseModel):

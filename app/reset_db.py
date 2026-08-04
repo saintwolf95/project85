@@ -10,6 +10,7 @@ def reset_and_seed():
         db.query(models.Registro_PO).delete()
         db.query(models.InventarioSnapshot).delete()
         db.query(models.VentaHistorica).delete()
+        db.query(models.Cliente).delete()
         db.query(models.Producto).delete()
         # No eliminamos la empresa ni el usuario para no romper el login
         db.commit()

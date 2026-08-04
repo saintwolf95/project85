@@ -26,6 +26,12 @@ const SALES_COLUMNS: ColumnDefinition[] = [
   { name: 'Nombre Seccion', type: 'texto', required: true, destination: 'seccion', description: 'Sección corporativa del producto.' },
   { name: 'EAN', type: 'texto', required: true, destination: 'ean', description: 'EAN conservado como texto.' },
   { name: 'Product Manager', type: 'texto', required: true, destination: 'product_manager', description: 'PM responsable del artículo.' },
+  { name: 'ClientePK', type: 'texto', required: true, destination: 'cliente_pk', description: 'Código interno estable del cliente.' },
+  { name: 'Nombre Cliente', type: 'texto', required: true, destination: 'nombre_cliente', description: 'Nombre descriptivo del cliente.' },
+  { name: 'KD', type: 'texto', required: true, destination: 'kd', description: 'Tipo o indicador de operación especial KD.' },
+  { name: 'Tipo Cliente', type: 'texto', required: true, destination: 'tipo_cliente', description: 'Clasificación comercial del cliente.' },
+  { name: 'Nombre Comercial', type: 'texto', required: true, destination: 'comercial_cliente', description: 'Comercial asignado a la ficha del cliente.' },
+  { name: 'Comercial Factura', type: 'texto', required: true, destination: 'comercial_factura', description: 'Comercial que realiza la venta.' },
 ];
 
 const ColumnTable = () => (
@@ -95,7 +101,7 @@ export const DataImportGuide = () => (
           <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-500" />
           <div>
             <p className="text-sm font-semibold text-slate-900 dark:text-white">Actualización idempotente</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Repetir un SKU y fecha actualiza esa combinación sin duplicarla.</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Repetir una combinación de fecha, artículo, cliente, KD y comercial actualiza el total sin duplicarlo.</p>
           </div>
         </div>
       </div>
@@ -109,7 +115,7 @@ export const DataImportGuide = () => (
       <ColumnTable />
       <div className="mt-3 flex items-start gap-2 border-l-2 border-brand-blue dark:border-brand-cyan bg-brand-blue/5 dark:bg-brand-cyan/5 px-3 py-2 text-sm text-slate-700 dark:text-slate-300">
         <Info size={17} className="mt-0.5 shrink-0 text-brand-blue dark:text-brand-cyan" />
-        El catálogo se crea y actualiza automáticamente usando ArticuloPK como SKU. No necesitas cargar costes, precios ni inventario para comenzar.
+        El catálogo y los clientes se crean y actualizan automáticamente usando ArticuloPK y ClientePK como claves estables.
       </div>
     </section>
 
@@ -127,10 +133,10 @@ export const DataImportGuide = () => (
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Primera carga y cargas diarias</h2>
         <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />En la primera carga, activa “Sustituir los datos actuales” para retirar la demo.</li>
+          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />En esta primera carga con clientes, activa “Sustituir los datos actuales” para eliminar las ventas y clientes anteriores.</li>
           <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Valida siempre el archivo antes de habilitar la carga.</li>
           <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Puedes subir todo el periodo fiscal o solo las fechas actualizadas.</li>
-          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Solo se sustituyen las combinaciones ArticuloPK + Fecha incluidas en el archivo.</li>
+          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />En cargas incrementales se actualiza Fecha + ArticuloPK + ClientePK + KD + Comercial Factura.</li>
         </ul>
       </div>
     </section>

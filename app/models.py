@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Date, DateTime
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Date, DateTime, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
@@ -21,6 +21,20 @@ class Usuario(Base):
     rol = Column(String, default="user")
 
     empresa = relationship("Empresa")
+
+
+class Cliente(Base):
+    __tablename__ = "clientes"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "cliente_pk", name="uq_clientes_empresa_cliente_pk"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    cliente_pk = Column(String(120), nullable=False, index=True)
+    nombre = Column(String(255), nullable=False)
+    tipo_cliente = Column(String(120), nullable=True)
+    comercial_cliente = Column(String(255), nullable=True)
 
 class Producto(Base):
     __tablename__ = "productos"
@@ -66,6 +80,7 @@ class VentaHistorica(Base):
     __tablename__ = "ventas_historicas"
     id = Column(Integer, primary_key=True, index=True)
     producto_id = Column(Integer, ForeignKey("productos.id"))
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
     fecha_venta = Column(Date, nullable=False)
     cantidad_vendida = Column(Integer, nullable=False)
     precio_unitario = Column(Float, nullable=False)
@@ -74,7 +89,11 @@ class VentaHistorica(Base):
     margen_bruto_pct = Column(Float, nullable=True)
     margen_destino_eur = Column(Float, nullable=False, default=0.0)
     margen_destino_pct = Column(Float, nullable=True)
+    kd = Column(String(120), nullable=True)
+    comercial_factura = Column(String(255), nullable=True)
     stock_disponible = Column(Integer, nullable=False, default=0)
+
+    cliente = relationship("Cliente")
 
 class CopilotChat(Base):
     __tablename__ = "copilot_chats"

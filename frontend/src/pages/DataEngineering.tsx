@@ -38,8 +38,8 @@ const DATASETS: Array<{
     id: 'sales',
     step: 1,
     title: 'fivemin_ventas',
-    description: 'Fuente principal. Crea el catálogo y carga las ventas por SKU y fecha.',
-    required: ['Fecha', 'Ventas', 'Unidades Venta', '% MG', 'Margen', '% MGD', 'MGD', 'Nombre Articulo', 'ArticuloPK', 'Nombre Marca', 'Familia/Marca', 'Nombre Familia', 'Nombre Seccion', 'EAN', 'Product Manager'],
+    description: 'Fuente principal. Crea el catálogo, los clientes y las ventas agregadas.',
+    required: ['Fecha', 'Ventas', 'Unidades Venta', '% MG', 'Margen', '% MGD', 'MGD', 'Nombre Articulo', 'ArticuloPK', 'Nombre Marca', 'Familia/Marca', 'Nombre Familia', 'Nombre Seccion', 'EAN', 'Product Manager', 'ClientePK', 'Nombre Cliente', 'KD', 'Tipo Cliente', 'Nombre Comercial', 'Comercial Factura'],
     optional: [],
   },
   {
@@ -223,7 +223,7 @@ export const DataEngineering = () => {
       </div>
 
       <section className="border-y border-slate-200 dark:border-slate-800 py-4">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Productos</p>
             <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.products)}</p>
@@ -231,6 +231,10 @@ export const DataEngineering = () => {
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">SKUs con inventario</p>
             <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.inventory_records)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Clientes</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.clients)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Registros diarios de venta</p>
@@ -313,7 +317,7 @@ export const DataEngineering = () => {
           {dataset === 'sales' && (
             <section className="mb-5 border border-brand-blue/20 bg-brand-blue/5 p-4 dark:border-brand-cyan/25 dark:bg-brand-cyan/5" aria-label="Alcance de la carga de ventas">
               <p className="text-sm font-semibold text-slate-900 dark:text-white">¿Qué ventas vas a incorporar?</p>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Ambas cargas usan <code>fivemin_ventas</code> y se guardan por SKU y fecha. No hace falta crear otra fuente ni otra tabla.</p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Ambas cargas usan <code>fivemin_ventas</code> y se agregan por fecha, artículo, cliente, KD y comercial de factura.</p>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <button
                   type="button"
@@ -401,7 +405,9 @@ export const DataEngineering = () => {
                   Sustituir los datos actuales
                 </label>
                 <span id="replace-existing-description" className="block text-xs text-amber-700 dark:text-amber-400">
-                  Elimina productos, stock, ventas y métricas de esta empresa. Actívalo solo en la primera carga real para retirar la demo.
+                  {dataset === 'sales'
+                    ? 'Elimina todas las ventas y clientes anteriores antes de cargar este fichero completo. Conserva el catálogo y el inventario.'
+                    : 'Elimina productos, stock, ventas y métricas de esta empresa. Actívalo solo para una sustitución completa.'}
                 </span>
               </span>
             </div>
@@ -512,6 +518,11 @@ export const DataEngineering = () => {
               {dataset === 'sales' && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                   Catálogo: {formatNumber(result.products_created)} SKU creados · {formatNumber(result.products_updated)} actualizados.
+                </p>
+              )}
+              {dataset === 'sales' && (
+                <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
+                  Clientes: {formatNumber(result.clients_created)} creados · {formatNumber(result.clients_updated)} actualizados.
                 </p>
               )}
               {dataset === 'sales' && salesImportScope === 'fiscal_anterior' && (

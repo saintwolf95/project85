@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext } from '../services/api';
-import type { AgentSettings, AgentInsight, AgentChatMessage } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, Code2, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save } from 'lucide-react';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness } from '../services/api';
+import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness } from '../services/api';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
@@ -11,7 +11,9 @@ interface AgentInfo {
   role: string;
   model: string;
   color: string;
-  formula: string;
+  purpose: string;
+  calculations: string[];
+  prompts: string[];
 }
 
 const AGENTS_INFO: Record<string, AgentInfo> = {
@@ -21,7 +23,9 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     role: 'Inventario',
     model: 'GPT-4o',
     color: 'emerald',
-    formula: `**IA Cognitiva + Tool Calling:** María recibe las alertas logísticas y luego consulta SQL activamente para generar su informe.`
+    purpose: 'Protege la disponibilidad y detecta riesgo de rotura, exceso y capital inmovilizado.',
+    calculations: ['Stock y valor de inventario', 'Cobertura y roturas por clase ABC', 'Demanda de 30 y 90 días'],
+    prompts: ['¿Qué productos requieren atención de inventario?', 'Relaciona la demanda de 30 días con el stock disponible.']
   },
   lucia: {
     id: 'lucia',
@@ -29,7 +33,9 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     role: 'Ventas',
     model: 'GPT-4o',
     color: 'blue',
-    formula: `**IA Cognitiva + Tool Calling:** Lucía lee alertas comerciales, revisa los márgenes dinámicamente vía SQL y sugiere estrategias de promoción.`
+    purpose: 'Explica el rendimiento comercial y encuentra oportunidades por producto, cliente y equipo.',
+    calculations: ['Ventas 30 y 90 días y variación', 'Clientes activos y concentración Top 10', 'Familias, KD y comerciales'],
+    prompts: ['Compara las ventas de los últimos 30 días con el periodo anterior.', '¿Qué clientes y familias explican mejor las ventas recientes?']
   },
   mattia: {
     id: 'mattia',
@@ -37,22 +43,25 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     role: 'Finanzas',
     model: 'GPT-4o',
     color: 'violet',
-    formula: `**IA Cognitiva + Tool Calling:** Mattia escanea márgenes negativos, investiga costos en vivo vía SQL y expone la salud financiera del inventario.`
+    purpose: 'Vigila rentabilidad, calidad del margen y exposición económica del negocio.',
+    calculations: ['MG y MGD ponderados', 'Margen negativo o estrecho', 'Concentración y capital inmovilizado'],
+    prompts: ['Resume MG y MGD de los últimos 30 días.', 'Detecta productos o clientes con rentabilidad débil.']
   }
 };
 
 const EXECUTION_STAGES = [
-  { phase: 1, msg: '⚡ Iniciando agentes de área...', agent: null },
-  { phase: 1, msg: '📦 María analizando el inventario...', agent: 'maria' },
-  { phase: 1, msg: '📈 Lucía revisando ventas y márgenes...', agent: 'lucia' },
-  { phase: 1, msg: '💰 Mattia calculando la salud financiera...', agent: 'mattia' },
-  { phase: 2, msg: '🧠 CEO consolidando el informe ejecutivo...', agent: 'ceo' },
-  { phase: 2, msg: '✅ Guardando resultados...', agent: null },
+  { phase: 1, msg: 'Preparando métricas verificadas...', agent: null },
+  { phase: 1, msg: 'María analizando disponibilidad...', agent: 'maria' },
+  { phase: 1, msg: 'Lucía analizando ventas y clientes...', agent: 'lucia' },
+  { phase: 1, msg: 'Mattia evaluando la rentabilidad...', agent: 'mattia' },
+  { phase: 2, msg: 'Consolidando el informe ejecutivo...', agent: 'ceo' },
+  { phase: 2, msg: 'Guardando resultados...', agent: null },
 ];
 
 export const AiControlPanel = () => {
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
   const [insightsHistory, setInsightsHistory] = useState<AgentInsight[]>([]);
+  const [dataReadiness, setDataReadiness] = useState<AgentDataReadiness | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [runStage, setRunStage] = useState(0);
@@ -65,6 +74,7 @@ export const AiControlPanel = () => {
   // Chat States
   const [agentChatHistory, setAgentChatHistory] = useState<AgentChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatSuggestions, setChatSuggestions] = useState<string[]>([]);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -76,6 +86,7 @@ export const AiControlPanel = () => {
   useEffect(() => {
     if (selectedAgent) {
       setAgentChatHistory([]);
+      setChatSuggestions(AGENTS_INFO[selectedAgent]?.prompts || []);
       setIsChatLoading(true);
       getAgentChat(selectedAgent)
         .then(data => setAgentChatHistory(data))
@@ -99,8 +110,9 @@ export const AiControlPanel = () => {
     try {
       const response = await sendAgentMessage(selectedAgent, updatedHistory);
       setAgentChatHistory([...updatedHistory, { role: 'assistant', content: response.reply }]);
+      setChatSuggestions(response.suggestions || []);
     } catch {
-      setAgentChatHistory([...updatedHistory, { role: 'assistant', content: '⚠️ Error al conectar con el agente. Inténtalo de nuevo.' }]);
+      setAgentChatHistory([...updatedHistory, { role: 'assistant', content: 'No se pudo conectar con el agente. Inténtalo de nuevo.' }]);
     } finally {
       setIsChatLoading(false);
     }
@@ -108,9 +120,10 @@ export const AiControlPanel = () => {
 
   const refreshData = async () => {
     try {
-      const [settingsData, insightsData] = await Promise.all([getAgentSettings(), getAllAgentInsights()]);
+      const [settingsData, insightsData, readinessData] = await Promise.all([getAgentSettings(), getAllAgentInsights(), getAgentDataReadiness()]);
       setSettings(settingsData);
       setInsightsHistory(insightsData);
+      setDataReadiness(readinessData);
       if (insightsData.length > 0 && !expandedRowId) setExpandedRowId(insightsData[0].id);
     } catch (e) {
       console.error(e);
@@ -140,7 +153,9 @@ export const AiControlPanel = () => {
     setRunStage(0);
 
     // Simular progreso por etapas
-    const stagesFiltered = EXECUTION_STAGES.filter(s => s.phase === 1 || settings.fase2_active);
+    const stagesFiltered = EXECUTION_STAGES.filter(s =>
+      (s.phase === 1 && settings.fase1_active) || (s.phase === 2 && settings.fase2_active)
+    );
     let stageIdx = 0;
     const stageTimer = setInterval(() => {
       stageIdx = Math.min(stageIdx + 1, stagesFiltered.length - 1);
@@ -247,6 +262,39 @@ export const AiControlPanel = () => {
             </button>
           </div>
 
+          {dataReadiness && (
+            <div className="mt-4 border-y border-slate-200 dark:border-slate-800 py-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="flex items-center gap-3">
+                  <Database size={18} className="text-blue-500 shrink-0" />
+                  <div><p className="text-xs text-slate-500">Ventas</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.registros_ventas.toLocaleString('es-ES')} registros</p></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Users size={18} className="text-emerald-500 shrink-0" />
+                  <div><p className="text-xs text-slate-500">Clientes</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.clientes_con_ventas.toLocaleString('es-ES')} con ventas</p></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <PackageCheck size={18} className={dataReadiness.inventario_disponible ? 'text-emerald-500 shrink-0' : 'text-amber-500 shrink-0'} />
+                  <div><p className="text-xs text-slate-500">Inventario</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.inventario_disponible ? `${dataReadiness.productos_con_inventario.toLocaleString('es-ES')} productos` : 'Pendiente de carga'}</p></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <ShoppingCart size={18} className="text-amber-500 shrink-0" />
+                  <div><p className="text-xs text-slate-500">Compras</p><p className="text-sm font-semibold text-slate-800 dark:text-white">Pendiente de conexión</p></div>
+                </div>
+              </div>
+              {dataReadiness.fecha_minima && dataReadiness.fecha_maxima && (
+                <div className="mt-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4 text-xs text-slate-500">
+                  <p>Cobertura: {new Date(`${dataReadiness.fecha_minima}T00:00:00`).toLocaleDateString('es-ES')} a {new Date(`${dataReadiness.fecha_maxima}T00:00:00`).toLocaleDateString('es-ES')}. Periodos móviles anclados a la última fecha.</p>
+                  <span className="hidden md:block text-slate-300 dark:text-slate-700">|</span>
+                  <p className={dataReadiness.completitud_dimensiones_pct >= 98 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>
+                    Calidad dimensional: {dataReadiness.completitud_dimensiones_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%
+                  </p>
+                  {dataReadiness.ventas_negativas > 0 && <p className="text-amber-600 dark:text-amber-400">{dataReadiness.ventas_negativas.toLocaleString('es-ES')} registros con venta negativa</p>}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Barra de estado global */}
           <div className={`mt-4 flex items-center gap-4 px-4 py-3 rounded-xl border text-sm ${
             latestInsight
@@ -334,6 +382,7 @@ export const AiControlPanel = () => {
                     </div>
                   </div>
                   <p className="text-xs opacity-70 mb-3">Área: {info.role} · {info.model}</p>
+                  <p className="text-sm leading-5 min-h-[60px] text-slate-700 dark:text-slate-300">{info.purpose}</p>
                   <div className="relative mt-3 h-32 flex justify-center items-center">
                     <img
                       src={settings.fase1_active ? `/assets/agents/${agentId}_work.png` : `/assets/agents/${agentId}_sleep.png`}
@@ -351,7 +400,7 @@ export const AiControlPanel = () => {
                       {settings.fase1_active ? 'ACTIVO' : 'EN ESPERA'}
                     </span>
                   </div>
-                  <p className="text-[11px] mt-3 text-center opacity-60">Haz clic para chatear</p>
+                  <p className="text-[11px] mt-3 text-center opacity-60">Abrir expediente y chat</p>
                 </div>
               );
             })}
@@ -512,13 +561,24 @@ export const AiControlPanel = () => {
                 </div>
               )}
 
-              {/* Arquitectura */}
-              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shrink-0">
+              {/* Capacidades verificadas */}
+              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-lg p-4 border border-slate-200 dark:border-slate-700 shrink-0">
                 <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Code2 size={14} className="text-brand-blue dark:text-brand-cyan" /> Arquitectura Cognitiva
+                  <Calculator size={14} className="text-brand-blue dark:text-brand-cyan" /> Qué analiza y calcula
                 </h3>
-                <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400">
-                  <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{AGENTS_INFO[selectedAgent].formula}</ReactMarkdown>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{AGENTS_INFO[selectedAgent].purpose}</p>
+                <div className="grid sm:grid-cols-3 gap-2">
+                  {AGENTS_INFO[selectedAgent].calculations.map(calculation => (
+                    <div key={calculation} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2"><CheckCircle size={13} className="text-emerald-500 mt-0.5 shrink-0" />{calculation}</div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2"><Sparkles size={13} /> Preguntas recomendadas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {AGENTS_INFO[selectedAgent].prompts.map(prompt => (
+                      <button key={prompt} type="button" onClick={() => setChatInput(prompt)} className="text-left text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-brand-blue dark:hover:border-brand-cyan transition-colors">{prompt}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -552,19 +612,35 @@ export const AiControlPanel = () => {
                       </div>
                     </div>
                   )}
+                  {!isChatLoading && chatSuggestions.length > 0 && agentChatHistory.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {chatSuggestions.map(suggestion => (
+                        <button key={suggestion} type="button" onClick={() => setChatInput(suggestion)} className="text-left text-xs px-3 py-2 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 text-brand-blue dark:text-brand-cyan hover:bg-brand-blue/5 dark:hover:bg-brand-cyan/10 transition-colors">
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div ref={chatEndRef} />
                 </div>
 
                 <form onSubmit={handleSendAgentMessage} className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex gap-2 shrink-0">
-                  <input
-                    type="text"
+                  <textarea
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendAgentMessage();
+                      }
+                    }}
                     placeholder={`Pregúntale a ${AGENTS_INFO[selectedAgent].name} sobre ${AGENTS_INFO[selectedAgent].role.toLowerCase()}...`}
-                    className="flex-1 bg-slate-100 dark:bg-slate-900 border-none rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                    maxLength={2000}
+                    rows={2}
+                    className="flex-1 min-h-[44px] max-h-28 resize-y bg-slate-100 dark:bg-slate-900 border-none rounded-lg px-4 py-2 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
                     disabled={isChatLoading}
                   />
-                  <button type="submit" disabled={!chatInput.trim() || isChatLoading} className="p-2 bg-brand-blue dark:bg-brand-cyan text-white rounded-xl hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors">
+                  <button type="submit" title="Enviar mensaje" aria-label="Enviar mensaje" disabled={!chatInput.trim() || isChatLoading} className="self-end p-3 bg-brand-blue dark:bg-brand-cyan text-white rounded-lg hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors">
                     <Send size={18} />
                   </button>
                 </form>

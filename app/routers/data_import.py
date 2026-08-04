@@ -18,6 +18,7 @@ from ..api.deps import get_current_active_admin
 from ..core.rate_limit import limiter
 from ..database import get_db
 from ..models import (
+    Cliente,
     EmpresaEstadisticas,
     InventarioSnapshot,
     Producto,
@@ -128,6 +129,12 @@ DATASET_CONFIG = {
             "seccion",
             "ean",
             "product_manager",
+            "cliente_pk",
+            "nombre_cliente",
+            "kd",
+            "tipo_cliente",
+            "comercial_cliente",
+            "comercial_factura",
         },
         "headers": [
             "Fecha",
@@ -145,6 +152,12 @@ DATASET_CONFIG = {
             "Nombre Seccion",
             "EAN",
             "Product Manager",
+            "ClientePK",
+            "Nombre Cliente",
+            "KD",
+            "Tipo Cliente",
+            "Nombre Comercial",
+            "Comercial Factura",
         ],
         "sample": [
             "01/05/2026",
@@ -162,6 +175,12 @@ DATASET_CONFIG = {
             "Telefonia",
             "8430000000001",
             "Responsable",
+            "CLI-001",
+            "Cliente de ejemplo",
+            "NO",
+            "Distribuidor",
+            "Comercial asignado",
+            "Comercial de la venta",
         ],
         "canonical_headers": {
             "fecha_venta",
@@ -181,6 +200,12 @@ DATASET_CONFIG = {
             "product_manager",
             "precio_unitario",
             "stock_disponible",
+            "cliente_pk",
+            "nombre_cliente",
+            "kd",
+            "tipo_cliente",
+            "comercial_cliente",
+            "comercial_factura",
         },
         "aliases": {
             "fecha": "fecha_venta",
@@ -218,6 +243,14 @@ DATASET_CONFIG = {
             "nombre_seccion": "seccion",
             "stock": "stock_disponible",
             "stock_actual": "stock_disponible",
+            "cliente": "cliente_pk",
+            "clientepk": "cliente_pk",
+            "codigo_cliente": "cliente_pk",
+            "nombre_cliente": "nombre_cliente",
+            "tipo_cliente": "tipo_cliente",
+            "nombre_comercial": "comercial_cliente",
+            "comercial_cliente": "comercial_cliente",
+            "comercial_factura": "comercial_factura",
         },
     },
 }
@@ -559,6 +592,12 @@ def _validate_rows(
                     "seccion": _optional_text(row.get("seccion"), "Nombre Seccion"),
                     "ean": _optional_text(row.get("ean"), "EAN", 80),
                     "product_manager": _optional_text(row.get("product_manager"), "Product Manager"),
+                    "cliente_pk": _required_text(row.get("cliente_pk"), "ClientePK", 120),
+                    "nombre_cliente": _required_text(row.get("nombre_cliente"), "Nombre Cliente", 255),
+                    "kd": (_optional_text(row.get("kd"), "KD", 120) or "NO").upper(),
+                    "tipo_cliente": _optional_text(row.get("tipo_cliente"), "Tipo Cliente", 120),
+                    "comercial_cliente": _optional_text(row.get("comercial_cliente"), "Nombre Comercial", 255),
+                    "comercial_factura": _optional_text(row.get("comercial_factura"), "Comercial Factura", 255),
                     "stock_disponible": stock,
                 })
         except ValueError as exc:
@@ -598,6 +637,11 @@ def _company_products(db: Session, empresa_id: int) -> dict[str, Producto]:
     return {product.sku.casefold(): product for product in products}
 
 
+def _company_clients(db: Session, empresa_id: int) -> dict[str, Cliente]:
+    clients = db.query(Cliente).filter(Cliente.empresa_id == empresa_id).all()
+    return {client.cliente_pk.casefold(): client for client in clients}
+
+
 def _clear_company_operational_data(db: Session, empresa_id: int) -> None:
     product_ids = [
         product_id
@@ -609,7 +653,26 @@ def _clear_company_operational_data(db: Session, empresa_id: int) -> None:
         db.query(ProductoMetricas).filter(ProductoMetricas.producto_id.in_(product_ids)).delete(synchronize_session=False)
         db.query(InventarioSnapshot).filter(InventarioSnapshot.producto_id.in_(product_ids)).delete(synchronize_session=False)
         db.query(Producto).filter(Producto.id.in_(product_ids)).delete(synchronize_session=False)
+    db.query(Cliente).filter(Cliente.empresa_id == empresa_id).delete(synchronize_session=False)
     db.query(EmpresaEstadisticas).filter(EmpresaEstadisticas.empresa_id == empresa_id).delete(synchronize_session=False)
+
+
+def _clear_company_sales_data(db: Session, empresa_id: int) -> None:
+    product_ids = [
+        product_id
+        for (product_id,) in db.query(Producto.id).filter(Producto.empresa_id == empresa_id).all()
+    ]
+    if product_ids:
+        db.query(VentaHistorica).filter(
+            VentaHistorica.producto_id.in_(product_ids)
+        ).delete(synchronize_session=False)
+        db.query(ProductoMetricas).filter(
+            ProductoMetricas.producto_id.in_(product_ids)
+        ).delete(synchronize_session=False)
+    db.query(Cliente).filter(Cliente.empresa_id == empresa_id).delete(synchronize_session=False)
+    db.query(EmpresaEstadisticas).filter(
+        EmpresaEstadisticas.empresa_id == empresa_id
+    ).delete(synchronize_session=False)
 
 
 def _refresh_metrics(db: Session, empresa_id: int) -> None:
@@ -625,13 +688,26 @@ def _ensure_sales_schema(db: Session) -> None:
         "margen_bruto_pct",
         "margen_destino_eur",
         "margen_destino_pct",
+        "cliente_id",
+        "kd",
+        "comercial_factura",
     }
+    required_client_columns = {"empresa_id", "cliente_pk", "nombre", "tipo_cliente", "comercial_cliente"}
+    table_names = set(inspect(db.bind).get_table_names())
     sales_columns = {column["name"] for column in inspect(db.bind).get_columns("ventas_historicas")}
     product_columns = {column["name"] for column in inspect(db.bind).get_columns("productos")}
-    if required_columns - sales_columns or "familia_marca" not in product_columns:
+    client_columns = (
+        {column["name"] for column in inspect(db.bind).get_columns("clientes")}
+        if "clientes" in table_names else set()
+    )
+    if (
+        required_columns - sales_columns
+        or required_client_columns - client_columns
+        or "familia_marca" not in product_columns
+    ):
         raise HTTPException(
             status_code=503,
-            detail="La base de datos necesita la migracion V1.02 antes de cargar fivemin_ventas.",
+            detail="La base de datos necesita las migraciones V1.02 y V1.10 antes de cargar fivemin_ventas.",
         )
 
 
@@ -697,6 +773,8 @@ async def load_import(
         updated = 0
         products_created = 0
         products_updated = 0
+        clients_created = 0
+        clients_updated = 0
 
         if dataset == "products":
             if replace_existing:
@@ -740,10 +818,12 @@ async def load_import(
 
         else:
             if replace_existing:
-                _clear_company_operational_data(db, empresa_id)
+                _clear_company_sales_data(db, empresa_id)
                 db.flush()
             products = _company_products(db, empresa_id)
+            clients = _company_clients(db, empresa_id)
             latest_product_rows: dict[str, dict[str, Any]] = {}
+            latest_client_rows: dict[str, dict[str, Any]] = {}
             product_totals: dict[str, dict[str, Any]] = {}
             for row in valid_rows:
                 product_key = row["sku"].casefold()
@@ -758,6 +838,10 @@ async def load_import(
                 totals["unidades"] += row["cantidad_vendida"]
                 totals["margen"] += row["margen_bruto_eur"]
                 totals["margen_informado"] = totals["margen_informado"] or row["margen_bruto_informado"]
+                client_key = row["cliente_pk"].casefold()
+                previous_client = latest_client_rows.get(client_key)
+                if previous_client is None or row["fecha_venta"] >= previous_client["fecha_venta"]:
+                    latest_client_rows[client_key] = row
 
             for product_key, row in latest_product_rows.items():
                 product = products.get(product_key)
@@ -804,19 +888,49 @@ async def load_import(
                     products_updated += 1
             db.flush()
 
+            for client_key, row in latest_client_rows.items():
+                client = clients.get(client_key)
+                client_fields = {
+                    "nombre": row["nombre_cliente"],
+                    "tipo_cliente": row["tipo_cliente"],
+                    "comercial_cliente": row["comercial_cliente"],
+                }
+                if client is None:
+                    client = Cliente(
+                        empresa_id=empresa_id,
+                        cliente_pk=row["cliente_pk"],
+                        **client_fields,
+                    )
+                    db.add(client)
+                    clients[client_key] = client
+                    clients_created += 1
+                else:
+                    client.nombre = row["nombre_cliente"]
+                    for field, value in client_fields.items():
+                        if field != "nombre" and value is not None:
+                            setattr(client, field, value)
+                    clients_updated += 1
+            db.flush()
+
             inventory_by_product = {
                 snapshot.producto_id: snapshot.stock_disponible
                 for snapshot in db.query(InventarioSnapshot).join(Producto).filter(
                     Producto.empresa_id == empresa_id
                 ).all()
             }
-            aggregated: dict[tuple[int, date], dict[str, Any]] = {}
+            aggregated: dict[tuple[int, date, int, str, str], dict[str, Any]] = {}
             for row in valid_rows:
                 product = products[row["sku"].casefold()]
-                key = (product.id, row["fecha_venta"])
+                client = clients[row["cliente_pk"].casefold()]
+                kd = row["kd"] or "NO"
+                comercial_factura = row["comercial_factura"] or ""
+                key = (product.id, row["fecha_venta"], client.id, kd.casefold(), comercial_factura.casefold())
                 item = aggregated.setdefault(key, {
                     "producto_id": product.id,
+                    "cliente_id": client.id,
                     "fecha_venta": row["fecha_venta"],
+                    "kd": kd,
+                    "comercial_factura": row["comercial_factura"],
                     "cantidad_vendida": 0,
                     "ingreso_total": 0.0,
                     "margen_bruto_eur": 0.0,
@@ -841,13 +955,31 @@ async def load_import(
                 ).delete(synchronize_session=False)
             else:
                 product_ids_by_date: dict[date, set[int]] = {}
-                for product_id, sale_date in aggregated:
+                for product_id, sale_date, _client_id, _kd, _comercial in aggregated:
                     product_ids_by_date.setdefault(sale_date, set()).add(product_id)
+                incoming_keys = set(aggregated)
                 for sale_date, product_ids in product_ids_by_date.items():
-                    db.query(VentaHistorica).filter(
+                    existing_rows = db.query(VentaHistorica).filter(
                         VentaHistorica.producto_id.in_(product_ids),
                         VentaHistorica.fecha_venta == sale_date,
-                    ).delete(synchronize_session=False)
+                    ).all()
+                    ids_to_delete = [
+                        existing.id
+                        for existing in existing_rows
+                        if existing.cliente_id is None
+                        or (
+                            existing.producto_id,
+                            existing.fecha_venta,
+                            existing.cliente_id,
+                            (existing.kd or "NO").casefold(),
+                            (existing.comercial_factura or "").casefold(),
+                        ) in incoming_keys
+                    ]
+                    if ids_to_delete:
+                        db.query(VentaHistorica).filter(
+                            VentaHistorica.id.in_(ids_to_delete)
+                        ).delete(synchronize_session=False)
+                        updated += len(ids_to_delete)
 
             records = []
             for item in aggregated.values():
@@ -872,7 +1004,7 @@ async def load_import(
                 records.append(item)
             db.bulk_insert_mappings(VentaHistorica, records)
             affected = len(records)
-            created = len(records)
+            created = max(0, len(records) - updated)
 
         db.flush()
         _refresh_metrics(db, empresa_id)
@@ -885,6 +1017,8 @@ async def load_import(
             "updated": updated,
             "products_created": products_created,
             "products_updated": products_updated,
+            "clients_created": clients_created,
+            "clients_updated": clients_updated,
             "replace_existing": replace_existing,
             "sales_mode": sales_mode,
         }
@@ -907,6 +1041,7 @@ def import_status(
     inventory_count = db.query(func.count(InventarioSnapshot.producto_id)).join(Producto).filter(
         Producto.empresa_id == empresa_id
     ).scalar() or 0
+    client_count = db.query(func.count(Cliente.id)).filter(Cliente.empresa_id == empresa_id).scalar() or 0
     sales_summary = db.query(
         func.count(VentaHistorica.id),
         func.min(VentaHistorica.fecha_venta),
@@ -915,6 +1050,7 @@ def import_status(
     return {
         "products": int(product_count),
         "inventory_records": int(inventory_count),
+        "clients": int(client_count),
         "sales_records": int(sales_summary[0] or 0),
         "sales_date_min": sales_summary[1].isoformat() if sales_summary[1] else None,
         "sales_date_max": sales_summary[2].isoformat() if sales_summary[2] else None,

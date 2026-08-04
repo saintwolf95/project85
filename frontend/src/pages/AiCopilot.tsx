@@ -80,6 +80,7 @@ const METRIC_LABELS: Record<string, string> = {
   variacion_pct: 'Variación %',
   variacion_pp: 'Variación p.p.',
   productos: 'Productos',
+  clientes: 'Clientes',
   productos_alerta: 'Productos en alerta',
   productos_sobrestock: 'Productos con sobrestock',
 };

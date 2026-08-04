@@ -1,6 +1,6 @@
 import unittest
 
-from app.copilot_orchestrator import analizar_intencion
+from app.copilot_orchestrator import analizar_intencion, crear_consulta_semantica
 
 
 CASOS_EVALUACION = (
@@ -44,12 +44,17 @@ CASOS_EVALUACION = (
     ("Ventas de la familia 'Redes' ultimos 30 dias", "ventas", "ventas_eur", "ultimos_30_dias", None, False, "familia"),
     ("Compara las ventas ultimos 7 dias", "ventas", "ventas_eur", "ultimos_7_dias", None, True, None),
     ("Que periodo quieres analizar", None, None, None, None, None, None),
+    ("Ventas de este mes por cliente", "ventas", "ventas_eur", "mes_actual", "cliente", False, None),
+    ("Ventas de este mes por tipo de cliente", "ventas", "ventas_eur", "mes_actual", "tipo_cliente", False, None),
+    ("Margen de este mes por comercial asignado", "rentabilidad", "margen_eur", "mes_actual", "comercial_cliente", False, None),
+    ("MGD de este mes por comercial de factura", "rentabilidad", "mgd_eur", "mes_actual", "comercial_factura", False, None),
+    ("Ventas de este mes por KD", "ventas", "ventas_eur", "mes_actual", "kd", False, None),
 )
 
 
 class EvaluacionCopilotTests(unittest.TestCase):
     def test_cuarenta_consultas_gerenciales_y_operativas(self):
-        self.assertEqual(len(CASOS_EVALUACION), 40)
+        self.assertEqual(len(CASOS_EVALUACION), 45)
         for texto, tipo, medida, periodo, agrupacion, comparacion, expectativa in CASOS_EVALUACION:
             with self.subTest(texto=texto):
                 intento, aclaracion = analizar_intencion([{"role": "user", "content": texto}])
@@ -82,6 +87,19 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIsNotNone(intento)
         self.assertEqual(intento.periodo, "anio_fiscal")
         self.assertEqual(intento.agrupacion, "familia")
+
+    def test_consulta_por_cliente_usa_dimension_y_filtro_de_empresa(self):
+        intento, aclaracion = analizar_intencion([{
+            "role": "user",
+            "content": "Ventas de este mes por tipo de cliente",
+        }])
+
+        self.assertIsNone(aclaracion)
+        consulta, parametros = crear_consulta_semantica(intento)
+        self.assertIn("LEFT JOIN clientes c ON c.id = vh.cliente_id", consulta)
+        self.assertIn("p.empresa_id = :empresa_id", consulta)
+        self.assertIn("c.tipo_cliente", consulta)
+        self.assertIn("fecha_inicio", parametros)
 
 
 if __name__ == "__main__":

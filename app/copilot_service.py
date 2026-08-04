@@ -232,6 +232,7 @@ Tabla `inventario_snapshot` (alias recomendado: inv):
 Tabla `ventas_historicas` (alias recomendado: vh):
 - id (INTEGER, Primary Key)
 - producto_id (INTEGER, FK a productos.id)
+- cliente_id (INTEGER, FK a clientes.id)
 - fecha_venta (DATE) -- fecha de la venta (formato YYYY-MM-DD)
 - cantidad_vendida (INTEGER) -- unidades vendidas
 - precio_unitario (FLOAT) -- Ventas / Unidades Venta
@@ -240,6 +241,16 @@ Tabla `ventas_historicas` (alias recomendado: vh):
 - margen_bruto_pct (FLOAT) -- columna % MG
 - margen_destino_eur (FLOAT) -- columna MGD: margen puesto en destino en euros
 - margen_destino_pct (FLOAT) -- columna % MGD
+- kd (VARCHAR) -- tipo o indicador de operación especial KD
+- comercial_factura (VARCHAR) -- comercial que realiza la venta
+
+Tabla `clientes` (alias recomendado: c):
+- id (INTEGER, Primary Key)
+- empresa_id (INTEGER) -- empresa propietaria del cliente
+- cliente_pk (VARCHAR) -- código interno estable del cliente
+- nombre (VARCHAR) -- Nombre Cliente
+- tipo_cliente (VARCHAR) -- clasificación comercial del cliente
+- comercial_cliente (VARCHAR) -- Nombre Comercial asignado en la ficha del cliente
 
 Tabla `registro_po` (alias recomendado: po):
 - id (INTEGER, Primary Key)
@@ -260,7 +271,9 @@ Tabla `producto_metricas` (alias recomendado: pm):
 DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - "ventas" significa euros facturados: SUM(vh.ingreso_total). No uses cantidad_vendida salvo que el usuario pida unidades.
 - "ventas 90 días" = SUM(vh.ingreso_total) con fecha_venta entre CURRENT_DATE - INTERVAL '89 days' y CURRENT_DATE, contando 90 fechas naturales.
-- La fuente oficial de ventas es la carga `fivemin_ventas`. Sus dimensiones de análisis son `p.familia`, `p.marca`, `p.familia_marca`, `p.seccion` y `p.product_manager`.
+- La fuente oficial de ventas es la carga `fivemin_ventas`. Sus dimensiones de análisis incluyen producto, familia, marca, sección, Product Manager, cliente, tipo de cliente, KD, comercial asignado y comercial de factura.
+- Para mostrar o buscar clientes, une `ventas_historicas vh` con `clientes c ON c.id = vh.cliente_id`. `ClientePK` es `c.cliente_pk` y `Nombre Cliente` es `c.nombre`.
+- "Nombre Comercial" o "comercial asignado" significa `c.comercial_cliente`; "Comercial Factura" significa `vh.comercial_factura`.
 - El año fiscal empieza el 1 de mayo. Para preguntas de "año fiscal" usa desde el 1 de mayo correspondiente hasta hoy, siempre en Europe/Madrid.
 - Si el resumen operativo indica una cobertura de datos, no inventes resultados fuera de esas fechas; explica con claridad la limitación.
 - "inventario" significa euros actuales: SUM(p.costo_unitario * inv.stock_disponible).
@@ -371,6 +384,7 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
     return sql_query.strip()
 
 ALLOWED_SQL_TABLES = {
+    "clientes",
     "productos",
     "inventario_snapshot",
     "ventas_historicas",
@@ -686,6 +700,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         usar_plan_analitico = (
             model_preference in {"thinking", "ultra_thinking"}
             and intento.tipo in {"ventas", "rentabilidad"}
+            and intento.agrupacion not in {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
             and (intento.comparacion or es_pregunta_gerencial(user_message))
         )
         if usar_plan_analitico:
@@ -773,7 +788,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             })
             retry_history.append({
                 "role": "user",
-                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, inventario_snapshot, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
+                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, clientes, inventario_snapshot, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
             })
             continue
         

@@ -151,13 +151,26 @@ class AnaliticaVentasTests(unittest.TestCase):
                 )
             """))
             conexion.execute(text("""
+                CREATE TABLE clientes (
+                    id INTEGER PRIMARY KEY,
+                    empresa_id INTEGER NOT NULL,
+                    cliente_pk TEXT,
+                    nombre TEXT,
+                    tipo_cliente TEXT,
+                    comercial_cliente TEXT
+                )
+            """))
+            conexion.execute(text("""
                 CREATE TABLE ventas_historicas (
                     producto_id INTEGER NOT NULL,
+                    cliente_id INTEGER,
                     fecha_venta DATE NOT NULL,
                     ingreso_total FLOAT NOT NULL,
                     cantidad_vendida INTEGER NOT NULL,
                     margen_bruto_eur FLOAT NOT NULL,
-                    margen_destino_eur FLOAT NOT NULL
+                    margen_destino_eur FLOAT NOT NULL,
+                    kd TEXT,
+                    comercial_factura TEXT
                 )
             """))
             conexion.execute(text("""

@@ -3,15 +3,17 @@ from sqlalchemy.orm import Session
 import logging
 from ..database import get_db
 from ..models import Usuario, AgentSettings, AgentInsights
-from ..api.deps import get_current_user
+from ..api.deps import get_current_user, get_current_active_admin
 from ..schemas import AgentInsightResponse
 from ..agents_service import execute_agents_workflow
+from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..core.rate_limit import limiter
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 MAX_AGENT_INSIGHTS_HISTORY = 100
 MAX_AGENT_CHAT_MESSAGES = 100
+MAX_AGENT_MODEL_MESSAGES = 20
 ALLOWED_AGENT_NAMES = {"maria", "maría", "lucia", "lucía", "mattia", "ceo"}
 
 def validate_agent_name(agent_name: str) -> str:
@@ -22,7 +24,7 @@ def validate_agent_name(agent_name: str) -> str:
 
 @router.post("/agents/run")
 @limiter.limit("2/minute")
-def run_agents(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def run_agents(request: Request, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
     try:
         settings = db.query(AgentSettings).filter(AgentSettings.empresa_id == current_user.empresa_id).first()
         if not settings:
@@ -43,6 +45,10 @@ def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Se
     if not insight:
         raise HTTPException(status_code=404, detail="No hay insights generados aún.")
     return insight
+
+@router.get("/agents/readiness")
+def get_agents_readiness(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    return build_company_data_readiness(db, current_user.empresa_id)
 
 from typing import List
 @router.get("/agents/insights/history", response_model=List[AgentInsightResponse])
@@ -88,6 +94,8 @@ def chat_with_agent(request: Request, agent_name: str, payload: AgentChatRequest
         db.refresh(chat)
 
     nuevo_mensaje = payload.history[-1]
+    if nuevo_mensaje.role != "user":
+        raise HTTPException(status_code=422, detail="El último mensaje debe ser del usuario")
     
     user_msg = AgentMessage(chat_id=chat.id, rol=nuevo_mensaje.role, contenido=nuevo_mensaje.content)
     db.add(user_msg)
@@ -95,14 +103,15 @@ def chat_with_agent(request: Request, agent_name: str, payload: AgentChatRequest
 
     mensajes_previos = db.query(AgentMessage).filter(
         AgentMessage.chat_id == chat.id
-    ).order_by(AgentMessage.creado_en.desc()).limit(MAX_AGENT_CHAT_MESSAGES).all()
+    ).order_by(AgentMessage.creado_en.desc()).limit(MAX_AGENT_MODEL_MESSAGES).all()
     mensajes_previos.reverse()
     history_dicts = [{"role": m.rol, "content": m.contenido} for m in mensajes_previos]
 
-    reply = process_agent_chat(db, current_user.empresa_id, agent_name, history_dicts)
+    dossier = build_agent_dossier(db, current_user.empresa_id, agent_name)
+    reply = process_agent_chat(db, current_user.empresa_id, agent_name, history_dicts, dossier=dossier)
 
     assistant_msg = AgentMessage(chat_id=chat.id, rol="assistant", contenido=reply)
     db.add(assistant_msg)
     db.commit()
 
-    return {"reply": reply}
+    return {"reply": reply, "suggestions": build_agent_followups(dossier, agent_name)}

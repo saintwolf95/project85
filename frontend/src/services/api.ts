@@ -106,6 +106,7 @@ export interface DataImportValidation {
 
 export interface DataImportStatus {
   products: number;
+  clients: number;
   inventory_records: number;
   sales_records: number;
   sales_date_min: string | null;
@@ -121,6 +122,8 @@ export interface DataImportResult {
   updated: number;
   products_created: number;
   products_updated: number;
+  clients_created: number;
+  clients_updated: number;
   replace_existing: boolean;
 }
 
@@ -380,6 +383,32 @@ export const runAgentAnalysis = async (): Promise<AgentInsight> => {
   return response.data;
 };
 
+export interface AgentDataReadiness {
+  registros_ventas: number;
+  productos_con_ventas: number;
+  clientes_con_ventas: number;
+  fecha_minima?: string;
+  fecha_maxima?: string;
+  ventas_sin_cliente: number;
+  ventas_sin_familia: number;
+  ventas_negativas: number;
+  productos_con_inventario: number;
+  unidades_stock: number;
+  inventario_eur: number;
+  productos_catalogo: number;
+  ventas_disponibles: boolean;
+  clientes_disponibles: boolean;
+  inventario_disponible: boolean;
+  compras_disponibles: boolean;
+  nota_compras: string;
+  completitud_dimensiones_pct: number;
+}
+
+export const getAgentDataReadiness = async (): Promise<AgentDataReadiness> => {
+  const response = await api.get('/agents/readiness');
+  return response.data;
+};
+
 // --- Agent Chat ---
 export interface AgentChatMessage {
   role: 'user' | 'assistant';
@@ -391,7 +420,7 @@ export const getAgentChat = async (agentName: string): Promise<AgentChatMessage[
   return response.data;
 };
 
-export const sendAgentMessage = async (agentName: string, history: AgentChatMessage[]): Promise<{ reply: string }> => {
+export const sendAgentMessage = async (agentName: string, history: AgentChatMessage[]): Promise<{ reply: string; suggestions?: string[] }> => {
   const response = await api.post(`/agents/${agentName}/chat`, { history });
   return response.data;
 };

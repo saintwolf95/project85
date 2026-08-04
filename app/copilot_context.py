@@ -54,6 +54,7 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
             SELECT
                 COUNT(vh.id) AS registros_ventas,
                 COUNT(DISTINCT vh.producto_id) AS productos_con_ventas,
+                COUNT(DISTINCT vh.cliente_id) AS clientes_con_ventas,
                 MIN(vh.fecha_venta) AS primera_fecha_venta,
                 MAX(vh.fecha_venta) AS ultima_fecha_venta,
                 COALESCE(SUM(vh.ingreso_total), 0) AS ventas_cargadas,
@@ -156,6 +157,7 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
                 "ultima_fecha": resumen.get("ultima_fecha_venta"),
                 "registros": resumen.get("registros_ventas", 0),
                 "productos": resumen.get("productos_con_ventas", 0),
+                "clientes": resumen.get("clientes_con_ventas", 0),
                 "nota": "No infieras ventas fuera de este rango cargado.",
             },
             "totales": resumen,
@@ -166,7 +168,10 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
             "Usa estos valores agregados como referencia exacta. Las ventas son euros facturados; "
             "MG es el margen bruto y MGD es el margen en destino. Los datos oficiales de ventas "
             "proceden de fivemin_ventas; incluyen Fecha, Ventas, Unidades Venta, MG, MGD, SKU, "
-            "marca, familia, sección y Product Manager. El año fiscal comienza el 1 de mayo. "
+            "marca, familia, sección, Product Manager, ClientePK, Nombre Cliente, KD, Tipo Cliente, "
+            "Nombre Comercial y Comercial Factura. ClientePK es el identificador estable; Nombre "
+            "Comercial es el asignado a la ficha y Comercial Factura quien realiza la venta. "
+            "El año fiscal comienza el 1 de mayo. "
             "El inventario solo está disponible cuando existen snapshots cargados. No muestres "
             "nombres técnicos de tablas y no supongas datos fuera de la cobertura indicada.\n"
             + json.dumps(payload, ensure_ascii=False, default=str)

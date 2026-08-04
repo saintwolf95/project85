@@ -164,6 +164,16 @@ def detectar_medida(texto: str) -> tuple[str | None, str | None]:
 
 def detectar_agrupacion(texto: str) -> str | None:
     normalizado = normalizar_texto(texto)
+    if _contiene(normalizado, ("por comercial factura", "por comercial de factura", "cada comercial factura")):
+        return "comercial_factura"
+    if _contiene(normalizado, ("por nombre comercial", "por comercial asignado", "por comercial cliente")):
+        return "comercial_cliente"
+    if _contiene(normalizado, ("por tipo cliente", "por tipo de cliente", "por tipos de cliente")):
+        return "tipo_cliente"
+    if _contiene(normalizado, ("por cliente", "por clientes", "cada cliente")):
+        return "cliente"
+    if _contiene(normalizado, ("por kd", "kd y no kd")):
+        return "kd"
     if _contiene(normalizado, ("por familia/marca", "por familia marca", "por familia y marca")):
         return "familia_marca"
     if _contiene(normalizado, ("por seccion", "por secciones", "cada seccion")):
@@ -190,6 +200,11 @@ def detectar_filtros(texto: str) -> dict[str, str]:
         "familia_marca": {"familia", "marca", "familia_marca"},
         "seccion": {"seccion"},
         "product_manager": {"product_manager"},
+        "cliente": {"cliente_pk", "nombre_cliente"},
+        "tipo_cliente": {"tipo_cliente"},
+        "comercial_cliente": {"comercial_cliente"},
+        "comercial_factura": {"comercial_factura"},
+        "kd": {"kd"},
     }.get(agrupacion_solicitada, set())
 
     # "Clase A/B/C" se refiere a ABC (ventas EUR) y "clase X/Y/Z" a XYZ
@@ -214,6 +229,12 @@ def detectar_filtros(texto: str) -> dict[str, str]:
         "familia_marca": ("familia/marca", "familia marca"),
         "seccion": ("seccion", "sección"),
         "product_manager": ("product manager", "pm"),
+        "cliente_pk": ("clientepk", "cliente pk", "codigo cliente"),
+        "nombre_cliente": ("nombre cliente", "cliente"),
+        "tipo_cliente": ("tipo cliente", "tipo de cliente"),
+        "comercial_cliente": ("nombre comercial", "comercial asignado", "comercial cliente"),
+        "comercial_factura": ("comercial factura", "comercial de factura"),
+        "kd": ("kd",),
     }
     for campo, alias in campos.items():
         if campo in campos_agrupados:
@@ -247,7 +268,7 @@ def _es_seguimiento(texto: str) -> bool:
     if re.match(r"^(compara|comparalo|compararlo)\b", normalizado):
         return True
     return _contiene(normalizado, (
-        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por matriz", "en euros", "en unidades", "lo mismo", "mismo periodo", "desglosa", "desglosar", "desglosado", "desglosada"
+        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por cliente", "por tipo cliente", "por comercial", "por kd", "por matriz", "en euros", "en unidades", "lo mismo", "mismo periodo", "desglosa", "desglosar", "desglosado", "desglosada"
     ))
 
 
@@ -259,7 +280,7 @@ def _tiene_filtro_no_soportado(texto: str) -> bool:
         return False
     if _contiene(normalizado, ("producto", "articulo")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
         return True
-    if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
+    if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm", "cliente", "comercial", "kd")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
         return True
     if _contiene(normalizado, ("sku",)) and not detectar_filtros(texto):
         return True
@@ -351,6 +372,13 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
     if tipo == "inventario" and comparar:
         return None, "Solo dispongo del inventario del último snapshot. Puedo darte su valor actual, pero todavía no compararlo con un periodo anterior."
 
+    dimensiones_cliente = {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
+    if tipo == "inventario" and (
+        detectar_agrupacion(texto_analizado) in dimensiones_cliente
+        or any(campo in filtros for campo in {"cliente_pk", "nombre_cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"})
+    ):
+        return None, "Las dimensiones de cliente, KD y comercial están asociadas a ventas. ¿Quieres analizar las ventas en euros para ese desglose?"
+
     agrupacion_actual = detectar_agrupacion(actual)
     if intento_anterior:
         agrupacion = agrupacion_actual or intento_anterior.agrupacion
@@ -405,6 +433,15 @@ def _condiciones_sql(
     for campo in ("familia", "marca", "familia_marca", "seccion", "product_manager", "sku"):
         if campo in intento.parametros:
             condiciones.append(f"p.{campo} = :{campo}")
+    if intento.tipo in ("ventas", "rentabilidad"):
+        for campo in ("cliente_pk", "tipo_cliente", "comercial_cliente"):
+            if campo in intento.parametros:
+                condiciones.append(f"c.{campo} = :{campo}")
+        if "nombre_cliente" in intento.parametros:
+            condiciones.append("c.nombre = :nombre_cliente")
+        for campo in ("kd", "comercial_factura"):
+            if campo in intento.parametros:
+                condiciones.append(f"vh.{campo} = :{campo}")
     if "abc" in intento.parametros:
         condiciones.append(f"{campo_abc} = :abc")
     for campo in ("xyz", "matriz_abc"):
@@ -566,6 +603,16 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             agrupacion = "COALESCE(p.seccion, 'Sin seccion')"
         elif intento.agrupacion == "product_manager":
             agrupacion = "COALESCE(p.product_manager, 'Sin Product Manager')"
+        elif intento.agrupacion == "cliente":
+            agrupacion = "COALESCE(c.cliente_pk || ' · ' || c.nombre, c.cliente_pk, c.nombre, 'Sin cliente')"
+        elif intento.agrupacion == "tipo_cliente":
+            agrupacion = "COALESCE(c.tipo_cliente, 'Sin tipo de cliente')"
+        elif intento.agrupacion == "comercial_cliente":
+            agrupacion = "COALESCE(c.comercial_cliente, 'Sin comercial asignado')"
+        elif intento.agrupacion == "comercial_factura":
+            agrupacion = "COALESCE(vh.comercial_factura, 'Sin comercial de factura')"
+        elif intento.agrupacion == "kd":
+            agrupacion = "COALESCE(vh.kd, 'NO')"
         elif intento.agrupacion == "matriz":
             agrupacion = "COALESCE(pm.matriz_abc, 'Sin clasificar')"
         else:
@@ -591,9 +638,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                 sql = f"""{prefijo_abc}
                     SELECT {agrupacion} AS agrupacion,
                            {columnas_comparacion},
-                           {productos_actuales} AS productos
+                           {productos_actuales} AS productos,
+                           COUNT(DISTINCT vh.cliente_id) AS clientes
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    LEFT JOIN clientes c ON c.id = vh.cliente_id
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -603,9 +652,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             else:
                 sql = f"""{prefijo_abc}
                     SELECT {columnas_comparacion},
-                           {productos_actuales} AS productos
+                           {productos_actuales} AS productos,
+                           COUNT(DISTINCT vh.cliente_id) AS clientes
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    LEFT JOIN clientes c ON c.id = vh.cliente_id
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -615,9 +666,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             sql = f"""{prefijo_abc}
                 SELECT {agrupacion} AS agrupacion,
                        {expresion_agregada} AS {alias_agregado},
-                       COUNT(DISTINCT vh.producto_id) AS productos
+                       COUNT(DISTINCT vh.producto_id) AS productos,
+                       COUNT(DISTINCT vh.cliente_id) AS clientes
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
+                LEFT JOIN clientes c ON c.id = vh.cliente_id
                 {join_abc}
                 {join_metricas}
                 WHERE {condiciones}
@@ -627,9 +680,11 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         else:
             sql = f"""{prefijo_abc}
                    SELECT {expresion_agregada} AS {alias_agregado},
-                          COUNT(DISTINCT vh.producto_id) AS productos
+                          COUNT(DISTINCT vh.producto_id) AS productos,
+                          COUNT(DISTINCT vh.cliente_id) AS clientes
                    FROM ventas_historicas vh
                    JOIN productos p ON p.id = vh.producto_id
+                   LEFT JOIN clientes c ON c.id = vh.cliente_id
                    {join_abc}
                    {join_metricas}
                    WHERE {condiciones}

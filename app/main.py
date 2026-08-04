@@ -5,6 +5,7 @@ from .api.deps import get_current_active_admin
 from .core.security import IS_PRODUCTION
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
+import asyncio
 import os
 import logging
 import uvicorn
@@ -24,12 +25,22 @@ from .routers import analytics, copilot, data_import, inventory, settings, agent
 
 logger = logging.getLogger(__name__)
 ALLOW_SCHEMA_INIT = os.getenv("ALLOW_SCHEMA_INIT", "false" if IS_PRODUCTION else "true").strip().lower() in {"1", "true", "yes"}
+ENABLE_DAILY_AGENT_REPORTS = os.getenv("ENABLE_DAILY_AGENT_REPORTS", "true" if IS_PRODUCTION else "false").strip().lower() in {"1", "true", "yes"}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    daily_task = None
+    if ENABLE_DAILY_AGENT_REPORTS:
+        from .daily_agents import daily_reports_loop
+        daily_task = asyncio.create_task(daily_reports_loop())
+
     if IS_PRODUCTION and not ALLOW_SCHEMA_INIT:
         logger.info("[STARTUP] Produccion: se omiten create_all, auto-seed, migraciones manuales y sincronizacion de arranque.")
-        yield
+        try:
+            yield
+        finally:
+            if daily_task:
+                daily_task.cancel()
         return
 
     # Inicializa las tablas al iniciar la aplicación
@@ -95,13 +106,17 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
     
-    yield
+    try:
+        yield
+    finally:
+        if daily_task:
+            daily_task.cancel()
     # No eliminamos las tablas al cerrar para persistir durante la vida de la app
 
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.10.0",
+    version="1.11.0",
     lifespan=lifespan
 )
 

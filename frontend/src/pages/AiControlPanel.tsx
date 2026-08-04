@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness } from '../services/api';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness, ensureDailyAgentReport } from '../services/api';
 import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles } from 'lucide-react';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles, PanelRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
@@ -62,6 +62,9 @@ export const AiControlPanel = () => {
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
   const [insightsHistory, setInsightsHistory] = useState<AgentInsight[]>([]);
   const [dataReadiness, setDataReadiness] = useState<AgentDataReadiness | null>(null);
+  const [dailyInsight, setDailyInsight] = useState<AgentInsight | null>(null);
+  const [isDailyPreparing, setIsDailyPreparing] = useState(false);
+  const [dailyError, setDailyError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [runStage, setRunStage] = useState(0);
@@ -101,7 +104,7 @@ export const AiControlPanel = () => {
 
   const handleSendAgentMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!chatInput.trim() || !selectedAgent || isChatLoading) return;
+    if (!chatInput.trim() || !selectedAgent || isChatLoading || isDailyPreparing) return;
     const newMessage: AgentChatMessage = { role: 'user', content: chatInput.trim() };
     const updatedHistory = [...agentChatHistory, newMessage];
     setAgentChatHistory(updatedHistory);
@@ -132,7 +135,27 @@ export const AiControlPanel = () => {
     }
   };
 
-  useEffect(() => { refreshData(); }, []);
+  const prepareDailyReport = async () => {
+    setIsDailyPreparing(true);
+    setDailyError(null);
+    try {
+      const insight = await ensureDailyAgentReport();
+      setDailyInsight(insight);
+      setInsightsHistory(previous => {
+        const withoutDuplicate = previous.filter(item => item.id !== insight.id);
+        return [insight, ...withoutDuplicate].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+      });
+    } catch {
+      setDailyError('No se pudo actualizar el informe diario. Puedes consultar el último disponible.');
+    } finally {
+      setIsDailyPreparing(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshData();
+    prepareDailyReport();
+  }, []);
 
   const handleToggle = async (key: keyof AgentSettings) => {
     const newValue = { ...settings, [key]: !settings[key] };
@@ -163,7 +186,10 @@ export const AiControlPanel = () => {
     }, 4000);
 
     try {
-      await runAgentAnalysis();
+      const insight = await runAgentAnalysis();
+      if (insight.fase1_maria_md && insight.fase1_lucia_md && insight.fase1_mattia_md) {
+        setDailyInsight(insight);
+      }
       clearInterval(stageTimer);
       setRunStage(stagesFiltered.length - 1);
       setRunSuccess(true);
@@ -226,6 +252,7 @@ export const AiControlPanel = () => {
   };
 
   const latestInsight = insightsHistory[0];
+  const reportInsight = dailyInsight || latestInsight;
 
   if (isLoading) {
     return (
@@ -532,37 +559,60 @@ export const AiControlPanel = () => {
 
       {/* Modal de Chat con Agente */}
       {selectedAgent && AGENTS_INFO[selectedAgent] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-5 bg-slate-900/55 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-[1500px] h-[94vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
               <div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                   Expediente: {AGENTS_INFO[selectedAgent].name}
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Área: {AGENTS_INFO[selectedAgent].role} · Modelo: {AGENTS_INFO[selectedAgent].model} · Memoria: 7 días
+                  Área: {AGENTS_INFO[selectedAgent].role} · Informe diario · Memoria analítica: 7 días
                 </p>
               </div>
-              <button onClick={() => setSelectedAgent(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <button title="Cerrar expediente" aria-label="Cerrar expediente" onClick={() => setSelectedAgent(null)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                 <X size={24} />
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-5 flex-1 flex flex-col">
-              {/* Último informe del agente */}
-              {latestInsight && latestInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] && (
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700 shrink-0">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <FileText size={13} /> Último informe ({new Date(latestInsight.fecha).toLocaleDateString('es-ES')})
-                  </h3>
-                  <div className="prose dark:prose-invert max-w-none text-sm text-slate-600 dark:text-slate-400 line-clamp-4">
-                    <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(latestInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] || '').slice(0, 400) + '...'}</ReactMarkdown>
+            <div className="p-3 md:p-5 overflow-y-auto lg:overflow-hidden flex-1 grid grid-cols-1 lg:grid-cols-[minmax(360px,0.85fr)_minmax(560px,1.15fr)] lg:grid-rows-[auto_minmax(0,1fr)] gap-4 min-h-0">
+              {/* Vista previa del informe diario */}
+              <section className="order-1 lg:col-start-2 lg:row-start-1 lg:row-span-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 min-h-[420px] overflow-hidden flex flex-col">
+                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <PanelRight size={17} className="text-brand-blue dark:text-brand-cyan" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Informe diario de {AGENTS_INFO[selectedAgent].name}</h3>
+                      <p className="text-xs text-slate-500">Preparado con los últimos datos disponibles</p>
+                    </div>
                   </div>
+                  {reportInsight && (
+                    <span className="text-xs text-slate-500 shrink-0">{new Date(reportInsight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  )}
                 </div>
-              )}
+                <div className="flex-1 overflow-y-auto p-5 md:p-7">
+                  {isDailyPreparing && (
+                    <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-sm">
+                      <Loader2 size={16} className="animate-spin shrink-0" /> Actualizando el informe de hoy con los datos existentes...
+                    </div>
+                  )}
+                  {dailyError && <div className="mb-5 text-sm text-amber-700 dark:text-amber-300">{dailyError}</div>}
+                  {reportInsight && reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] ? (
+                    <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
+                      <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight])}</ReactMarkdown>
+                    </div>
+                  ) : !isDailyPreparing ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-slate-400">
+                      <FileText size={38} className="mb-3 opacity-40" />
+                      <p className="font-medium">Todavía no hay un informe disponible.</p>
+                      <button type="button" onClick={prepareDailyReport} className="mt-4 px-4 py-2 text-sm rounded-lg bg-brand-blue text-white hover:bg-blue-700">Preparar informe</button>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
 
               {/* Capacidades verificadas */}
-              <div className="bg-slate-100 dark:bg-slate-800/80 rounded-lg p-4 border border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="order-2 lg:col-start-1 lg:row-start-1 bg-slate-100 dark:bg-slate-800/80 rounded-lg p-4 border border-slate-200 dark:border-slate-700 shrink-0">
                 <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
                   <Calculator size={14} className="text-brand-blue dark:text-brand-cyan" /> Qué analiza y calcula
                 </h3>
@@ -583,7 +633,7 @@ export const AiControlPanel = () => {
               </div>
 
               {/* Chat */}
-              <div className="flex-1 flex flex-col min-h-[250px] border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900 shadow-inner">
+              <div className="order-3 lg:col-start-1 lg:row-start-2 flex flex-col min-h-[420px] lg:min-h-0 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900 shadow-inner">
                 <div className="bg-white dark:bg-slate-800 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 shrink-0">
                   <MessageSquare size={16} className="text-brand-blue dark:text-brand-cyan" />
                   <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>
@@ -591,9 +641,10 @@ export const AiControlPanel = () => {
 
                 <div className="flex-1 p-4 overflow-y-auto space-y-4">
                   {agentChatHistory.length === 0 && !isChatLoading && (
-                    <div className="text-center text-slate-400 text-sm italic py-8 flex flex-col items-center">
+                    <div className="text-center text-slate-400 text-sm py-8 flex flex-col items-center">
                       <Bot size={32} className="mb-2 opacity-50" />
-                      Saluda a {AGENTS_INFO[selectedAgent].name}. Solo responderá sobre su área de especialidad.
+                      <p className="font-medium text-slate-500 dark:text-slate-300">El informe diario está listo para orientar la conversación.</p>
+                      <p className="mt-1 text-xs">Pregunta por un hallazgo o usa una sugerencia.</p>
                     </div>
                   )}
                   {agentChatHistory.map((msg, idx) => (
@@ -638,9 +689,9 @@ export const AiControlPanel = () => {
                     maxLength={2000}
                     rows={2}
                     className="flex-1 min-h-[44px] max-h-28 resize-y bg-slate-100 dark:bg-slate-900 border-none rounded-lg px-4 py-2 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
-                    disabled={isChatLoading}
+                    disabled={isChatLoading || isDailyPreparing}
                   />
-                  <button type="submit" title="Enviar mensaje" aria-label="Enviar mensaje" disabled={!chatInput.trim() || isChatLoading} className="self-end p-3 bg-brand-blue dark:bg-brand-cyan text-white rounded-lg hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors">
+                  <button type="submit" title="Enviar mensaje" aria-label="Enviar mensaje" disabled={!chatInput.trim() || isChatLoading || isDailyPreparing} className="self-end p-3 bg-brand-blue dark:bg-brand-cyan text-white rounded-lg hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors">
                     <Send size={18} />
                   </button>
                 </form>

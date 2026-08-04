@@ -383,6 +383,11 @@ export const runAgentAnalysis = async (): Promise<AgentInsight> => {
   return response.data;
 };
 
+export const ensureDailyAgentReport = async (): Promise<AgentInsight> => {
+  const response = await api.post('/agents/daily/ensure');
+  return response.data;
+};
+
 export interface AgentDataReadiness {
   registros_ventas: number;
   productos_con_ventas: number;

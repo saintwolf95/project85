@@ -1,19 +1,70 @@
 import json
 import logging
-from datetime import date, datetime, timedelta
+import threading
+from datetime import date, datetime, time as datetime_time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from .database import SessionLocalRO
-from .models import AgentInsights, EmpresaConfiguracion
+from .models import AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
 from .copilot_service import get_openai_client, validate_read_only_sql
 from .agent_metrics import build_agent_dossier
 
 logger = logging.getLogger(__name__)
+MADRID_TZ = ZoneInfo("Europe/Madrid")
+_daily_report_lock = threading.Lock()
 
 
 def get_business_context(db: Session, empresa_id: int) -> str:
     config = db.query(EmpresaConfiguracion).filter(EmpresaConfiguracion.empresa_id == empresa_id).first()
     return (config.contexto_negocio or "").strip()[:8000] if config else ""
+
+
+def daily_utc_window(target_date: date | None = None) -> tuple[datetime, datetime]:
+    report_date = target_date or datetime.now(MADRID_TZ).date()
+    start_local = datetime.combine(report_date, datetime_time.min, tzinfo=MADRID_TZ)
+    end_local = start_local + timedelta(days=1)
+    return (
+        start_local.astimezone(timezone.utc).replace(tzinfo=None),
+        end_local.astimezone(timezone.utc).replace(tzinfo=None),
+    )
+
+
+def get_daily_agent_insight(db: Session, empresa_id: int, target_date: date | None = None):
+    start_utc, end_utc = daily_utc_window(target_date)
+    query = db.query(AgentInsights).filter(
+        AgentInsights.empresa_id == empresa_id,
+        AgentInsights.fecha >= start_utc,
+        AgentInsights.fecha < end_utc,
+        AgentInsights.fase1_maria_md.isnot(None),
+        AgentInsights.fase1_lucia_md.isnot(None),
+        AgentInsights.fase1_mattia_md.isnot(None),
+    )
+    metrics_updated_at = db.query(EmpresaEstadisticas.actualizado_en).filter(
+        EmpresaEstadisticas.empresa_id == empresa_id
+    ).scalar()
+    if metrics_updated_at:
+        query = query.filter(AgentInsights.fecha >= metrics_updated_at)
+    return query.order_by(AgentInsights.fecha.desc()).first()
+
+
+def ensure_daily_agent_insight(db: Session, empresa_id: int):
+    """Genera como máximo un expediente departamental completo por día de Madrid."""
+    existing = get_daily_agent_insight(db, empresa_id)
+    if existing:
+        return existing
+
+    with _daily_report_lock:
+        existing = get_daily_agent_insight(db, empresa_id)
+        if existing:
+            return existing
+        settings = db.query(AgentSettings).filter(AgentSettings.empresa_id == empresa_id).first()
+        return execute_agents_workflow(
+            db,
+            empresa_id,
+            run_fase1=True,
+            run_fase2=bool(settings and settings.fase2_active),
+        )
 
 def ejecutar_consulta_sql(db: Session, query: str, empresa_id: int) -> str:
     """Ejecuta una consulta SQL segura (sólo SELECT)."""

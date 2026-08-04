@@ -5,7 +5,7 @@ from ..database import get_db
 from ..models import Usuario, AgentSettings, AgentInsights
 from ..api.deps import get_current_user, get_current_active_admin
 from ..schemas import AgentInsightResponse
-from ..agents_service import execute_agents_workflow
+from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..core.rate_limit import limiter
 
@@ -49,6 +49,22 @@ def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Se
 @router.get("/agents/readiness")
 def get_agents_readiness(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     return build_company_data_readiness(db, current_user.empresa_id)
+
+@router.get("/agents/daily", response_model=AgentInsightResponse)
+def get_daily_report(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    insight = get_daily_agent_insight(db, current_user.empresa_id)
+    if not insight:
+        raise HTTPException(status_code=404, detail="El informe diario todavía no está preparado")
+    return insight
+
+@router.post("/agents/daily/ensure", response_model=AgentInsightResponse)
+@limiter.limit("2/minute")
+def ensure_daily_report(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        return ensure_daily_agent_insight(db, current_user.empresa_id)
+    except Exception:
+        logger.exception("Error preparando el informe diario de agentes")
+        raise HTTPException(status_code=500, detail="No se pudo preparar el informe diario")
 
 from typing import List
 @router.get("/agents/insights/history", response_model=List[AgentInsightResponse])

@@ -168,7 +168,10 @@ def build_agent_dossier(db: Session, empresa_id: int, agent_name: str) -> dict[s
         JOIN productos p ON p.id = vh.producto_id
         WHERE p.empresa_id = :empresa_id AND vh.fecha_venta >= :inicio_anterior
         GROUP BY COALESCE(p.familia, 'Sin familia')
-        ORDER BY ABS(impacto_eur) DESC LIMIT 8
+        ORDER BY ABS(
+          SUM(CASE WHEN vh.fecha_venta >= :inicio_30d THEN vh.ingreso_total ELSE 0 END)
+          - SUM(CASE WHEN vh.fecha_venta BETWEEN :inicio_anterior AND :fin_anterior THEN vh.ingreso_total ELSE 0 END)
+        ) DESC LIMIT 8
     """, params)
     product_drivers = _rows(db, """
         SELECT p.sku AS sku, p.nombre AS producto, COALESCE(p.familia, 'Sin familia') AS familia,
@@ -180,7 +183,10 @@ def build_agent_dossier(db: Session, empresa_id: int, agent_name: str) -> dict[s
         JOIN productos p ON p.id = vh.producto_id
         WHERE p.empresa_id = :empresa_id AND vh.fecha_venta >= :inicio_anterior
         GROUP BY p.id, p.sku, p.nombre, p.familia
-        ORDER BY ABS(impacto_eur) DESC LIMIT 10
+        ORDER BY ABS(
+          SUM(CASE WHEN vh.fecha_venta >= :inicio_30d THEN vh.ingreso_total ELSE 0 END)
+          - SUM(CASE WHEN vh.fecha_venta BETWEEN :inicio_anterior AND :fin_anterior THEN vh.ingreso_total ELSE 0 END)
+        ) DESC LIMIT 10
     """, params)
     customer_leaders = _rows(db, """
         SELECT c.cliente_pk, c.nombre AS cliente, c.tipo_cliente,

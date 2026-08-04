@@ -7,6 +7,7 @@ from ..api.deps import get_current_user, get_current_active_admin
 from ..schemas import AgentInsightResponse
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
+from ..agent_studies import ALLOWED_STUDY_AGENTS, ensure_agent_study_snapshot
 from ..core.rate_limit import limiter
 
 router = APIRouter()
@@ -65,6 +66,18 @@ def ensure_daily_report(request: Request, current_user: Usuario = Depends(get_cu
     except Exception:
         logger.exception("Error preparando el informe diario de agentes")
         raise HTTPException(status_code=500, detail="No se pudo preparar el informe diario")
+
+@router.get("/agents/{agent_name}/studies")
+@limiter.limit("10/minute")
+def get_agent_studies(request: Request, agent_name: str, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    normalized = validate_agent_name(agent_name).replace("í", "i")
+    if normalized not in ALLOWED_STUDY_AGENTS:
+        raise HTTPException(status_code=404, detail="Centro de estudios no disponible")
+    try:
+        return ensure_agent_study_snapshot(db, current_user.empresa_id, normalized)
+    except Exception:
+        logger.exception("Error preparando estudios de %s", normalized)
+        raise HTTPException(status_code=500, detail="No se pudieron preparar los estudios analíticos")
 
 from typing import List
 @router.get("/agents/insights/history", response_model=List[AgentInsightResponse])

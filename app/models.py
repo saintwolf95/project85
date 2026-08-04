@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Date, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Date, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 
@@ -147,6 +147,20 @@ class AgentInsights(Base):
     fase1_lucia_md = Column(String, nullable=True) # Informe de Lucía (Ventas)
     fase1_mattia_md = Column(String, nullable=True) # Informe de Mattia (Finanzas)
     fase2_ceo_markdown = Column(String, nullable=True) # Informe final del CEO
+
+class AgentStudySnapshot(Base):
+    __tablename__ = "agent_study_snapshots"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "agent_name", "report_date", name="uq_agent_study_company_agent_day"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    agent_name = Column(String(40), nullable=False)
+    report_date = Column(Date, nullable=False, index=True)
+    source_date = Column(Date, nullable=True)
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"

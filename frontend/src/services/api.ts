@@ -388,6 +388,34 @@ export const ensureDailyAgentReport = async (): Promise<AgentInsight> => {
   return response.data;
 };
 
+export interface AgentStudySection {
+  title: string;
+  summary: string;
+  rows?: Array<Record<string, string | number | null>>;
+  metrics?: Record<string, number | null>;
+  methodology?: string | string[];
+  regression?: Record<string, string | number | boolean | null>;
+  distribution?: Record<string, number | null>;
+  weekday_seasonality?: Array<Record<string, string | number | null>>;
+  series?: Array<Record<string, string | number | null>>;
+}
+
+export interface AgentStudies {
+  agent: string;
+  generated_at: string;
+  source_date?: string;
+  period?: { start: string; end: string };
+  focus?: string;
+  tabs: Record<string, AgentStudySection>;
+  data_quality?: Record<string, string | number | boolean | null>;
+  limitations: string[];
+}
+
+export const getAgentStudies = async (agentName: string): Promise<AgentStudies> => {
+  const response = await api.get(`/agents/${agentName}/studies`);
+  return response.data;
+};
+
 export interface AgentDataReadiness {
   registros_ventas: number;
   productos_con_ventas: number;

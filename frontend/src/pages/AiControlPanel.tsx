@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness, ensureDailyAgentReport } from '../services/api';
-import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness } from '../services/api';
-import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles, PanelRight } from 'lucide-react';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness, ensureDailyAgentReport, getAgentStudies } from '../services/api';
+import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness, AgentStudies } from '../services/api';
+import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles, PanelRight, Boxes, UserRoundSearch, BriefcaseBusiness, FlaskConical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 
@@ -15,6 +15,8 @@ interface AgentInfo {
   calculations: string[];
   prompts: string[];
 }
+
+type StudyTab = 'report' | 'articles' | 'clients' | 'product_managers' | 'laboratory';
 
 const AGENTS_INFO: Record<string, AgentInfo> = {
   maria: {
@@ -78,6 +80,10 @@ export const AiControlPanel = () => {
   const [agentChatHistory, setAgentChatHistory] = useState<AgentChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSuggestions, setChatSuggestions] = useState<string[]>([]);
+  const [studyTab, setStudyTab] = useState<StudyTab>('report');
+  const [agentStudies, setAgentStudies] = useState<AgentStudies | null>(null);
+  const [isStudiesLoading, setIsStudiesLoading] = useState(false);
+  const [studiesError, setStudiesError] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -90,11 +96,19 @@ export const AiControlPanel = () => {
     if (selectedAgent) {
       setAgentChatHistory([]);
       setChatSuggestions(AGENTS_INFO[selectedAgent]?.prompts || []);
+      setStudyTab('report');
+      setAgentStudies(null);
+      setStudiesError(null);
       setIsChatLoading(true);
+      setIsStudiesLoading(true);
       getAgentChat(selectedAgent)
         .then(data => setAgentChatHistory(data))
         .catch(err => console.error(err))
         .finally(() => setIsChatLoading(false));
+      getAgentStudies(selectedAgent)
+        .then(setAgentStudies)
+        .catch(() => setStudiesError('No se pudieron preparar los estudios.'))
+        .finally(() => setIsStudiesLoading(false));
     }
   }, [selectedAgent]);
 
@@ -247,6 +261,96 @@ export const AiControlPanel = () => {
             )}
           </div>
         )}
+      </div>
+    );
+  };
+
+  const formatStudyValue = (key: string, value: string | number | boolean | null | undefined) => {
+    if (value === null || value === undefined) return 'Sin dato';
+    if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+    if (typeof value !== 'number') return value;
+    if (key.includes('pct') || key.includes('variation') || key.includes('variacion')) {
+      return `${value.toLocaleString('es-ES', { maximumFractionDigits: 2 })}%`;
+    }
+    if (key.includes('eur') || key.includes('sales') || key.includes('ventas') || key.includes('mean') || key.includes('median') || key.includes('q1') || key.includes('q3') || key.includes('slope') || key.includes('intercept')) {
+      return value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
+    }
+    return value.toLocaleString('es-ES', { maximumFractionDigits: 3 });
+  };
+
+  const renderStudyTable = (tabId: string) => {
+    const section = agentStudies?.tabs?.[tabId];
+    const rows = section?.rows || [];
+    const columnsByTab: Record<string, Array<[string, string]>> = {
+      articles: [['sku', 'SKU'], ['articulo', 'Artículo'], ['familia', 'Familia'], ['product_manager', 'Product Manager'], ['ventas_actual', 'Ventas 30D'], ['impacto_eur', 'Impacto'], ['variacion_pct', 'Variación'], ['mgd_pct', 'MGD']],
+      clients: [['cliente_pk', 'Cliente'], ['cliente', 'Nombre'], ['tipo_cliente', 'Tipo'], ['comercial_asignado', 'Comercial'], ['ventas_eur', 'Ventas 30D'], ['share_pct', 'Peso'], ['mgd_pct', 'MGD'], ['articulos', 'Artículos']],
+      product_managers: [['product_manager', 'Product Manager'], ['ventas_eur', 'Ventas 30D'], ['share_pct', 'Peso'], ['mgd_pct', 'MGD'], ['articulos', 'Artículos'], ['clientes', 'Clientes']],
+    };
+    const columns = columnsByTab[tabId] || [];
+    return (
+      <div>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{section?.summary}</p>
+        {rows.length ? (
+          <div className="overflow-x-auto border-y border-slate-200 dark:border-slate-700">
+            <table className="w-full text-xs text-left">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
+                <tr>{columns.map(([key, label]) => <th key={key} className="px-3 py-3 font-semibold whitespace-nowrap">{label}</th>)}</tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {rows.map((row, index) => (
+                  <tr key={`${tabId}-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    {columns.map(([key]) => <td key={key} className="px-3 py-3 whitespace-nowrap text-slate-700 dark:text-slate-300">{formatStudyValue(key, row[key])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : <p className="py-10 text-center text-sm text-slate-400">No hay datos suficientes para este estudio.</p>}
+        {section?.methodology && <p className="mt-4 text-xs text-slate-500"><strong>Método:</strong> {String(section.methodology)}</p>}
+      </div>
+    );
+  };
+
+  const renderLaboratory = () => {
+    const lab = agentStudies?.tabs?.laboratory;
+    const regression = lab?.regression || {};
+    const distribution = lab?.distribution || {};
+    return (
+      <div className="space-y-6">
+        <p className="text-sm text-slate-600 dark:text-slate-300">{lab?.summary}</p>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {[
+            ['slope_eur_per_day', 'Pendiente diaria', regression.slope_eur_per_day],
+            ['r_squared', 'R² de tendencia', regression.r_squared],
+            ['mean', 'Media diaria', distribution.mean],
+            ['coefficient_variation_pct', 'Variabilidad', distribution.coefficient_variation_pct],
+          ].map(([key, label, value]) => (
+            <div key={String(key)} className="border-l-2 border-brand-blue dark:border-brand-cyan pl-3 py-1">
+              <p className="text-xs text-slate-500">{label}</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">{formatStudyValue(String(key), value as number | null)}</p>
+            </div>
+          ))}
+        </div>
+        <div className="border-y border-slate-200 dark:border-slate-700 py-4 text-sm text-slate-600 dark:text-slate-300 space-y-2">
+          <p><strong>Intervalo 95% de la pendiente:</strong> {formatStudyValue('slope_eur', regression.slope_ci95_low as number)} a {formatStudyValue('slope_eur', regression.slope_ci95_high as number)}</p>
+          <p><strong>Intervalo 95% de la media:</strong> {formatStudyValue('mean_eur', distribution.mean_ci95_low)} a {formatStudyValue('mean_eur', distribution.mean_ci95_high)}</p>
+          <p><strong>Muestra:</strong> {formatStudyValue('n', regression.n as number)} días.</p>
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-3">Índice de estacionalidad semanal</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
+            {(lab?.weekday_seasonality || []).map((day, index) => (
+              <div key={index} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-center">
+                <p className="text-xs text-slate-500">{day.weekday}</p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">{formatStudyValue('index', day.seasonality_index as number)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="text-xs text-slate-500 space-y-1">
+          {(Array.isArray(lab?.methodology) ? lab?.methodology : [lab?.methodology]).filter(Boolean).map((item, index) => <p key={index}>{item}</p>)}
+          {regression.caution && <p className="font-medium text-amber-700 dark:text-amber-300">{String(regression.caution)}</p>}
+        </div>
       </div>
     );
   };
@@ -582,32 +686,64 @@ export const AiControlPanel = () => {
                   <div className="flex items-center gap-2">
                     <PanelRight size={17} className="text-brand-blue dark:text-brand-cyan" />
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Informe diario de {AGENTS_INFO[selectedAgent].name}</h3>
-                      <p className="text-xs text-slate-500">Preparado con los últimos datos disponibles</p>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Centro de estudios de {AGENTS_INFO[selectedAgent].name}</h3>
+                      <p className="text-xs text-slate-500">Informe, conocimiento y laboratorio analítico</p>
                     </div>
                   </div>
                   {reportInsight && (
                     <span className="text-xs text-slate-500 shrink-0">{new Date(reportInsight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   )}
                 </div>
+                <div className="px-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
+                  <div className="flex min-w-max">
+                    {([
+                      ['report', 'Informe', <FileText size={14} />],
+                      ['articles', 'Artículos', <Boxes size={14} />],
+                      ['clients', 'Clientes', <UserRoundSearch size={14} />],
+                      ['product_managers', 'Product Managers', <BriefcaseBusiness size={14} />],
+                      ['laboratory', 'Laboratorio', <FlaskConical size={14} />],
+                    ] as Array<[StudyTab, string, React.ReactNode]>).map(([id, label, icon]) => (
+                      <button key={id} type="button" onClick={() => setStudyTab(id)} className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium border-b-2 transition-colors ${studyTab === id ? 'border-brand-blue dark:border-brand-cyan text-brand-blue dark:text-brand-cyan' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+                        {icon}{label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex-1 overflow-y-auto p-5 md:p-7">
-                  {isDailyPreparing && (
+                  {studyTab === 'report' && isDailyPreparing && (
                     <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-sm">
                       <Loader2 size={16} className="animate-spin shrink-0" /> Actualizando el informe de hoy con los datos existentes...
                     </div>
                   )}
-                  {dailyError && <div className="mb-5 text-sm text-amber-700 dark:text-amber-300">{dailyError}</div>}
-                  {reportInsight && reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] ? (
+                  {studyTab === 'report' && dailyError && <div className="mb-5 text-sm text-amber-700 dark:text-amber-300">{dailyError}</div>}
+                  {studyTab === 'report' && reportInsight && reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] ? (
                     <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
                       <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight])}</ReactMarkdown>
                     </div>
-                  ) : !isDailyPreparing ? (
+                  ) : studyTab === 'report' && !isDailyPreparing ? (
                     <div className="h-full flex flex-col items-center justify-center text-center text-slate-400">
                       <FileText size={38} className="mb-3 opacity-40" />
                       <p className="font-medium">Todavía no hay un informe disponible.</p>
                       <button type="button" onClick={prepareDailyReport} className="mt-4 px-4 py-2 text-sm rounded-lg bg-brand-blue text-white hover:bg-blue-700">Preparar informe</button>
                     </div>
                   ) : null}
+                  {studyTab !== 'report' && isStudiesLoading && (
+                    <div className="h-full flex items-center justify-center gap-3 text-sm text-slate-500"><Loader2 size={18} className="animate-spin" /> Preparando estudios diarios...</div>
+                  )}
+                  {studyTab !== 'report' && studiesError && !isStudiesLoading && <div className="text-sm text-amber-700 dark:text-amber-300">{studiesError}</div>}
+                  {studyTab !== 'report' && agentStudies && !isStudiesLoading && (
+                    <>
+                      <div className="mb-5 pb-4 border-b border-slate-200 dark:border-slate-700">
+                        <p className="text-xs uppercase text-slate-500 font-semibold">Enfoque experto</p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{agentStudies.focus}</p>
+                        <p className="text-xs text-slate-500 mt-2">Datos hasta {agentStudies.source_date ? new Date(`${agentStudies.source_date}T00:00:00`).toLocaleDateString('es-ES') : 'sin fecha'} · Estudio guardado diariamente</p>
+                      </div>
+                      {studyTab === 'laboratory' ? renderLaboratory() : renderStudyTable(studyTab)}
+                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 space-y-1">
+                        {agentStudies.limitations.map((limitation, index) => <p key={index}>{limitation}</p>)}
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
 

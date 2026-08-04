@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 
 from .agents_service import ensure_daily_agent_insight
+from .agent_studies import ensure_agent_study_snapshot
 from .database import SessionLocal
 from .models import Empresa
 
@@ -32,6 +33,8 @@ def run_daily_reports_once() -> None:
             """), {"empresa_id": empresa_id}).scalar()
             if has_sales:
                 ensure_daily_agent_insight(db, empresa_id)
+                for agent_name in ("maria", "lucia", "mattia"):
+                    ensure_agent_study_snapshot(db, empresa_id, agent_name)
     except Exception:
         db.rollback()
         logger.exception("No se pudieron preparar los informes diarios")

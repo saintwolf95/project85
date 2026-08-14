@@ -28,7 +28,7 @@ const SALES_COLUMNS: ColumnDefinition[] = [
   { name: 'Product Manager', type: 'texto', required: true, destination: 'product_manager', description: 'PM responsable del artículo.' },
   { name: 'ClientePK', type: 'texto', required: true, destination: 'cliente_pk', description: 'Código interno estable del cliente.' },
   { name: 'Nombre Cliente', type: 'texto', required: true, destination: 'nombre_cliente', description: 'Nombre descriptivo del cliente.' },
-  { name: 'KD', type: 'texto', required: true, destination: 'kd', description: 'Tipo o indicador de operación especial KD.' },
+  { name: 'Kit Digital', type: 'texto', required: true, destination: 'kd', description: 'Indicador de operación Kit Digital (se guarda como KD).' },
   { name: 'Tipo Cliente', type: 'texto', required: true, destination: 'tipo_cliente', description: 'Clasificación comercial del cliente.' },
   { name: 'Nombre Comercial', type: 'texto', required: true, destination: 'comercial_cliente', description: 'Comercial asignado a la ficha del cliente.' },
   { name: 'Comercial Factura', type: 'texto', required: true, destination: 'comercial_factura', description: 'Comercial que realiza la venta.' },
@@ -67,9 +67,9 @@ export const DataImportGuide = () => (
   <div className="flex flex-col gap-7 pb-10 animate-in fade-in duration-300">
     <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
       <div>
-        <h1 className="title-corporate text-3xl mb-1">Guía de fivemin_ventas</h1>
+        <h1 className="title-corporate text-3xl mb-1">Guía de importación</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Contrato operativo para cargar las ventas reales desde el 01/05/2026 y actualizarlas cada día.
+          Contrato operativo para cargar ventas desde el 01/05/2026 e inventario diario desde el 06/08/2026.
         </p>
       </div>
       <Link
@@ -86,8 +86,8 @@ export const DataImportGuide = () => (
         <div className="flex gap-3">
           <FileSpreadsheet size={20} className="mt-0.5 shrink-0 text-brand-blue dark:text-brand-cyan" />
           <div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Un único archivo principal</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Se admite fivemin_ventas.xlsx o .csv.</p>
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Dos archivos operativos</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Se admiten fivemin_ventas y fivemin_inventario en .xlsx o .csv.</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -142,9 +142,9 @@ export const DataImportGuide = () => (
     </section>
 
     <section className="border-t border-slate-200 dark:border-slate-800 pt-5">
-      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Inventario pendiente</h2>
+      <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Histórico de inventario</h2>
       <p className="mt-2 max-w-4xl text-sm text-slate-600 dark:text-slate-300">
-        Mientras no exista una fuente de inventario, la aplicación calcula ABC con las ventas en euros y muestra XYZ como no disponible. No genera stock, valor de inventario, cobertura ni alertas ficticias. Cuando llegue el archivo de inventario podrá vincularse por ArticuloPK/SKU.
+        El archivo de inventario usa Fecha, ArticuloPK, atributos del artículo, Inventario (€) y Unidades Inv. Se conserva cada snapshot diario desde el 06/08/2026 y el último disponible actualiza el stock operativo de ABCXYZ, cobertura y alertas.
       </p>
     </section>
   </div>

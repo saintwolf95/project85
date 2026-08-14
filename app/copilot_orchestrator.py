@@ -174,6 +174,8 @@ def detectar_agrupacion(texto: str) -> str | None:
         return "cliente"
     if _contiene(normalizado, ("por kd", "kd y no kd")):
         return "kd"
+    if re.search(r"\b(?:por|cada)\s+mes(?:es)?\b", normalizado) or _contiene(normalizado, ("mensual", "mes a mes")):
+        return "mes"
     if _contiene(normalizado, ("por familia/marca", "por familia marca", "por familia y marca")):
         return "familia_marca"
     if _contiene(normalizado, ("por seccion", "por secciones", "cada seccion")):
@@ -366,11 +368,6 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
 
     if tipo in ("ventas", "rentabilidad") and not periodo:
         return None, "¿Qué periodo quieres analizar: ayer, mes actual, últimos 30 días o últimos 90 días?"
-
-    if tipo == "inventario" and periodo not in (None, "hoy"):
-        return None, "El inventario se calcula con el último snapshot disponible. ¿Quieres que consulte el inventario actual en euros?"
-    if tipo == "inventario" and comparar:
-        return None, "Solo dispongo del inventario del último snapshot. Puedo darte su valor actual, pero todavía no compararlo con un periodo anterior."
 
     dimensiones_cliente = {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
     if tipo == "inventario" and (
@@ -615,6 +612,8 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             agrupacion = "COALESCE(vh.kd, 'NO')"
         elif intento.agrupacion == "matriz":
             agrupacion = "COALESCE(pm.matriz_abc, 'Sin clasificar')"
+        elif intento.agrupacion == "mes":
+            agrupacion = "SUBSTR(CAST(vh.fecha_venta AS TEXT), 1, 7)"
         else:
             agrupacion = None
 
@@ -675,7 +674,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                 {join_metricas}
                 WHERE {condiciones}
                 GROUP BY {agrupacion}
-                ORDER BY {alias_agregado} DESC
+                ORDER BY {"agrupacion ASC" if intento.agrupacion == "mes" else f"{alias_agregado} DESC"}
             """
         else:
             sql = f"""{prefijo_abc}
@@ -689,6 +688,53 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                    {join_metricas}
                    WHERE {condiciones}
                """
+        return sql, dict(intento.parametros)
+
+    if intento.tipo == "inventario" and intento.periodo not in (None, "hoy"):
+        expresion = "ih.unidades_inventario" if intento.medida == "inventario_unidades" else "ih.inventario_eur"
+        alias = "inventario_unidades" if intento.medida == "inventario_unidades" else "inventario_eur"
+        agrupaciones = {
+            "familia": "COALESCE(p.familia, 'Sin familia')",
+            "marca": "COALESCE(p.marca, 'Sin marca')",
+            "familia_marca": "COALESCE(p.familia_marca, 'Sin familia/marca')",
+            "seccion": "COALESCE(p.seccion, 'Sin seccion')",
+            "product_manager": "COALESCE(p.product_manager, 'Sin Product Manager')",
+        }
+        agrupacion = agrupaciones.get(intento.agrupacion)
+        join_metricas = (
+            " LEFT JOIN producto_metricas pm ON pm.producto_id = p.id"
+            if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("abc", "xyz", "matriz_abc"))
+            else ""
+        )
+        condiciones = _condiciones_sql(intento)
+        if intento.comparacion:
+            actual = f"COALESCE(SUM(CASE WHEN ih.fecha_inventario BETWEEN :fecha_inicio AND :fecha_fin THEN {expresion} ELSE 0 END), 0)"
+            anterior = f"COALESCE(SUM(CASE WHEN ih.fecha_inventario BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN {expresion} ELSE 0 END), 0)"
+            variacion = f"({actual}) - ({anterior})"
+            variacion_pct = f"CASE WHEN ABS({anterior}) = 0 THEN 0 ELSE ({variacion}) / ABS({anterior}) * 100 END"
+            columnas = f"{actual} AS periodo_actual, {anterior} AS periodo_anterior, {variacion} AS variacion_absoluta, {variacion_pct} AS variacion_pct"
+            periodo_sql = "ih.fecha_inventario BETWEEN :fecha_inicio_comparacion AND :fecha_fin"
+        else:
+            columnas = f"COALESCE(SUM({expresion}), 0) AS {alias}"
+            periodo_sql = "ih.fecha_inventario BETWEEN :fecha_inicio AND :fecha_fin"
+        if agrupacion:
+            sql = f"""
+                SELECT {agrupacion} AS agrupacion, {columnas}, COUNT(DISTINCT p.id) AS productos
+                FROM inventario_historico ih
+                JOIN productos p ON p.id = ih.producto_id
+                {join_metricas}
+                WHERE {condiciones} AND {periodo_sql}
+                GROUP BY {agrupacion}
+                ORDER BY {"variacion_pct DESC" if intento.comparacion else f"{alias} DESC"}
+            """
+        else:
+            sql = f"""
+                SELECT {columnas}, COUNT(DISTINCT p.id) AS productos
+                FROM inventario_historico ih
+                JOIN productos p ON p.id = ih.producto_id
+                {join_metricas}
+                WHERE {condiciones} AND {periodo_sql}
+            """
         return sql, dict(intento.parametros)
 
     if intento.medida == "inventario_unidades":

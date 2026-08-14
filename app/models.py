@@ -64,6 +64,22 @@ class InventarioSnapshot(Base):
     
     producto = relationship("Producto", back_populates="inventario")
 
+
+class InventarioHistorico(Base):
+    """Valor y unidades de inventario observados para un SKU en una fecha."""
+    __tablename__ = "inventario_historico"
+    __table_args__ = (
+        UniqueConstraint("producto_id", "fecha_inventario", name="uq_inventario_historico_producto_fecha"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    producto_id = Column(Integer, ForeignKey("productos.id", ondelete="CASCADE"), nullable=False, index=True)
+    fecha_inventario = Column(Date, nullable=False, index=True)
+    inventario_eur = Column(Float, nullable=False, default=0.0)
+    unidades_inventario = Column(Integer, nullable=False, default=0)
+
+    producto = relationship("Producto")
+
 class Registro_PO(Base):
     __tablename__ = "registro_po"
     id = Column(Integer, primary_key=True, index=True)

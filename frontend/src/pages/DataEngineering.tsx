@@ -39,12 +39,12 @@ const DATASETS: Array<{
     step: 1,
     title: 'fivemin_ventas',
     description: 'Fuente principal. Crea el catálogo, los clientes y las ventas agregadas.',
-    required: ['Fecha', 'Ventas', 'Unidades Venta', '% MG', 'Margen', '% MGD', 'MGD', 'Nombre Articulo', 'ArticuloPK', 'Nombre Marca', 'Familia/Marca', 'Nombre Familia', 'Nombre Seccion', 'EAN', 'Product Manager', 'ClientePK', 'Nombre Cliente', 'KD', 'Tipo Cliente', 'Nombre Comercial', 'Comercial Factura'],
+    required: ['Fecha', 'Ventas', 'Unidades Venta', '% MG', 'Margen', '% MGD', 'MGD', 'Nombre Articulo', 'ArticuloPK', 'Nombre Marca', 'Familia/Marca', 'Nombre Familia', 'Nombre Seccion', 'EAN', 'Product Manager', 'ClientePK', 'Nombre Cliente', 'Kit Digital', 'Tipo Cliente', 'Nombre Comercial', 'Comercial Factura'],
     optional: [],
   },
   {
     id: 'products',
-    step: 2,
+    step: 3,
     title: 'Catálogo independiente',
     description: 'Opcional. No es necesario cuando utilizas fivemin_ventas.',
     required: ['sku', 'nombre', 'costo_unitario', 'precio_venta'],
@@ -52,10 +52,10 @@ const DATASETS: Array<{
   },
   {
     id: 'inventory',
-    step: 3,
-    title: 'Inventario futuro',
-    description: 'Disponible cuando exista una fuente real de stock.',
-    required: ['sku', 'stock_disponible'],
+    step: 2,
+    title: 'fivemin_inventario',
+    description: 'Histórico diario de unidades y valor de inventario. Actualiza el stock actual con la última fecha.',
+    required: ['Fecha', 'Nombre Articulo', 'ArticuloPK', 'Nombre Marca', 'Familia/Marca', 'Nombre Familia', 'Nombre Seccion', 'EAN', 'Product Manager', 'Inventario', 'Unidades Inv'],
     optional: [],
   },
 ];
@@ -209,7 +209,7 @@ export const DataEngineering = () => {
         <div>
           <h1 className="title-corporate text-3xl mb-1">Carga de datos reales</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Carga fivemin_ventas en CSV o XLSX. El catálogo se crea automáticamente desde las ventas.
+            Carga los dos archivos reales: ventas desde el 01/05/2026 e inventario diario desde el 06/08/2026.
           </p>
         </div>
         <button
@@ -223,7 +223,7 @@ export const DataEngineering = () => {
       </div>
 
       <section className="border-y border-slate-200 dark:border-slate-800 py-4">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Productos</p>
             <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.products)}</p>
@@ -231,6 +231,11 @@ export const DataEngineering = () => {
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">SKUs con inventario</p>
             <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.inventory_records)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Histórico inventario</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900 dark:text-white">{formatNumber(status?.inventory_history_records)}</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{status?.inventory_date_min && status?.inventory_date_max ? `${status.inventory_date_min} · ${status.inventory_date_max}` : 'Sin datos'}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500 dark:text-slate-400">Clientes</p>
@@ -515,7 +520,7 @@ export const DataEngineering = () => {
               <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
                 {formatNumber(result.records_affected)} registros procesados · {formatNumber(result.created)} creados · {formatNumber(result.updated)} actualizados.
               </p>
-              {dataset === 'sales' && (
+              {(dataset === 'sales' || dataset === 'inventory') && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                   Catálogo: {formatNumber(result.products_created)} SKU creados · {formatNumber(result.products_updated)} actualizados.
                 </p>

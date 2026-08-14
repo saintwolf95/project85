@@ -229,6 +229,12 @@ Tabla `inventario_snapshot` (alias recomendado: inv):
 - producto_id (INTEGER, FK a productos.id)
 - stock_disponible (INTEGER) -- unidades físicas actuales en almacén
 
+Tabla `inventario_historico` (alias recomendado: ih):
+- producto_id (INTEGER, FK a productos.id)
+- fecha_inventario (DATE) -- fecha del snapshot diario
+- inventario_eur (FLOAT) -- valor de inventario reportado en euros para ese SKU y día
+- unidades_inventario (INTEGER) -- unidades disponibles en esa fecha
+
 Tabla `ventas_historicas` (alias recomendado: vh):
 - id (INTEGER, Primary Key)
 - producto_id (INTEGER, FK a productos.id)
@@ -277,6 +283,7 @@ DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - El año fiscal empieza el 1 de mayo. Para preguntas de "año fiscal" usa desde el 1 de mayo correspondiente hasta hoy, siempre en Europe/Madrid.
 - Si el resumen operativo indica una cobertura de datos, no inventes resultados fuera de esas fechas; explica con claridad la limitación.
 - "inventario" significa euros actuales: SUM(p.costo_unitario * inv.stock_disponible).
+- Para evoluciones, variaciones o inventario de una fecha pasada usa `inventario_historico`, no el snapshot actual. Su cobertura comienza el 06/08/2026; no infieras inventario antes de esa fecha.
 - "margen", "MG" o "beneficio" = SUM(vh.margen_bruto_eur); su porcentaje agregado es SUM(margen_bruto_eur) / SUM(ingreso_total) * 100.
 - "MGD" o "margen en destino" = SUM(vh.margen_destino_eur); su porcentaje agregado es SUM(margen_destino_eur) / SUM(ingreso_total) * 100.
 - No recalcules MG o MGD desde el catálogo cuando existen estas columnas de ventas: son la fuente económica oficial.
@@ -387,6 +394,7 @@ ALLOWED_SQL_TABLES = {
     "clientes",
     "productos",
     "inventario_snapshot",
+    "inventario_historico",
     "ventas_historicas",
     "registro_po",
     "producto_metricas",
@@ -557,6 +565,7 @@ REGLAS ESTRICTAS PARA MODO AVANZADO:
 ```
 5. **Lenguaje SQL Prohibido:** NUNCA muestres código SQL ni nombres de tablas/columnas técnicas al usuario.
 6. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
+   Si la consulta devuelve un desglose, muestra cada fila devuelta; nunca reconstruyas periodos sumando o restando agregados que no estén desglosados.
 7. **Contexto Corporativo:** Usa el "Contexto del Negocio" para adaptar tus consejos a la realidad de la empresa.
 8. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
 9. **Moneda:** Usa siempre el formato europeo para importes: €1.234,56 con punto como separador de miles y coma como decimal.
@@ -601,6 +610,7 @@ REGLAS ESTRICTAS PARA MODO RÁPIDO:
 ```
 4. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL ni nombres de tablas/columnas técnicas.
 5. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
+   Si la consulta devuelve un desglose, muestra cada fila devuelta; nunca reconstruyas periodos sumando o restando agregados que no estén desglosados.
 6. **Contexto:** Usa el "Contexto del Negocio".
 7. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
 8. **Moneda:** Usa siempre el formato europeo para importes: €1.234,56 con punto como separador de miles y coma como decimal.
@@ -788,7 +798,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             })
             retry_history.append({
                 "role": "user",
-                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, clientes, inventario_snapshot, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
+                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, clientes, inventario_snapshot, inventario_historico, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
             })
             continue
         

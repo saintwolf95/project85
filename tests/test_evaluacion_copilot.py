@@ -101,6 +101,29 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIn("c.tipo_cliente", consulta)
         self.assertIn("fecha_inicio", parametros)
 
+    def test_ventas_fiscales_por_mes_crean_un_desglose_mensual(self):
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Dame las ventas de este año fiscal actual por cada mes"},
+        ])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.periodo, "anio_fiscal")
+        self.assertEqual(intento.agrupacion, "mes")
+
+    def test_inventario_historico_permite_comparar_periodos(self):
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Compara el inventario de este mes con el mes anterior por familia"},
+        ])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.tipo, "inventario")
+        self.assertTrue(intento.comparacion)
+        consulta, _parametros = crear_consulta_semantica(intento)
+        self.assertIn("inventario_historico ih", consulta)
+        self.assertIn("periodo_anterior", consulta)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -108,6 +108,9 @@ export interface DataImportStatus {
   products: number;
   clients: number;
   inventory_records: number;
+  inventory_history_records: number;
+  inventory_date_min: string | null;
+  inventory_date_max: string | null;
   sales_records: number;
   sales_date_min: string | null;
   sales_date_max: string | null;
@@ -177,7 +180,11 @@ export const downloadDataImportTemplate = async (dataset: DataImportDataset): Pr
   const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = dataset === 'sales' ? 'fivemin_ventas.csv' : `plantilla_${dataset}.csv`;
+  link.download = dataset === 'sales'
+    ? 'fivemin_ventas.csv'
+    : dataset === 'inventory'
+      ? 'fivemin_inventario.csv'
+      : `plantilla_${dataset}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();

@@ -20,6 +20,7 @@ from ..database import get_db
 from ..models import (
     Cliente,
     EmpresaEstadisticas,
+    InventarioHistorico,
     InventarioSnapshot,
     Producto,
     ProductoMetricas,
@@ -98,17 +99,30 @@ DATASET_CONFIG = {
         },
     },
     "inventory": {
-        "required": {"sku", "stock_disponible"},
-        "headers": ["sku", "stock_disponible"],
-        "sample": ["SKU-001", "150"],
+        "required": {"fecha_inventario", "nombre", "sku", "marca", "familia_marca", "familia", "seccion", "ean", "product_manager", "inventario_eur", "stock_disponible"},
+        "headers": ["Fecha", "Nombre Articulo", "ArticuloPK", "Nombre Marca", "Familia/Marca", "Nombre Familia", "Nombre Seccion", "EAN", "Product Manager", "Inventario", "Unidades Inv"],
+        "sample": ["06/08/2026", "Producto de ejemplo", "SKU-001", "Marca A", "Moviles/Marca A", "Moviles", "Telefonia", "8430000000001", "Responsable", "1.250,50 €", "150"],
+        "canonical_headers": {"fecha_inventario", "nombre", "sku", "marca", "familia_marca", "familia", "seccion", "ean", "product_manager", "inventario_eur", "stock_disponible"},
         "aliases": {
+            "fecha": "fecha_inventario",
+            "fecha_inventario": "fecha_inventario",
             "codigo": "sku",
             "codigo_articulo": "sku",
             "cod_art": "sku",
             "articulo": "sku",
+            "articulopk": "sku",
+            "nombre_articulo": "nombre",
+            "nombre_art": "nombre",
+            "nombre_marca": "marca",
+            "nombre_familia": "familia",
+            "nombre_seccion": "seccion",
+            "familia_marca": "familia_marca",
+            "inventario": "inventario_eur",
+            "valor_inventario": "inventario_eur",
             "stock": "stock_disponible",
             "stock_actual": "stock_disponible",
             "unidades": "stock_disponible",
+            "unidades_inv": "stock_disponible",
             "inventario_unidades": "stock_disponible",
         },
     },
@@ -154,7 +168,7 @@ DATASET_CONFIG = {
             "Product Manager",
             "ClientePK",
             "Nombre Cliente",
-            "KD",
+            "Kit Digital",
             "Tipo Cliente",
             "Nombre Comercial",
             "Comercial Factura",
@@ -247,6 +261,8 @@ DATASET_CONFIG = {
             "clientepk": "cliente_pk",
             "codigo_cliente": "cliente_pk",
             "nombre_cliente": "nombre_cliente",
+            "kit_digital": "kd",
+            "kd": "kd",
             "tipo_cliente": "tipo_cliente",
             "nombre_comercial": "comercial_cliente",
             "comercial_cliente": "comercial_cliente",
@@ -291,6 +307,8 @@ def _parse_number(value: Any, field: str, required: bool = True) -> float | None
             cleaned = cleaned.replace(",", "")
     elif "," in cleaned:
         cleaned = cleaned.replace(",", ".")
+    elif re.fullmatch(r"[+-]?\d{1,3}(?:\.\d{3})+", cleaned):
+        cleaned = cleaned.replace(".", "")
     try:
         return float(cleaned)
     except ValueError as exc:
@@ -327,7 +345,7 @@ def _parse_percentage(value: Any, field: str, required: bool = False) -> float |
     return parsed
 
 
-def _parse_date(value: Any) -> date:
+def _parse_date(value: Any, field: str = "fecha") -> date:
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
@@ -338,7 +356,7 @@ def _parse_date(value: Any) -> date:
             return datetime.strptime(raw, date_format).date()
         except ValueError:
             continue
-    raise ValueError("fecha_venta debe usar YYYY-MM-DD o DD/MM/YYYY")
+    raise ValueError(f"{field} debe usar YYYY-MM-DD o DD/MM/YYYY")
 
 
 def _required_text(value: Any, field: str, max_length: int = 255) -> str:
@@ -493,16 +511,16 @@ def _validate_rows(
     valid_rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
-    seen_skus: set[str] = set()
+    seen_keys: set[tuple[str, date] | str] = set()
 
     for index, row in enumerate(rows, start=2):
         try:
             sku = _required_text(row.get("sku"), "sku", 120)
-            if dataset in {"products", "inventory"}:
+            if dataset == "products":
                 normalized_sku = sku.casefold()
-                if normalized_sku in seen_skus:
+                if normalized_sku in seen_keys:
                     raise ValueError("sku esta duplicado dentro del archivo")
-                seen_skus.add(normalized_sku)
+                seen_keys.add(normalized_sku)
 
             if dataset == "products":
                 costo = _parse_number(row.get("costo_unitario"), "costo_unitario")
@@ -533,10 +551,30 @@ def _validate_rows(
                     "seccion": str(row.get("seccion") or "").strip() or None,
                 })
             elif dataset == "inventory":
+                fecha_inventario = _parse_date(row.get("fecha_inventario"), "Fecha")
+                inventory_key = (sku.casefold(), fecha_inventario)
+                if inventory_key in seen_keys:
+                    raise ValueError("la combinación Fecha + ArticuloPK está duplicada dentro del archivo")
+                seen_keys.add(inventory_key)
                 stock = _parse_integer(row.get("stock_disponible"), "stock_disponible")
+                inventario_eur = _parse_number(row.get("inventario_eur"), "Inventario")
                 if stock is None or stock < 0:
                     raise ValueError("stock_disponible no puede ser negativo")
-                valid_rows.append({"sku": sku, "stock_disponible": stock})
+                if inventario_eur is None or inventario_eur < 0:
+                    raise ValueError("Inventario no puede ser negativo")
+                valid_rows.append({
+                    "sku": sku,
+                    "fecha_inventario": fecha_inventario,
+                    "nombre": _required_text(row.get("nombre"), "Nombre Articulo", 255),
+                    "marca": _optional_text(row.get("marca"), "Nombre Marca"),
+                    "familia_marca": _optional_text(row.get("familia_marca"), "Familia/Marca"),
+                    "familia": _optional_text(row.get("familia"), "Nombre Familia"),
+                    "seccion": _optional_text(row.get("seccion"), "Nombre Seccion"),
+                    "ean": _optional_text(row.get("ean"), "EAN", 80),
+                    "product_manager": _optional_text(row.get("product_manager"), "Product Manager"),
+                    "inventario_eur": inventario_eur,
+                    "stock_disponible": stock,
+                })
             else:
                 cantidad = _parse_integer(row.get("cantidad_vendida"), "cantidad_vendida")
                 precio = _parse_number(row.get("precio_unitario"), "precio_unitario", required=False)
@@ -625,8 +663,9 @@ def _validation_response(
         "warnings": warnings,
         **metadata,
     }
-    if dataset == "sales" and valid_rows:
-        dates = [row["fecha_venta"] for row in valid_rows]
+    if dataset in {"sales", "inventory"} and valid_rows:
+        date_field = "fecha_venta" if dataset == "sales" else "fecha_inventario"
+        dates = [row[date_field] for row in valid_rows]
         response["date_min"] = min(dates).isoformat()
         response["date_max"] = max(dates).isoformat()
     return response
@@ -652,6 +691,7 @@ def _clear_company_operational_data(db: Session, empresa_id: int) -> None:
         db.query(Registro_PO).filter(Registro_PO.producto_id.in_(product_ids)).delete(synchronize_session=False)
         db.query(ProductoMetricas).filter(ProductoMetricas.producto_id.in_(product_ids)).delete(synchronize_session=False)
         db.query(InventarioSnapshot).filter(InventarioSnapshot.producto_id.in_(product_ids)).delete(synchronize_session=False)
+        db.query(InventarioHistorico).filter(InventarioHistorico.producto_id.in_(product_ids)).delete(synchronize_session=False)
         db.query(Producto).filter(Producto.id.in_(product_ids)).delete(synchronize_session=False)
     db.query(Cliente).filter(Cliente.empresa_id == empresa_id).delete(synchronize_session=False)
     db.query(EmpresaEstadisticas).filter(EmpresaEstadisticas.empresa_id == empresa_id).delete(synchronize_session=False)
@@ -708,6 +748,20 @@ def _ensure_sales_schema(db: Session) -> None:
         raise HTTPException(
             status_code=503,
             detail="La base de datos necesita las migraciones V1.02 y V1.10 antes de cargar fivemin_ventas.",
+        )
+
+
+def _ensure_inventory_schema(db: Session) -> None:
+    table_names = set(inspect(db.bind).get_table_names())
+    columns = (
+        {column["name"] for column in inspect(db.bind).get_columns("inventario_historico")}
+        if "inventario_historico" in table_names else set()
+    )
+    required = {"producto_id", "fecha_inventario", "inventario_eur", "unidades_inventario"}
+    if required - columns:
+        raise HTTPException(
+            status_code=503,
+            detail="La base de datos necesita la migración V1.13 antes de cargar el histórico de inventario.",
         )
 
 
@@ -768,6 +822,8 @@ async def load_import(
     try:
         if dataset == "sales":
             _ensure_sales_schema(db)
+        elif dataset == "inventory":
+            _ensure_inventory_schema(db)
         affected = 0
         created = 0
         updated = 0
@@ -796,25 +852,71 @@ async def load_import(
 
         elif dataset == "inventory":
             products = _company_products(db, empresa_id)
-            unknown = [
-                {"line": index + 2, "message": f"El SKU {row['sku']} no existe en el catalogo."}
-                for index, row in enumerate(valid_rows)
-                if row["sku"].casefold() not in products
-            ]
-            if unknown:
-                raise HTTPException(status_code=400, detail={"valid": False, "errors": unknown[:MAX_REPORTED_ERRORS]})
+            latest_rows: dict[str, dict[str, Any]] = {}
             for row in valid_rows:
-                product = products[row["sku"].casefold()]
-                snapshot = db.query(InventarioSnapshot).filter(
-                    InventarioSnapshot.producto_id == product.id
-                ).first()
-                if snapshot is None:
-                    db.add(InventarioSnapshot(producto_id=product.id, stock_disponible=row["stock_disponible"]))
-                    created += 1
+                key = row["sku"].casefold()
+                if key not in latest_rows or row["fecha_inventario"] >= latest_rows[key]["fecha_inventario"]:
+                    latest_rows[key] = row
+            for product_key, row in latest_rows.items():
+                product = products.get(product_key)
+                unit_cost = row["inventario_eur"] / row["stock_disponible"] if row["stock_disponible"] else 0.0
+                product_fields = {field: row[field] for field in ("marca", "familia_marca", "familia", "seccion", "ean", "product_manager")}
+                if product is None:
+                    product = Producto(
+                        empresa_id=empresa_id,
+                        sku=row["sku"],
+                        nombre=row["nombre"],
+                        costo_unitario=unit_cost,
+                        precio_venta=0.0,
+                        lead_time_dias=7,
+                        **product_fields,
+                    )
+                    db.add(product)
+                    products[product_key] = product
+                    products_created += 1
                 else:
-                    snapshot.stock_disponible = row["stock_disponible"]
-                    updated += 1
-            affected = len(valid_rows)
+                    product.nombre = row["nombre"]
+                    product.costo_unitario = unit_cost
+                    for field, value in product_fields.items():
+                        if value is not None:
+                            setattr(product, field, value)
+                    products_updated += 1
+            db.flush()
+
+            product_ids = list({products[row["sku"].casefold()].id for row in valid_rows})
+            incoming_keys = {(products[row["sku"].casefold()].id, row["fecha_inventario"]) for row in valid_rows}
+            existing_rows = db.query(InventarioHistorico).filter(
+                InventarioHistorico.producto_id.in_(product_ids)
+            ).all()
+            ids_to_delete = [row.id for row in existing_rows if (row.producto_id, row.fecha_inventario) in incoming_keys]
+            if ids_to_delete:
+                db.query(InventarioHistorico).filter(InventarioHistorico.id.in_(ids_to_delete)).delete(synchronize_session=False)
+                updated = len(ids_to_delete)
+            records = [{
+                "producto_id": products[row["sku"].casefold()].id,
+                "fecha_inventario": row["fecha_inventario"],
+                "inventario_eur": row["inventario_eur"],
+                "unidades_inventario": row["stock_disponible"],
+            } for row in valid_rows]
+            db.bulk_insert_mappings(InventarioHistorico, records)
+            db.flush()
+            latest_inventory: dict[int, InventarioHistorico] = {}
+            for item in db.query(InventarioHistorico).filter(
+                InventarioHistorico.producto_id.in_(product_ids)
+            ).order_by(InventarioHistorico.producto_id, InventarioHistorico.fecha_inventario.desc()).all():
+                latest_inventory.setdefault(item.producto_id, item)
+            snapshots = {
+                snapshot.producto_id: snapshot
+                for snapshot in db.query(InventarioSnapshot).filter(InventarioSnapshot.producto_id.in_(product_ids)).all()
+            }
+            for product_id, item in latest_inventory.items():
+                snapshot = snapshots.get(product_id)
+                if snapshot is None:
+                    db.add(InventarioSnapshot(producto_id=product_id, stock_disponible=item.unidades_inventario))
+                else:
+                    snapshot.stock_disponible = item.unidades_inventario
+            affected = len(records)
+            created = max(0, len(records) - updated)
 
         else:
             if replace_existing:
@@ -1041,6 +1143,11 @@ def import_status(
     inventory_count = db.query(func.count(InventarioSnapshot.producto_id)).join(Producto).filter(
         Producto.empresa_id == empresa_id
     ).scalar() or 0
+    inventory_summary = db.query(
+        func.count(InventarioHistorico.id),
+        func.min(InventarioHistorico.fecha_inventario),
+        func.max(InventarioHistorico.fecha_inventario),
+    ).join(Producto).filter(Producto.empresa_id == empresa_id).one()
     client_count = db.query(func.count(Cliente.id)).filter(Cliente.empresa_id == empresa_id).scalar() or 0
     sales_summary = db.query(
         func.count(VentaHistorica.id),
@@ -1050,6 +1157,9 @@ def import_status(
     return {
         "products": int(product_count),
         "inventory_records": int(inventory_count),
+        "inventory_history_records": int(inventory_summary[0] or 0),
+        "inventory_date_min": inventory_summary[1].isoformat() if inventory_summary[1] else None,
+        "inventory_date_max": inventory_summary[2].isoformat() if inventory_summary[2] else None,
         "clients": int(client_count),
         "sales_records": int(sales_summary[0] or 0),
         "sales_date_min": sales_summary[1].isoformat() if sales_summary[1] else None,

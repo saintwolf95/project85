@@ -71,6 +71,11 @@ class PlanAnaliticoVentas:
 
 def es_pregunta_gerencial(texto: str) -> bool:
     """Identifica preguntas que exigen diagnostico y no un total aislado."""
+    if "Ã" in texto or "Â" in texto:
+        try:
+            texto = texto.encode("latin-1").decode("utf-8")
+        except UnicodeError:
+            pass
     normalizado = unicodedata.normalize("NFD", texto.lower())
     normalizado = "".join(caracter for caracter in normalizado if unicodedata.category(caracter) != "Mn")
     return bool(re.search(

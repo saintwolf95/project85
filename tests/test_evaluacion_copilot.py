@@ -147,6 +147,19 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 self.assertEqual(inicio, inicio_esperado)
                 self.assertEqual(fin, fin_esperado)
 
+    def test_pregunta_gerencial_mal_codificada_sigue_la_consulta_segura(self):
+        intento, aclaracion = analizar_intencion([{
+            "role": "user",
+            "content": "\u00c2\u00bfC\u00c3\u00b3mo va la empresa este mes?",
+        }])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.tipo, "ventas")
+        self.assertTrue(intento.comparacion)
+        consulta, _ = crear_consulta_semantica(intento)
+        self.assertNotIn("LEFT JOIN clientes", consulta)
+
     def test_inventario_historico_permite_comparar_periodos(self):
         intento, aclaracion = analizar_intencion([
             {"role": "user", "content": "Compara el inventario de este mes con el mes anterior por familia"},

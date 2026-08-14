@@ -32,6 +32,11 @@ class IntentoSemantico:
 
 def normalizar_texto(texto: str) -> str:
     """Normaliza acentos y espacios para que el parser sea estable en espanol."""
+    if "Ã" in texto or "Â" in texto:
+        try:
+            texto = texto.encode("latin-1").decode("utf-8")
+        except UnicodeError:
+            pass
     texto = unicodedata.normalize("NFD", texto.lower())
     texto = "".join(caracter for caracter in texto if unicodedata.category(caracter) != "Mn")
     return re.sub(r"\s+", " ", texto).strip()
@@ -689,6 +694,13 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             if intento.agrupacion == "matriz" or any(campo in intento.parametros for campo in ("xyz", "matriz_abc"))
             else ""
         )
+        usa_clientes = intento.agrupacion in {
+            "cliente", "tipo_cliente", "comercial_cliente",
+        } or any(campo in intento.parametros for campo in {
+            "cliente_pk", "nombre_cliente", "tipo_cliente", "comercial_cliente",
+        })
+        join_clientes = " LEFT JOIN clientes c ON c.id = vh.cliente_id" if usa_clientes else ""
+        columna_clientes = ", COUNT(DISTINCT vh.cliente_id) AS clientes" if usa_clientes else ""
         prefijo_abc = crear_cte_abc_ventas() if usa_abc_dinamico else ""
         join_abc = " LEFT JOIN clasificacion_abc ca ON ca.producto_id = p.id" if usa_abc_dinamico else ""
         if intento.comparacion:
@@ -704,11 +716,10 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                 sql = f"""{prefijo_abc}
                     SELECT {agrupacion} AS agrupacion,
                            {columnas_comparacion},
-                           {productos_actuales} AS productos,
-                           COUNT(DISTINCT vh.cliente_id) AS clientes
+                           {productos_actuales} AS productos{columna_clientes}
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
-                    LEFT JOIN clientes c ON c.id = vh.cliente_id
+                    {join_clientes}
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -718,11 +729,10 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             else:
                 sql = f"""{prefijo_abc}
                     SELECT {columnas_comparacion},
-                           {productos_actuales} AS productos,
-                           COUNT(DISTINCT vh.cliente_id) AS clientes
+                           {productos_actuales} AS productos{columna_clientes}
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
-                    LEFT JOIN clientes c ON c.id = vh.cliente_id
+                    {join_clientes}
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -732,11 +742,10 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             sql = f"""{prefijo_abc}
                 SELECT {agrupacion} AS agrupacion,
                        {expresion_agregada} AS {alias_agregado},
-                       COUNT(DISTINCT vh.producto_id) AS productos,
-                       COUNT(DISTINCT vh.cliente_id) AS clientes
+                       COUNT(DISTINCT vh.producto_id) AS productos{columna_clientes}
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
-                LEFT JOIN clientes c ON c.id = vh.cliente_id
+                {join_clientes}
                 {join_abc}
                 {join_metricas}
                 WHERE {condiciones}
@@ -746,11 +755,10 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         else:
             sql = f"""{prefijo_abc}
                    SELECT {expresion_agregada} AS {alias_agregado},
-                          COUNT(DISTINCT vh.producto_id) AS productos,
-                          COUNT(DISTINCT vh.cliente_id) AS clientes
+                          COUNT(DISTINCT vh.producto_id) AS productos{columna_clientes}
                    FROM ventas_historicas vh
                    JOIN productos p ON p.id = vh.producto_id
-                   LEFT JOIN clientes c ON c.id = vh.cliente_id
+                   {join_clientes}
                    {join_abc}
                    {join_metricas}
                    WHERE {condiciones}

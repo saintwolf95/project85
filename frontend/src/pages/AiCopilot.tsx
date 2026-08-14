@@ -310,7 +310,13 @@ export const AiCopilot = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const now = () => new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const formatMessageTimestamp = (value: Date | string = new Date()) => {
+    const date = typeof value === 'string' ? new Date(value) : value;
+    if (Number.isNaN(date.getTime())) return '';
+    const pad = (number: number) => number.toString().padStart(2, '0');
+    return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+  };
+  const now = () => formatMessageTimestamp();
 
   const suggestions = capabilities?.inventario_disponible
     ? [...SALES_SUGGESTIONS, ...INVENTORY_SUGGESTIONS]
@@ -390,7 +396,7 @@ export const AiCopilot = () => {
           id: h.id.toString(),
           role: h.role === 'assistant' ? 'ai' : 'user',
           content: h.content,
-          timestamp: new Date(h.creado_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: formatMessageTimestamp(h.creado_en),
         }));
         setMessages(formatted);
       }

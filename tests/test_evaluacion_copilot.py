@@ -133,6 +133,20 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertEqual(intento.fecha_inicio, date(2026, 5, 1))
         self.assertEqual(intento.fecha_fin, date(2026, 7, 31))
 
+    def test_resolver_periodo_admite_formulaciones_naturales_de_meses(self):
+        casos = (
+            ("Entre febrero y abril", date(2026, 2, 1), date(2026, 4, 30)),
+            ("Ventas mensuales: mayo, junio y julio", date(2026, 5, 1), date(2026, 7, 31)),
+            ("De noviembre a febrero", date(2025, 11, 1), date(2026, 2, 28)),
+            ("Ventas del mes de junio", date(2026, 6, 1), date(2026, 6, 30)),
+        )
+        for texto, inicio_esperado, fin_esperado in casos:
+            with self.subTest(texto=texto):
+                periodo, inicio, fin = resolver_periodo(texto, hoy=date(2026, 8, 14))
+                self.assertEqual(periodo, "rango_personalizado")
+                self.assertEqual(inicio, inicio_esperado)
+                self.assertEqual(fin, fin_esperado)
+
     def test_inventario_historico_permite_comparar_periodos(self):
         intento, aclaracion = analizar_intencion([
             {"role": "user", "content": "Compara el inventario de este mes con el mes anterior por familia"},

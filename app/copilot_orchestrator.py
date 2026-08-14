@@ -63,6 +63,8 @@ MESES_ES = {
     "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
     "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
     "noviembre": 11, "diciembre": 12,
+    "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+    "jul": 7, "ago": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dic": 12,
 }
 
 
@@ -72,22 +74,33 @@ def _ultimo_dia_mes(anio: int, mes: int) -> date:
 
 
 def _resolver_rango_meses(normalizado: str, fecha_hoy: date) -> tuple[date, date] | None:
-    """Resuelve rangos como 'desde mayo hasta julio' sin exigir fechas numéricas."""
+    """Resuelve meses y rangos expresados en lenguaje natural."""
     nombres_meses = "|".join(MESES_ES)
-    rango = re.search(
-        rf"\b(?:desde\s+)?(?:el\s+)?(?:mes\s+de\s+)?({nombres_meses})"
-        rf"(?:\s+de\s+(\d{{4}}))?\s+(?:hasta|a|al)\s+(?:el\s+)?"
-        rf"(?:mes\s+de\s+)?({nombres_meses})(?:\s+de\s+(\d{{4}}))?\b",
+    coincidencias = list(re.finditer(
+        rf"\b({nombres_meses})\b(?:\s+(?:de\s+)?(\d{{4}}))?",
         normalizado,
-    )
-    if not rango:
+    ))
+    if not coincidencias:
         return None
 
-    mes_inicio, mes_fin = MESES_ES[rango.group(1)], MESES_ES[rango.group(3)]
-    anio_inicio = int(rango.group(2)) if rango.group(2) else (
+    primera, ultima = coincidencias[0], coincidencias[-1]
+    es_rango = len(coincidencias) > 1 and (
+        re.search(r"\b(?:desde|hasta|entre|y|a|al)\b|[-–—,]", normalizado[primera.end():ultima.start()])
+        or "por mes" in normalizado
+        or "mensual" in normalizado
+    )
+    es_mes_unico = len(coincidencias) == 1 and re.search(
+        rf"\b(?:en|de|del|durante)\s+(?:el\s+)?(?:mes\s+de\s+)?{re.escape(primera.group(1))}\b",
+        normalizado,
+    )
+    if not es_rango and not es_mes_unico:
+        return None
+
+    mes_inicio, mes_fin = MESES_ES[primera.group(1)], MESES_ES[ultima.group(1)]
+    anio_inicio = int(primera.group(2)) if primera.group(2) else (
         fecha_hoy.year if mes_inicio <= fecha_hoy.month else fecha_hoy.year - 1
     )
-    anio_fin = int(rango.group(4)) if rango.group(4) else (
+    anio_fin = int(ultima.group(2)) if ultima.group(2) else (
         anio_inicio if mes_fin >= mes_inicio else anio_inicio + 1
     )
     inicio, fin = date(anio_inicio, mes_inicio, 1), _ultimo_dia_mes(anio_fin, mes_fin)

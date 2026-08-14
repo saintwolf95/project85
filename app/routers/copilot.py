@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import re
 from ..database import get_db
@@ -21,6 +21,13 @@ MAX_CHAT_HISTORY_MESSAGES = 100
 MAX_CHAT_LIST = 100
 MAX_LIBRERIA_DOCS_PER_QUERY = 10
 MAX_DOCUMENT_PAGES = 50
+
+
+def _fecha_mensaje_api(fecha: datetime) -> str:
+    """Expone los timestamps históricos como UTC inequívoco para el navegador."""
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    return fecha.isoformat()
 
 class ChatMessage(BaseModel):
     role: Literal["user"]
@@ -157,7 +164,10 @@ def get_chat_history(chat_id: int, db: Session = Depends(get_db), current_user: 
         CopilotMessage.chat_id == chat_id
     ).order_by(CopilotMessage.creado_en.desc()).limit(MAX_CHAT_HISTORY_MESSAGES).all()
     mensajes.reverse()
-    return [{"id": m.id, "role": m.rol, "content": m.contenido, "creado_en": m.creado_en} for m in mensajes]
+    return [
+        {"id": m.id, "role": m.rol, "content": m.contenido, "creado_en": _fecha_mensaje_api(m.creado_en)}
+        for m in mensajes
+    ]
 
 @router.delete("/chats/{chat_id}")
 def delete_chat(chat_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):

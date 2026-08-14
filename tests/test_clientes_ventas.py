@@ -2,7 +2,7 @@ import csv
 import io
 import unittest
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _read_csv, _validate_rows
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _validate_rows
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -77,6 +77,7 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(_margin_percentage_with_loss_floor(-12.0, 0.0), -200.0)
         self.assertEqual(_margin_percentage_with_loss_floor(-300.0, 100.0), -200.0)
         self.assertEqual(_margin_percentage_with_loss_floor(-12.0, 100.0), -12.0)
+        self.assertEqual(_parse_percentage("-123018,6%", "% MGD"), -200.0)
 
 
 if __name__ == "__main__":

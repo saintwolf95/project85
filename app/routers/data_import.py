@@ -326,10 +326,6 @@ def _parse_integer(value: Any, field: str, required: bool = True) -> int | None:
     return int(parsed)
 
 
-class PercentageOutOfRange(ValueError):
-    """Porcentaje no fiable: se conserva la fila, pero se omite el dato puntual."""
-
-
 def _parse_percentage(value: Any, field: str, required: bool = False) -> float | None:
     raw = str(value or "").strip()
     if not raw:
@@ -342,9 +338,7 @@ def _parse_percentage(value: Any, field: str, required: bool = False) -> float |
         return None
     if not has_percent_sign and abs(parsed) <= 1:
         parsed *= 100
-    if not -1000 <= parsed <= 1000:
-        raise PercentageOutOfRange(f"{field} contiene un porcentaje fuera de rango")
-    return parsed
+    return max(parsed, PERCENTAGE_LOSS_FLOOR)
 
 
 def _margin_percentage_with_loss_floor(margen_eur: float, ventas_eur: float) -> float | None:
@@ -623,23 +617,9 @@ def _validate_rows(
                 precio = _parse_number(row.get("precio_unitario"), "precio_unitario", required=False)
                 ingreso = _parse_number(row.get("ingreso_total"), "Ventas")
                 margen_bruto_eur = _parse_number(row.get("margen_bruto_eur"), "Margen", required=False)
-                margen_bruto_pct_omitido = False
-                try:
-                    margen_bruto_pct = _parse_percentage(row.get("margen_bruto_pct"), "% MG", required=False)
-                except PercentageOutOfRange as exc:
-                    margen_bruto_pct = None
-                    margen_bruto_pct_omitido = True
-                    if len(warnings) < MAX_REPORTED_WARNINGS:
-                        warnings.append({"line": index, "message": f"{exc}; se ha omitido ese porcentaje."})
+                margen_bruto_pct = _parse_percentage(row.get("margen_bruto_pct"), "% MG", required=False)
                 margen_destino_eur = _parse_number(row.get("margen_destino_eur"), "MGD", required=False)
-                margen_destino_pct_omitido = False
-                try:
-                    margen_destino_pct = _parse_percentage(row.get("margen_destino_pct"), "% MGD", required=False)
-                except PercentageOutOfRange as exc:
-                    margen_destino_pct = None
-                    margen_destino_pct_omitido = True
-                    if len(warnings) < MAX_REPORTED_WARNINGS:
-                        warnings.append({"line": index, "message": f"{exc}; se ha omitido ese porcentaje."})
+                margen_destino_pct = _parse_percentage(row.get("margen_destino_pct"), "% MGD", required=False)
                 stock = _parse_integer(row.get("stock_disponible"), "stock_disponible", required=False)
                 if precio is not None and precio < 0:
                     raise ValueError("precio_unitario no puede ser negativo")
@@ -649,11 +629,11 @@ def _validate_rows(
                     precio = float(ingreso) / cantidad if cantidad else 0.0
                 if margen_bruto_eur is None and margen_bruto_pct is not None:
                     margen_bruto_eur = float(ingreso) * margen_bruto_pct / 100
-                if not margen_bruto_pct_omitido and margen_bruto_pct is None and ingreso and margen_bruto_eur is not None:
+                if margen_bruto_pct is None and ingreso and margen_bruto_eur is not None:
                     margen_bruto_pct = margen_bruto_eur / float(ingreso) * 100
                 if margen_destino_eur is None and margen_destino_pct is not None:
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
-                if not margen_destino_pct_omitido and margen_destino_pct is None and ingreso and margen_destino_eur is not None:
+                if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
                     margen_destino_pct = margen_destino_eur / float(ingreso) * 100
                 valid_rows.append({
                     "sku": sku,

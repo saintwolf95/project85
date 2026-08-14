@@ -27,6 +27,33 @@ logger = logging.getLogger(__name__)
 ALLOW_SCHEMA_INIT = os.getenv("ALLOW_SCHEMA_INIT", "false" if IS_PRODUCTION else "true").strip().lower() in {"1", "true", "yes"}
 ENABLE_DAILY_AGENT_REPORTS = os.getenv("ENABLE_DAILY_AGENT_REPORTS", "true" if IS_PRODUCTION else "false").strip().lower() in {"1", "true", "yes"}
 
+
+def ensure_inventory_history_schema() -> None:
+    """Crea el soporte mínimo de histórico de inventario en PostgreSQL de forma idempotente."""
+    if not IS_POSTGRES:
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS inventario_historico (
+                id SERIAL PRIMARY KEY,
+                producto_id INTEGER NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+                fecha_inventario DATE NOT NULL,
+                inventario_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                unidades_inventario INTEGER NOT NULL DEFAULT 0,
+                CONSTRAINT uq_inventario_historico_producto_fecha UNIQUE (producto_id, fecha_inventario)
+            )
+        """))
+        connection.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_inventario_historico_producto_fecha
+            ON inventario_historico (producto_id, fecha_inventario)
+        """))
+        connection.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_inventario_historico_fecha
+            ON inventario_historico (fecha_inventario)
+        """))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     daily_task = None
@@ -35,7 +62,12 @@ async def lifespan(app: FastAPI):
         daily_task = asyncio.create_task(daily_reports_loop())
 
     if IS_PRODUCTION and not ALLOW_SCHEMA_INIT:
-        logger.info("[STARTUP] Produccion: se omiten create_all, auto-seed, migraciones manuales y sincronizacion de arranque.")
+        try:
+            ensure_inventory_history_schema()
+            logger.info("[STARTUP] Esquema de histórico de inventario verificado.")
+        except Exception:
+            logger.exception("[STARTUP] No se pudo verificar el esquema de histórico de inventario.")
+        logger.info("[STARTUP] Produccion: se omiten create_all, auto-seed y sincronizacion de arranque.")
         try:
             yield
         finally:
@@ -116,7 +148,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.15.0",
+    version="1.17.0",
     lifespan=lifespan
 )
 

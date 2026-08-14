@@ -286,6 +286,7 @@ DEFINICIONES DE NEGOCIO OBLIGATORIAS:
 - Para evoluciones, variaciones o inventario de una fecha pasada usa `inventario_historico`, no el snapshot actual. Su cobertura comienza el 06/08/2026; no infieras inventario antes de esa fecha.
 - "margen", "MG" o "beneficio" = SUM(vh.margen_bruto_eur); su porcentaje agregado es SUM(margen_bruto_eur) / SUM(ingreso_total) * 100.
 - "MGD" o "margen en destino" = SUM(vh.margen_destino_eur); su porcentaje agregado es SUM(margen_destino_eur) / SUM(ingreso_total) * 100.
+- En operaciones con ventas de cero euros y pérdida, el porcentaje individual se limita a -200 % como señal de severidad; analiza siempre el importe en euros para cuantificar la pérdida real.
 - No recalcules MG o MGD desde el catálogo cuando existen estas columnas de ventas: son la fuente económica oficial.
 - Cuando se solicite una comparación, informa periodo actual, periodo anterior, variación absoluta y variación porcentual.
 - "oportunidad comercial" significa producto ABC A/B con stock disponible, margen positivo y ventas en los últimos 90 días; "acción prioritaria" ordena primero roturas de productos clave, después capital inmovilizado y después oportunidades.

@@ -1,6 +1,8 @@
+import csv
+import io
 import unittest
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _validate_rows
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _read_csv, _validate_rows
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -55,6 +57,26 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(valid[0]["kd"], "SI")
         self.assertEqual(valid[0]["comercial_cliente"], "Ana")
         self.assertEqual(valid[0]["comercial_factura"], "Luis")
+
+    def test_ignora_total_y_filtros_de_power_bi_al_final(self):
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(DATASET_CONFIG["sales"]["headers"])
+        writer.writerow(DATASET_CONFIG["sales"]["sample"])
+        writer.writerow(["Total", "22.949.634 €", "398.862", "4,8%", "1.107.955 €", "3,8%", "880.562 €"])
+        writer.writerow(["Filtros aplicados: Periodo es Current FY; Kit Digital es No"])
+        writer.writerow(["Nombre Familia no es Marketing o Gestión"])
+
+        rows, metadata = _read_csv(output.getvalue().encode("utf-8"), "sales")
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["fecha_venta"], "01/05/2026")
+        self.assertEqual(metadata["ignored_powerbi_rows"], 3)
+
+    def test_ancla_perdida_sin_venta_a_menos_doscientos_por_ciento(self):
+        self.assertEqual(_margin_percentage_with_loss_floor(-12.0, 0.0), -200.0)
+        self.assertEqual(_margin_percentage_with_loss_floor(-300.0, 100.0), -200.0)
+        self.assertEqual(_margin_percentage_with_loss_floor(-12.0, 100.0), -12.0)
 
 
 if __name__ == "__main__":

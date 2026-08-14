@@ -40,6 +40,8 @@ MAX_IMPORT_COLUMNS = 64
 MAX_REPORTED_ERRORS = 100
 MAX_REPORTED_WARNINGS = 100
 SUPPORTED_DATASETS = {"products", "inventory", "sales"}
+POWER_BI_TRAILER_PREFIXES = ("total", "subtotal", "filtros_aplicados", "filters_applied")
+PERCENTAGE_LOSS_FLOOR = -200.0
 
 DATASET_CONFIG = {
     "products": {
@@ -345,6 +347,14 @@ def _parse_percentage(value: Any, field: str, required: bool = False) -> float |
     return parsed
 
 
+def _margin_percentage_with_loss_floor(margen_eur: float, ventas_eur: float) -> float | None:
+    """Evita porcentajes infinitos y conserva una señal visible para pérdidas sin venta."""
+    if abs(ventas_eur) < 0.01:
+        return PERCENTAGE_LOSS_FLOOR if margen_eur < 0 else None
+    percentage = margen_eur / ventas_eur * 100
+    return max(percentage, PERCENTAGE_LOSS_FLOOR)
+
+
 def _parse_date(value: Any, field: str = "fecha") -> date:
     if isinstance(value, datetime):
         return value.date()
@@ -421,6 +431,15 @@ def _cell_to_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _is_power_bi_trailer(row: dict[str, str]) -> bool:
+    """Detecta totales, subtotales y pie de filtros exportados por Power BI."""
+    first_value = next((str(value).strip() for value in row.values() if str(value).strip()), "")
+    if not first_value:
+        return False
+    normalized = _normalize_header(first_value)
+    return normalized.startswith(POWER_BI_TRAILER_PREFIXES)
+
+
 def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
     try:
         with zipfile.ZipFile(io.BytesIO(content)) as archive:
@@ -439,6 +458,8 @@ def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict
             raise HTTPException(status_code=400, detail="El XLSX no contiene cabeceras.")
         normalized_headers = _canonicalize_headers(list(headers), dataset)
         rows: list[dict[str, str]] = []
+        ignored_powerbi_rows = 0
+        reached_filters_footer = False
         for source_row in rows_iterator:
             if len(rows) >= MAX_IMPORT_ROWS:
                 raise HTTPException(status_code=400, detail="El XLSX supera el limite de 100.000 filas.")
@@ -446,6 +467,15 @@ def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict
                 header: _cell_to_text(source_row[index] if index < len(source_row) else None)
                 for index, header in enumerate(normalized_headers)
             }
+            if reached_filters_footer:
+                if any(normalized_row.values()):
+                    ignored_powerbi_rows += 1
+                continue
+            if _is_power_bi_trailer(normalized_row):
+                ignored_powerbi_rows += 1
+                first_value = next((value for value in normalized_row.values() if value), "")
+                reached_filters_footer = _normalize_header(first_value).startswith(("filtros_aplicados", "filters_applied"))
+                continue
             if any(normalized_row.values()):
                 rows.append(normalized_row)
         if not rows:
@@ -455,6 +485,7 @@ def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict
             normalized_headers,
             encoding="xlsx",
             delimiter=f"hoja: {sheet.title}",
+            ignored_powerbi_rows=ignored_powerbi_rows,
         )
     finally:
         workbook.close()
@@ -472,6 +503,8 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
         raise HTTPException(status_code=400, detail="El CSV no contiene cabeceras.")
     normalized_headers = _canonicalize_headers(list(reader.fieldnames), dataset)
     rows: list[dict[str, str]] = []
+    ignored_powerbi_rows = 0
+    reached_filters_footer = False
     for source_row in reader:
         if len(rows) >= MAX_IMPORT_ROWS:
             raise HTTPException(status_code=400, detail="El CSV supera el limite de 100.000 filas.")
@@ -479,6 +512,15 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
             normalized_headers[index]: str(source_row.get(original_header) or "").strip()
             for index, original_header in enumerate(reader.fieldnames)
         }
+        if reached_filters_footer:
+            if any(normalized_row.values()):
+                ignored_powerbi_rows += 1
+            continue
+        if _is_power_bi_trailer(normalized_row):
+            ignored_powerbi_rows += 1
+            first_value = next((value for value in normalized_row.values() if value), "")
+            reached_filters_footer = _normalize_header(first_value).startswith(("filtros_aplicados", "filters_applied"))
+            continue
         if any(normalized_row.values()):
             rows.append(normalized_row)
     if not rows:
@@ -488,6 +530,7 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
         normalized_headers,
         encoding=encoding,
         delimiter=dialect.delimiter,
+        ignored_powerbi_rows=ignored_powerbi_rows,
     )
 
 
@@ -1088,15 +1131,11 @@ async def load_import(
                 quantity = item["cantidad_vendida"]
                 if quantity:
                     item["precio_unitario"] = item["ingreso_total"] / quantity
-                item["margen_bruto_pct"] = (
-                    item["margen_bruto_eur"] / item["ingreso_total"] * 100
-                    if item["ingreso_total"]
-                    else None
+                item["margen_bruto_pct"] = _margin_percentage_with_loss_floor(
+                    item["margen_bruto_eur"], item["ingreso_total"]
                 )
-                item["margen_destino_pct"] = (
-                    item["margen_destino_eur"] / item["ingreso_total"] * 100
-                    if item["ingreso_total"]
-                    else None
+                item["margen_destino_pct"] = _margin_percentage_with_loss_floor(
+                    item["margen_destino_eur"], item["ingreso_total"]
                 )
                 item["stock_disponible"] = (
                     item["stock_disponible"]

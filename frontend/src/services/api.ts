@@ -98,6 +98,7 @@ export interface DataImportValidation {
   delimiter: string;
   columns: string[];
   unknown_columns: string[];
+  ignored_powerbi_rows?: number;
   errors: DataImportError[];
   warnings: DataImportError[];
   date_min?: string;

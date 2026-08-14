@@ -487,6 +487,11 @@ export const DataEngineering = () => {
                   Columnas ignoradas: {validation.unknown_columns.join(', ')}
                 </p>
               )}
+              {!!validation.ignored_powerbi_rows && (
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                  Se ignoraron {formatNumber(validation.ignored_powerbi_rows)} filas de totales o filtros de Power BI.
+                </p>
+              )}
               {validation.errors.length > 0 && (
                 <div className="mt-3 max-h-52 overflow-y-auto border-t border-red-200 dark:border-red-500/20 pt-2">
                   {validation.errors.map((item, index) => (

@@ -1,0 +1,65 @@
+# SupplyChain / Five Minutes — contexto de trabajo
+
+## Propósito
+
+Aplicación interna de analítica comercial, inventario y supply chain para Five Minutes. La empresa activa ve ventas, inventario, ABCXYZ, previsiones y asistentes de IA. La interfaz y todas las respuestas al usuario se mantienen en español.
+
+## Arquitectura
+
+- Frontend: React + TypeScript + Vite + Tailwind, en `frontend/`.
+- Backend: FastAPI + SQLAlchemy, en `app/`; API bajo `/api/v1`.
+- Datos: PostgreSQL en producción; SQLite se usa como alternativa local. Las consultas del Copilot se ejecutan mediante una sesión de solo lectura.
+- Autenticación: Supabase/JWT. Todos los datos analíticos se aíslan por `empresa_id`.
+- Rutas y pestañas: `frontend/src/App.tsx`; navegación visible: `frontend/src/components/Sidebar.tsx`.
+- Cliente API: `frontend/src/services/api.ts`. No duplicar URLs ni contratos en las páginas.
+
+## Dominio de datos
+
+- `fivemin_ventas`: ventas detalladas por día. Es la fuente oficial de facturación, unidades, MG, MGD, producto, cliente y comercial. El año fiscal comienza el 1 de mayo.
+- `fivemin_inventario`: snapshots diarios desde el 06/08/2026. Alimenta `inventario_historico` y actualiza el snapshot actual con la última fecha.
+- Los exportes de Power BI pueden traer filas finales `Total`, `Subtotal` y `Filtros aplicados`; el importador debe ignorarlas, no tratarlas como registros.
+- Los porcentajes de MG/MGD anómalos se conservan con límite mínimo de `-200%`, no se eliminan las pérdidas negativas válidas.
+- ABC es una clasificación comercial basada en ventas EUR de los últimos 90 días. XYZ depende del valor de inventario actual; no presentar conclusiones XYZ si no hay inventario real.
+
+## Copilot y calidad analítica
+
+- El Copilot debe dar cifras, períodos, comparativas, familias/marcas/secciones/SKU y causas observables; evitar recomendaciones vacías como “potenciar ventas”.
+- Las consultas agregadas frecuentes pasan por `app/copilot_orchestrator.py`, no por SQL generado libremente. Mantenerlas parametrizadas y con `empresa_id`.
+- Las respuestas de continuación deben conservar medida, período, agrupación y filtros. El parser entiende rangos de fechas, meses nombrados, abreviaturas y rangos que cruzan año.
+- Los mensajes se persisten en `copilot_messages.creado_en` en UTC y se muestran en el navegador como `HH:mm dd-MM-yyyy` en hora local.
+- Fast es directo; Thinking/Ultra deben usar el mismo dato real y aportar análisis avanzado, no inventar conclusiones.
+
+## Pestañas documentadas
+
+Cada pestaña visible tiene su contexto en `docs/claude-tabs/<pestaña>/CLAUDE.md`:
+
+1. Dashboard
+2. Intelligence ABCXYZ
+3. Predicción Demanda
+4. AI Copilot
+5. Control IA
+6. Data Engineering
+7. Guía de Importación
+8. LibrerIA
+9. Power BI Services
+
+La ruta interna `/alerts` también está documentada porque sigue registrada en el router aunque no está en el menú visible.
+
+## Regla obligatoria de versionado y publicación
+
+**Todo cambio funcional, de interfaz, API, datos, documentación operativa o corrección debe quedar versionado y publicado en GitHub antes de considerarse terminado.**
+
+1. Incrementar versión en los cuatro puntos: `app/main.py`, `frontend/package.json`, `frontend/package-lock.json` y `frontend/src/config/version.ts`.
+2. Ejecutar verificaciones proporcionales: `python -m unittest ...`, `python -m compileall -q app`, `npm.cmd run build` y `git diff --check` cuando apliquen.
+3. Crear commit en `main` con el formato acordado: `Tipo (v.1.XX) : Descripción breve en español`.
+4. Subir con `git push origin main` y verificar que el hash local coincide con `refs/heads/main`.
+5. Informar la versión publicada y que el redeploy puede requerir recarga forzada del navegador.
+
+No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de Git. Si una migración de producción fuese necesaria, incluir una ruta segura de inicialización o la migración correspondiente.
+
+## Versiones y precedentes relevantes
+
+- v1.17 inicializa de forma segura la tabla de histórico de inventario en producción.
+- v1.18 elevó el límite de catálogo analítico a 20.000 SKU para ABCXYZ y previsión.
+- v1.19 corrigió la memoria de aclaraciones del Copilot.
+- v1.20 amplió los períodos naturales y el formato de fecha/hora de mensajes.

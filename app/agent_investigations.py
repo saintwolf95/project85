@@ -152,7 +152,8 @@ def verify_report(report: str, evidence: dict[str, dict]) -> dict:
 
 
 def _fallback_report(evidence: dict[str, dict]) -> str:
-    return "\n".join(f"- Evidencia disponible [{key}]: {json.dumps(block['data'], ensure_ascii=False, default=str)}" for key, block in evidence.items())
+    facts = "\n".join(f"- Evidencia disponible [{key}]: {json.dumps(block['data'], ensure_ascii=False, default=str)}" for key, block in evidence.items())
+    return f"## Evidencia\n{facts}\n\n## Hipótesis descartadas\n- Sin evidencia adicional no se descarta una causa.\n\n## Qué dato falta\n- Confirmación operativa de campañas, precio de coste y disponibilidad futura."
 
 
 def redact_and_verify(question: str, plan: list[str], evidence: dict[str, dict]) -> dict:
@@ -160,7 +161,12 @@ def redact_and_verify(question: str, plan: list[str], evidence: dict[str, dict])
     if not client:
         report = _fallback_report(evidence)
         return {"report": report, "verification": verify_report(report, evidence), "mode": "fallback"}
-    instruction = "Redacta una investigación en español usando SOLO este JSON. Cada cifra debe citar [eN] y reproducirse desde la evidencia; no inventes cálculos."
+    instruction = (
+        "Redacta una investigación en español usando SOLO este JSON. Cada cifra debe citar [eN] y reproducirse "
+        "desde la evidencia; no inventes cálculos. Usa exactamente estas secciones: Período y evidencia numérica, "
+        "Riesgos, Oportunidades, Métricas de seguimiento, Hipótesis descartadas y Qué dato falta. En hipótesis "
+        "descartadas explica solo hipótesis contrastadas por evidencia; en qué dato falta declara la limitación necesaria."
+    )
     for attempt in range(2):
         extra = "" if attempt == 0 else " Corrige: no uses cifras huérfanas y cita cada afirmación cuantitativa."
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": instruction + extra + "\n" + json.dumps({"pregunta": question, "plan": plan, "evidence": evidence}, ensure_ascii=False, default=str)}], temperature=0)

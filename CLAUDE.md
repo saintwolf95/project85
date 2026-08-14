@@ -79,3 +79,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Control IA investiga mediante cuatro fases: plan limitado a catálogo, recolección con consultas parametrizadas, redacción con referencias `[eN]` y verificación automática antes de publicar.
 - La ruta `POST /agents/{agent_name}/investigations` nunca acepta SQL. Si una cifra o una cita no existe en el bundle, el informe se reintenta una vez y después se bloquea.
+
+## Actualización v1.28 — motor único para Copilot
+
+- Copilot reutiliza `app/copilot_business_tools.py`: `buscar_senales`, `descomponer_variacion`, `serie_temporal` y el ranking semántico existente. No crear un segundo motor ni habilitar SQL libre para estas funciones.
+- El contexto del Copilot recupera definiciones del diccionario semántico de métricas (MG/MGD, ABC/XYZ, año fiscal, sección) según la pregunta.
+- El informe de investigación exige además Hipótesis descartadas y Qué dato falta, en coherencia con la evidencia y readiness.

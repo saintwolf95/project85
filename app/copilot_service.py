@@ -667,10 +667,23 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     
     # Las preguntas agregadas frecuentes se resuelven con SQL parametrizado y exacto.
     from .copilot_orchestrator import analizar_intencion, crear_consulta_semantica
+    from .copilot_business_tools import buscar_senales, descomponer_variacion, semantic_context, serie_temporal
 
     intento, aclaracion = analizar_intencion(history)
     if aclaracion:
         return aclaracion
+
+    # El Copilot consulta el mismo motor de señales que Control IA, sin SQL libre.
+    normalized_message = user_message.lower()
+    if any(term in normalized_message for term in ("qué está mal", "que esta mal", "señales", "senales", "alertas verificadas")):
+        family_match = re.search(r"familia\s+['\"]?([^'\"?.!,]+)", user_message, flags=re.IGNORECASE)
+        signals = buscar_senales(db, empresa_id, entidad=family_match.group(1).strip() if family_match else None)
+        if not signals:
+            return "No hay señales verificadas activas para ese alcance. Esto no demuestra que no exista un problema: puede faltar histórico o un detector específico."
+        lines = ["Señales verificadas, ordenadas por impacto EUR:"]
+        for signal in signals[:7]:
+            lines.append(f"- {signal['entidad']} · {signal['detector']} · impacto €{signal['impacto_eur']:,.2f} · confianza {signal['confianza']:.0%} · período {signal['periodo'][0]}–{signal['periodo'][1]}.")
+        return "\n".join(lines)
 
     # Las conversaciones simples no necesitan consultar el resumen empresarial.
     if not intento and is_conversational(user_message):
@@ -678,12 +691,25 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
 
     from .copilot_context import construir_resumen_operativo
     contexto_analisis = (contexto or "")[:MAX_CONTEXT_PROMPT_CHARS]
+    glosario = semantic_context(user_message)
+    contexto_analisis = f"{contexto_analisis}\n\nDICCIONARIO SEMÁNTICO RECUPERADO:\n{glosario}".strip()
     resumen_operativo = construir_resumen_operativo(db, empresa_id)
     if resumen_operativo:
         contexto_analisis = f"{contexto_analisis}\n\n{resumen_operativo}".strip()
     contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
+        if ("precio" in normalized_message and "volumen" in normalized_message) or "descompon" in normalized_message:
+            if intento.fecha_inicio and intento.fecha_fin and intento.fecha_inicio_comparacion and intento.fecha_fin_comparacion:
+                bridge = descomponer_variacion(
+                    db, empresa_id, (intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion),
+                    (intento.fecha_inicio, intento.fecha_fin), intento.agrupacion or "familia",
+                )
+                return interpret_results(history, "Herramienta determinista descomponer_variacion", bridge, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True)
+        if any(term in normalized_message for term in ("serie temporal", "tendencia diaria", "evolución diaria", "evolucion diaria")) and intento.fecha_inicio and intento.fecha_fin:
+            metric = "mgd" if intento.medida.startswith("mgd") else "unidades" if intento.medida == "ventas_unidades" else "ventas"
+            series = serie_temporal(db, empresa_id, metric, intento.fecha_inicio, intento.fecha_fin)
+            return interpret_results(history, "Herramienta determinista serie_temporal", series, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True)
         if intento.tipo == "inventario" or intento.medida in {
             "matriz_productos",
             "productos_alerta",

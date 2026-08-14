@@ -5,6 +5,8 @@ reciben el resultado serializado para explicarlo: nunca reciben herramientas SQL
 """
 import hashlib
 import json
+import math
+from collections import defaultdict
 from datetime import date, datetime, timedelta
 
 from sqlalchemy import text
@@ -14,6 +16,8 @@ from .models import AgentSignal
 
 
 ACTIVE_STATES = ("nueva", "persistente")
+MAX_NEW_SIGNALS_PER_AGENT_PER_DAY = 5
+FDR_ALPHA = 0.10
 
 
 def _number(value, default=0.0):
@@ -38,6 +42,80 @@ def _signal(agent, detector, entity_type, entity_id, start, end, severity, impac
     }
     signal["fingerprint"] = _fingerprint(signal)
     return signal
+
+
+def _median(values: list[float]) -> float:
+    ordered = sorted(values)
+    size = len(ordered)
+    if not size:
+        return 0.0
+    middle = size // 2
+    return ordered[middle] if size % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+
+def _normal_lower_tail(z: float) -> float:
+    """p unilateral estable, sin asumir una desviación típica frágil."""
+    return 0.5 * math.erfc(-z / math.sqrt(2))
+
+
+def _benjamini_hochberg(pvalues: list[float], alpha: float = FDR_ALPHA) -> set[int]:
+    """Control FDR BH: devuelve índices aceptados, no prioriza por p-valor."""
+    if not pvalues:
+        return set()
+    ordered = sorted(enumerate(pvalues), key=lambda item: item[1])
+    accepted_until = -1
+    total = len(ordered)
+    for rank, (_, pvalue) in enumerate(ordered, start=1):
+        if pvalue <= alpha * rank / total:
+            accepted_until = rank
+    return {index for index, _ in ordered[:accepted_until]} if accepted_until > 0 else set()
+
+
+def _robust_temporal_tests(db: Session, empresa_id: int, entities: list[str], ps: date, pe: date, cs: date, ce: date) -> dict[str, dict]:
+    """Mediana+MAD y CUSUM de ventas diarias; apto para picos comerciales."""
+    if not entities:
+        return {}
+    rows = db.execute(text("""
+        SELECT COALESCE(p.familia, 'Sin familia') entidad, v.fecha_venta fecha, SUM(v.ingreso_total) ventas
+        FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
+        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :ps AND :ce
+        GROUP BY COALESCE(p.familia, 'Sin familia'), v.fecha_venta
+    """), {"empresa_id": empresa_id, "ps": ps, "ce": ce}).mappings().all()
+    dates = [ps + timedelta(days=offset) for offset in range((ce - ps).days + 1)]
+    series = defaultdict(dict)
+    for row in rows:
+        series[row["entidad"]][row["fecha"]] = _number(row["ventas"])
+    result = {}
+    for entity in entities:
+        values = series[entity]
+        baseline = [values.get(day, 0.0) for day in dates if day <= pe]
+        current = [values.get(day, 0.0) for day in dates if day >= cs]
+        if len(baseline) < 14 or len(current) < 7:
+            result[entity] = {"p_value": 1.0, "apto": False, "motivo": "histórico diario insuficiente"}
+            continue
+        median = _median(baseline)
+        mad = _median([abs(value - median) for value in baseline])
+        scale = max(1.0, 1.4826 * mad)
+        current_median = _median(current)
+        z = (current_median - median) / scale
+        # CUSUM inferior: acumula desviaciones moderadas y evita alertar por un solo día.
+        cusum = 0.0
+        lower_limit = 0.5 * scale
+        for value in current:
+            cusum = min(0.0, cusum + (value - median + lower_limit))
+        streak = 0
+        for value in reversed(current):
+            if value < median - lower_limit:
+                streak += 1
+            else:
+                break
+        result[entity] = {
+            "p_value": _normal_lower_tail(z), "apto": True, "baseline_mediana_eur_dia": median,
+            "mad_eur_dia": mad, "mediana_actual_eur_dia": current_median, "z_robusto": z,
+            "cusum_inferior": cusum, "dias_consecutivos_bajos": streak,
+            "persistente": streak >= 3 or abs(cusum) >= 5 * scale,
+        }
+    return result
 
 
 def _sales_window(db: Session, empresa_id: int):
@@ -100,6 +178,23 @@ def _sales_signals(db: Session, empresa_id: int) -> list[dict]:
                                        severity, abs(min(0, price)) + abs(min(0, volume)), confidence,
                                        current, previous, decomposition))
     # Concentración de facturación: solo se emite cuando top 3 superan el 50 %.
+    # Filtro estadístico común para familias: mediana/MAD, CUSUM y Benjamini-Hochberg.
+    tested = [signal for signal in signals if signal["detector"] == "caida_facturacion_familia"]
+    temporal = _robust_temporal_tests(db, empresa_id, [signal["entidad_id"] for signal in tested], previous_start, previous_end, current_start, anchor)
+    accepted = _benjamini_hochberg([temporal[signal["entidad_id"]]["p_value"] for signal in tested])
+    accepted_entities = set()
+    for index, signal in enumerate(tested):
+        stats = temporal[signal["entidad_id"]]
+        stats["fdr_bh_alpha"] = FDR_ALPHA
+        stats["fdr_aprobado"] = index in accepted
+        signal["evidencia"]["validacion_estadistica"] = stats
+        if stats["fdr_aprobado"] and stats.get("persistente"):
+            accepted_entities.add(signal["entidad_id"])
+    signals = [signal for signal in signals if signal["detector"] not in {"caida_facturacion_familia", "precio_volumen_familia"} or signal["entidad_id"] in accepted_entities]
+    for signal in signals:
+        if signal["detector"] == "precio_volumen_familia":
+            signal["evidencia"]["validacion_estadistica"] = temporal[signal["entidad_id"]]
+
     concentration = db.execute(text("""
         WITH clientes AS (
           SELECT COALESCE(c.nombre, 'Cliente sin identificar') nombre, SUM(v.ingreso_total) ventas
@@ -184,7 +279,17 @@ def _finance_signals(db: Session, empresa_id: int) -> list[dict]:
             signals.append(_signal("mattia", "erosion_mgd_familia", "familia", row["entidad"], cs, ce,
                                    4 if pp - pa >= 5 else 3, mp - ma, confidence, pa, pp,
                                    {"metodo": "ratio MGD ponderado por ventas en periodos equivalentes", "periodo_actual": [str(cs), str(ce)], "periodo_base": [str(ps), str(pe)], "ventas_actuales_eur": va, "ventas_base_eur": vp, "mgd_actual_eur": ma, "mgd_base_eur": mp, "mgd_actual_pct": pa, "mgd_base_pct": pp, "variacion_pp": pa - pp}))
-    return signals
+    temporal = _robust_temporal_tests(db, empresa_id, [signal["entidad_id"] for signal in signals], ps, pe, cs, ce)
+    accepted = _benjamini_hochberg([temporal[signal["entidad_id"]]["p_value"] for signal in signals])
+    filtered = []
+    for index, signal in enumerate(signals):
+        stats = temporal[signal["entidad_id"]]
+        stats["fdr_bh_alpha"] = FDR_ALPHA
+        stats["fdr_aprobado"] = index in accepted
+        signal["evidencia"]["validacion_estadistica"] = stats
+        if stats["fdr_aprobado"] and stats.get("persistente"):
+            filtered.append(signal)
+    return filtered
 
 
 def collect_detected_signals(db: Session, empresa_id: int) -> list[dict]:
@@ -194,10 +299,23 @@ def collect_detected_signals(db: Session, empresa_id: int) -> list[dict]:
 def refresh_agent_signals(db: Session, empresa_id: int) -> list[AgentSignal]:
     detected = collect_detected_signals(db, empresa_id)
     now = datetime.utcnow()
-    fingerprints = {item["fingerprint"] for item in detected}
     detector_names = {item["detector"] for item in detected} | {"caida_facturacion_familia", "precio_volumen_familia", "concentracion_clientes", "rotura_stock_clase_a", "cobertura_vs_lead_time", "exceso_cobertura", "stock_muerto_90d", "erosion_mgd_familia"}
     existing = {item.fingerprint: item for item in db.query(AgentSignal).filter(AgentSignal.empresa_id == empresa_id).all()}
+    start_of_day = datetime.combine(now.date(), datetime.min.time())
+    new_counts = defaultdict(int)
+    for row in existing.values():
+        if row.primera_deteccion and row.primera_deteccion >= start_of_day:
+            new_counts[row.agente] += 1
+    # El p-valor filtra la entrada; impacto EUR, confianza y severidad eligen las cinco nuevas.
+    detected.sort(key=lambda item: item["impacto_eur"] * item["confianza"] * (1 + .15 * (item["severidad"] - 1)), reverse=True)
+    accepted_detected = []
     for data in detected:
+        if data["fingerprint"] in existing or new_counts[data["agente"]] < MAX_NEW_SIGNALS_PER_AGENT_PER_DAY:
+            accepted_detected.append(data)
+            if data["fingerprint"] not in existing:
+                new_counts[data["agente"]] += 1
+    fingerprints = {item["fingerprint"] for item in accepted_detected}
+    for data in accepted_detected:
         row = existing.get(data["fingerprint"])
         if row:
             for field in ("severidad", "impacto_eur", "confianza", "valor_actual", "valor_esperado", "desviacion"):

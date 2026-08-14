@@ -91,3 +91,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El fingerprint de señal identifica detector y entidad, no una ventana móvil; una señal recurrente debe conservar su historial `persistente`.
 - Mattia valida su detector temporal sobre MGD diario. Los informes solo se publican si cada línea con cifras cita un `[eN]` y cada valor existe en ese mismo bloque.
 - El puente del Copilot debe incluir precio, volumen, mix de SKU y clientes impulsores. La investigación verificable debe estar disponible desde Control IA.
+
+## Actualización v1.30 — consolidación operativa
+
+- `app/agents_service.py` no conserva rutas SQL o informes manuales heredados: todos los agentes narran evidence bundles.
+- La validación de evidencia reutilizable vive en `app/evidence_contract.py` y debe cubrirse con pruebas unitarias. El límite diario cuenta solo señales activas, no las resueltas.

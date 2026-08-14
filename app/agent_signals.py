@@ -305,7 +305,7 @@ def refresh_agent_signals(db: Session, empresa_id: int) -> list[AgentSignal]:
     start_of_day = datetime.combine(now.date(), datetime.min.time())
     new_counts = defaultdict(int)
     for row in existing.values():
-        if row.primera_deteccion and row.primera_deteccion >= start_of_day:
+        if row.estado in ACTIVE_STATES and row.primera_deteccion and row.primera_deteccion >= start_of_day:
             new_counts[row.agente] += 1
     # El p-valor filtra la entrada; impacto EUR, confianza y severidad eligen las cinco nuevas.
     detected.sort(key=lambda item: item["impacto_eur"] * item["confianza"] * (1 + .15 * (item["severidad"] - 1)), reverse=True)

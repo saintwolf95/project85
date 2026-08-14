@@ -32,3 +32,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - No incluir `periodo_inicio`/`periodo_fin` en el fingerprint: la señal debe persistir aunque se actualice la ventana y solo resolverse al desaparecer del detector.
 - El validador exige que cada línea que contenga cifras tenga referencia `[eN]`; cada cifra se compara exclusivamente con el bloque citado, con formatos de redondeo permitidos.
 - La acción “Investigar señal” en Control IA consume la API contractual y no muestra una redacción bloqueada.
+
+## Actualización v1.30 — sin legado de herramientas
+
+- No reintroducir tool-calling SQL en `agents_service.py`; sus únicos datos de entrada son señales y evidence bundles.
+- `evidence_contract.py` centraliza el verificador cifra→cita. Mantener pruebas para redondeo permitido, cifra sin cita y cita que apunta al bloque equivocado.

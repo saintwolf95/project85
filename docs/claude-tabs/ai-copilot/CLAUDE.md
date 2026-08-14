@@ -21,3 +21,7 @@ Cuando el Copilot o Cerebro del Negocio consuma hallazgos de Control IA, debe ci
 ## Actualización v1.29
 
 `descomponer_variacion` devuelve el puente de precio, volumen y mix de SKU, además de los cinco clientes que más explican la variación por entidad.
+
+## Actualización v1.30
+
+El módulo no mantiene un catálogo de herramientas decorativo: las funciones compartidas se invocan desde las rutas deterministas reales del Copilot.

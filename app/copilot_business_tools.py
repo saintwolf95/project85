@@ -95,10 +95,3 @@ def serie_temporal(db: Session, empresa_id: int, metric: str, start: date, end: 
         GROUP BY v.fecha_venta ORDER BY v.fecha_venta
     """), params).mappings().all()]
 
-
-COPILOT_TOOL_CATALOG = {
-    "buscar_senales": "Consulta señales verificadas por agente, entidad y periodo.",
-    "descomponer_variacion": "Calcula el puente de precio y volumen con periodos parametrizados.",
-    "serie_temporal": "Devuelve la serie diaria de ventas, unidades o MGD con filtros parametrizados.",
-    "top_n": "Usa el orquestador semántico existente para rankings autorizados.",
-}

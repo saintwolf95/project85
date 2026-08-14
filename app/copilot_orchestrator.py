@@ -59,6 +59,43 @@ def _parsear_fecha(valor: str) -> date | None:
     return None
 
 
+MESES_ES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+def _ultimo_dia_mes(anio: int, mes: int) -> date:
+    siguiente_anio, siguiente_mes = (anio + 1, 1) if mes == 12 else (anio, mes + 1)
+    return date(siguiente_anio, siguiente_mes, 1) - timedelta(days=1)
+
+
+def _resolver_rango_meses(normalizado: str, fecha_hoy: date) -> tuple[date, date] | None:
+    """Resuelve rangos como 'desde mayo hasta julio' sin exigir fechas numéricas."""
+    nombres_meses = "|".join(MESES_ES)
+    rango = re.search(
+        rf"\b(?:desde\s+)?(?:el\s+)?(?:mes\s+de\s+)?({nombres_meses})"
+        rf"(?:\s+de\s+(\d{{4}}))?\s+(?:hasta|a|al)\s+(?:el\s+)?"
+        rf"(?:mes\s+de\s+)?({nombres_meses})(?:\s+de\s+(\d{{4}}))?\b",
+        normalizado,
+    )
+    if not rango:
+        return None
+
+    mes_inicio, mes_fin = MESES_ES[rango.group(1)], MESES_ES[rango.group(3)]
+    anio_inicio = int(rango.group(2)) if rango.group(2) else (
+        fecha_hoy.year if mes_inicio <= fecha_hoy.month else fecha_hoy.year - 1
+    )
+    anio_fin = int(rango.group(4)) if rango.group(4) else (
+        anio_inicio if mes_fin >= mes_inicio else anio_inicio + 1
+    )
+    inicio, fin = date(anio_inicio, mes_inicio, 1), _ultimo_dia_mes(anio_fin, mes_fin)
+    if inicio > fin or inicio > fecha_hoy:
+        return None
+    return inicio, min(fin, fecha_hoy)
+
+
 def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, date | None, date | None]:
     """Resuelve periodos naturales usando siempre la zona horaria de Madrid."""
     normalizado = normalizar_texto(texto)
@@ -84,6 +121,10 @@ def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, d
         fin = _parsear_fecha(rango.group(2)) if rango.group(2) else fecha_hoy
         if inicio and fin and inicio <= fin:
             return "rango_personalizado", inicio, min(fin, fecha_hoy)
+
+    rango_meses = _resolver_rango_meses(normalizado, fecha_hoy)
+    if rango_meses:
+        return "rango_personalizado", *rango_meses
 
     dias = re.search(r"\b(?:ultimos?\s*)?(7|30|60|90)\s*(?:dias|d)\b", normalizado)
     if dias:
@@ -263,6 +304,8 @@ def detectar_filtros(texto: str) -> dict[str, str]:
 
 def _es_seguimiento(texto: str) -> bool:
     normalizado = normalizar_texto(texto)
+    if re.match(r"^(por|desde|hasta)\b", normalizado):
+        return True
     if _contiene(normalizado, ("gracias", "perfecto", "entendido", "vale")):
         return False
     if re.match(r"^(y|tambien|también|ademas|además)\b", normalizado):
@@ -349,6 +392,17 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
                 fecha_fin = intento_anterior.fecha_fin
             if not comparar:
                 comparar = intento_anterior.comparacion
+        else:
+            # Una aclaración previa puede contener solo parte de la intención.
+            # Completamos los huecos con los mensajes anteriores del usuario.
+            texto_analizado = f"{' '.join(mensajes_usuario[:-1])} {actual}"
+            for anterior in reversed(mensajes_usuario[:-1]):
+                if not medida:
+                    medida, tipo = detectar_medida(anterior)
+                if not periodo:
+                    periodo, fecha_inicio, fecha_fin = resolver_periodo(anterior)
+                if medida and periodo:
+                    break
 
     # Permite responder a "ayer" o "este mes" después de una pregunta de ventas.
     if not medida and periodo and len(mensajes_usuario) > 1:

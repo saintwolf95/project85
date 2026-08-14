@@ -1,6 +1,7 @@
 import unittest
+from datetime import date
 
-from app.copilot_orchestrator import analizar_intencion, crear_consulta_semantica
+from app.copilot_orchestrator import analizar_intencion, crear_consulta_semantica, resolver_periodo
 
 
 CASOS_EVALUACION = (
@@ -29,8 +30,8 @@ CASOS_EVALUACION = (
     ("Ventas por familia y marca este mes", "ventas", "ventas_eur", "mes_actual", "familia_marca", False, None),
     ("Cuanto inventario tenemos hoy", "inventario", "inventario_eur", "hoy", None, False, None),
     ("Cuantas unidades de stock tenemos", "inventario", "inventario_unidades", None, None, False, None),
-    ("Compara el inventario con el mes anterior", None, None, None, None, None, "snapshot"),
-    ("Inventario de los ultimos 30 dias", None, None, None, None, None, "snapshot"),
+    ("Compara el inventario con el mes anterior", "inventario", "inventario_eur", None, None, True, None),
+    ("Inventario de los ultimos 30 dias", "inventario", "inventario_eur", "ultimos_30_dias", None, False, None),
     ("Que acciones deberia priorizar hoy", "acciones", "acciones_prioritarias", "hoy", None, False, None),
     ("Que productos son oportunidades comerciales", "oportunidades", "productos_oportunidad", None, None, False, None),
     ("Que productos tienen riesgo de rotura", "alertas", "productos_alerta", None, None, False, None),
@@ -110,6 +111,27 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIsNotNone(intento)
         self.assertEqual(intento.periodo, "anio_fiscal")
         self.assertEqual(intento.agrupacion, "mes")
+
+    def test_rango_de_meses_y_aclaraciones_conservan_el_contexto(self):
+        periodo, inicio, fin = resolver_periodo(
+            "Por mes, desde el mes de mayo hasta julio", hoy=date(2026, 8, 14)
+        )
+        self.assertEqual(periodo, "rango_personalizado")
+        self.assertEqual(inicio, date(2026, 5, 1))
+        self.assertEqual(fin, date(2026, 7, 31))
+
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Dame las ventas mensuales en euros"},
+            {"role": "assistant", "content": "Que periodo quieres analizar?"},
+            {"role": "user", "content": "Por mes, desde el mes de mayo hasta julio"},
+        ])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.medida, "ventas_eur")
+        self.assertEqual(intento.agrupacion, "mes")
+        self.assertEqual(intento.fecha_inicio, date(2026, 5, 1))
+        self.assertEqual(intento.fecha_fin, date(2026, 7, 31))
 
     def test_inventario_historico_permite_comparar_periodos(self):
         intento, aclaracion = analizar_intencion([

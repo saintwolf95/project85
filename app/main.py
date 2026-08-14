@@ -148,7 +148,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.18.0",
+    version="1.19.0",
     lifespan=lifespan
 )
 

@@ -9,11 +9,12 @@ from ..models import Usuario
 from ..api.deps import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+MAX_INVENTORY_ANALYTICS_LIMIT = 20_000
 
 @router.get("/inventory-abc", response_model=schemas.InventoryAnalyticsResponse)
 def get_inventory_abc(
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=MAX_INVENTORY_ANALYTICS_LIMIT),
     search: Optional[str] = Query(None),
     matriz_abc: Optional[str] = Query(None),
     stock_out_risk: Optional[bool] = Query(None),

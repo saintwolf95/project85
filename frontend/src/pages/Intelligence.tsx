@@ -151,7 +151,7 @@ export const Intelligence = () => {
       try {
         setLoading(true);
         // Fetch all data for client-side interactions
-        const res = await getInventoryAbc(1, 10000, '', '', undefined);
+        const res = await getInventoryAbc(1, 20000, '', '', undefined);
         setInventoryData(res.data);
         setError(null);
       } catch (err) {

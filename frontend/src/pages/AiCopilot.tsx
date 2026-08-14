@@ -292,6 +292,7 @@ export const AiCopilot = () => {
   const [chatError, setChatError] = useState<string | null>(null);
   const [lastFailedQuestion, setLastFailedQuestion] = useState<string | null>(null);
   const [exportingMessage, setExportingMessage] = useState<string | null>(null);
+  const [exportingChat, setExportingChat] = useState<'csv' | 'xlsx' | 'pdf' | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
   const [businessContext, setBusinessContext] = useState('');
@@ -521,6 +522,27 @@ export const AiCopilot = () => {
     }
   };
 
+  const downloadChatExport = async (format: 'csv' | 'xlsx' | 'pdf') => {
+    if (!currentChatId) return;
+    try {
+      setExportingChat(format);
+      const response = await api.get(`/copilot/chats/${currentChatId}/export?format=${format}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `conversacion_copilot_${currentChatId}.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error exportando conversación', error);
+      setChatError(getCopilotErrorMessage(error));
+    } finally {
+      setExportingChat(null);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && input.trim()) {
       e.preventDefault();
@@ -621,6 +643,26 @@ export const AiCopilot = () => {
             <X size={20} />
           </button>
         </div>
+
+        {currentChatId && (
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Exportar conversación</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['pdf', 'xlsx', 'csv'] as const).map(format => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => downloadChatExport(format)}
+                  disabled={Boolean(exportingChat) || isLoading}
+                  className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 hover:border-brand-blue/40 hover:text-brand-blue dark:hover:border-brand-cyan/40 dark:hover:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {exportingChat === format ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  {format.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
           {isLoadingChats ? (

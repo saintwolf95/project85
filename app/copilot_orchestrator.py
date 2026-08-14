@@ -322,6 +322,8 @@ def detectar_filtros(texto: str) -> dict[str, str]:
 
 def _es_seguimiento(texto: str) -> bool:
     normalizado = normalizar_texto(texto)
+    if resolver_periodo(texto)[0] is not None:
+        return True
     if re.match(r"^(por|desde|hasta)\b", normalizado):
         return True
     if _contiene(normalizado, ("gracias", "perfecto", "entendido", "vale")):

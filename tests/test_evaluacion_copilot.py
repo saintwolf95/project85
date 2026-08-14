@@ -147,6 +147,27 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 self.assertEqual(inicio, inicio_esperado)
                 self.assertEqual(fin, fin_esperado)
 
+    def test_solicitud_excel_mensual_hereda_el_periodo_aclarado(self):
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Dame un Excel de las ventas por mes"},
+        ])
+        self.assertIsNone(intento)
+        self.assertIn("periodo", (aclaracion or "").casefold())
+
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Dame un Excel de las ventas por mes"},
+            {"role": "assistant", "content": "¿Qué periodo quieres analizar?"},
+            {"role": "user", "content": "Del año fiscal"},
+        ])
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.medida, "ventas_eur")
+        self.assertEqual(intento.agrupacion, "mes")
+        self.assertEqual(intento.periodo, "anio_fiscal")
+        consulta, _ = crear_consulta_semantica(intento)
+        self.assertIn("GROUP BY", consulta)
+        self.assertIn("fecha_venta", consulta)
+
     def test_pregunta_gerencial_mal_codificada_sigue_la_consulta_segura(self):
         intento, aclaracion = analizar_intencion([{
             "role": "user",

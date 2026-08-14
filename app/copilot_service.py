@@ -712,7 +712,10 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             model_preference in {"thinking", "ultra_thinking"}
             and intento.tipo in {"ventas", "rentabilidad"}
             and intento.agrupacion not in {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
-            and (intento.comparacion or es_pregunta_gerencial(user_message))
+            # El dossier global es para diagnósticos gerenciales. Las preguntas
+            # de seguimiento deben ejecutar su desglose parametrizado, no repetir
+            # el informe anterior ignorando filtro, SKU o agrupación solicitados.
+            and es_pregunta_gerencial(user_message)
         )
         if usar_plan_analitico:
             plan_analitico = crear_plan_analitico_ventas(intento)

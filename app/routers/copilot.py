@@ -172,6 +172,105 @@ def get_chat_history(chat_id: int, db: Session = Depends(get_db), current_user: 
         for m in mensajes
     ]
 
+@router.get("/chats/{chat_id}/export")
+def export_chat(
+    chat_id: int,
+    format: Literal["csv", "xlsx", "pdf"] = "pdf",
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Exporta el historial visible de un chat, sin marcadores internos de IA."""
+    import csv
+    import html
+    import io
+    from fastapi.responses import StreamingResponse
+
+    chat = db.query(CopilotChat).filter(
+        CopilotChat.id == chat_id,
+        CopilotChat.usuario_id == current_user.id,
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat no encontrado")
+
+    mensajes = db.query(CopilotMessage).filter(
+        CopilotMessage.chat_id == chat.id,
+    ).order_by(CopilotMessage.creado_en.asc()).all()
+    if not mensajes:
+        raise HTTPException(status_code=400, detail="El chat no tiene mensajes para exportar")
+
+    def limpiar_contenido(contenido: str) -> str:
+        return re.sub(r"<!-- (?:sql_export|copilot_metrics|copilot_followups): [\s\S]*? -->", "", contenido).strip()
+
+    filas = [
+        {
+            "Fecha": mensaje.creado_en.strftime("%H:%M %d-%m-%Y"),
+            "Rol": "Usuario" if mensaje.rol == "user" else "AI Copilot",
+            "Mensaje": limpiar_contenido(mensaje.contenido),
+        }
+        for mensaje in mensajes
+    ]
+    nombre_base = f"conversacion_copilot_{chat.id}"
+
+    if format == "csv":
+        output = io.StringIO()
+        output.write("\ufeff")
+        writer = csv.DictWriter(output, fieldnames=("Fecha", "Rol", "Mensaje"))
+        writer.writeheader()
+        writer.writerows(filas)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename={nombre_base}.csv"},
+        )
+
+    if format == "xlsx":
+        import pandas as pd
+
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            pd.DataFrame(filas).to_excel(writer, index=False, sheet_name="Conversación")
+            worksheet = writer.book["Conversación"]
+            worksheet.column_dimensions["A"].width = 20
+            worksheet.column_dimensions["B"].width = 16
+            worksheet.column_dimensions["C"].width = 100
+            for cell in worksheet[1]:
+                cell.font = __import__("openpyxl").styles.Font(bold=True)
+            for row in worksheet.iter_rows(min_row=2, min_col=3, max_col=3):
+                row[0].alignment = __import__("openpyxl").styles.Alignment(wrap_text=True, vertical="top")
+        output.seek(0)
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={nombre_base}.xlsx"},
+        )
+
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+    output = io.BytesIO()
+    document = SimpleDocTemplate(output, pagesize=A4, rightMargin=1.6 * cm, leftMargin=1.6 * cm, topMargin=1.6 * cm, bottomMargin=1.6 * cm)
+    styles = getSampleStyleSheet()
+    titulo = ParagraphStyle("CopilotTitle", parent=styles["Title"], textColor=HexColor("#0F172A"), fontSize=18, leading=22)
+    meta = ParagraphStyle("CopilotMeta", parent=styles["Normal"], textColor=HexColor("#64748B"), fontSize=8, leading=11)
+    usuario = ParagraphStyle("CopilotUser", parent=styles["BodyText"], backColor=HexColor("#DBEAFE"), textColor=HexColor("#172554"), borderPadding=8, leading=14, spaceAfter=4)
+    asistente = ParagraphStyle("CopilotAssistant", parent=styles["BodyText"], backColor=HexColor("#F1F5F9"), textColor=HexColor("#0F172A"), borderPadding=8, leading=14, spaceAfter=4)
+    historia = [Paragraph(html.escape(chat.titulo), titulo), Spacer(1, 0.25 * cm)]
+    for fila in filas:
+        historia.append(Paragraph(f"{fila['Rol']} · {fila['Fecha']}", meta))
+        texto = html.escape(fila["Mensaje"]).replace("\n", "<br/>")
+        historia.append(Paragraph(texto or "—", usuario if fila["Rol"] == "Usuario" else asistente))
+        historia.append(Spacer(1, 0.18 * cm))
+    document.build(historia)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={nombre_base}.pdf"},
+    )
+
 @router.put("/chats/{chat_id}")
 def rename_chat(chat_id: int, payload: RenameChatRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     chat = db.query(CopilotChat).filter(

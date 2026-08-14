@@ -8,4 +8,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Antes de habilitar conclusiones, respetar `readiness`: ventas e inventario incompletos deben convertirse en aviso explícito, no en hallazgo.
 - Los estudios e informes deben indicar período, evidencia numérica, riesgos, oportunidades y métricas de seguimiento. Persistir solo respuestas asociadas al agente y usuario correctos.
 - El “Cerebro del Negocio” comparte contexto con el Copilot; no mezclar contexto entre empresas.
+# Actualización v1.25 — motor de señales
+
+- `app/agent_signals.py` ejecuta detectores deterministas y persiste `agent_signals`; el LLM recibe exclusivamente un evidence bundle JSON, sin herramientas SQL ni cálculos propios.
+- `fingerprint` deduplica detector, entidad y ventana. Estados permitidos: nueva, persistente, resuelta y descartada; priorizar impacto EUR × confianza, severidad y persistencia.
+- Catálogo inicial: Lucía (caída de facturación, precio×volumen, concentración), María (rotura A, cobertura/lead time, exceso y stock muerto) y Mattia (erosión MGD). El CEO consolida solo las señales de mayor prioridad.
+- Con inventario desde el 06/08/2026 no se deben generar tendencias, DIO temporal ni XYZ fiables todavía.
 

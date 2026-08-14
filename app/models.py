@@ -178,6 +178,34 @@ class AgentStudySnapshot(Base):
     payload_json = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+
+class AgentSignal(Base):
+    """Hallazgo determinista persistente; la IA solo puede narrar su evidencia."""
+    __tablename__ = "agent_signals"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "fingerprint", name="uq_agent_signals_empresa_fingerprint"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    agente = Column(String(40), nullable=False, index=True)
+    detector = Column(String(120), nullable=False, index=True)
+    entidad_tipo = Column(String(40), nullable=True)
+    entidad_id = Column(String(255), nullable=True)
+    periodo_inicio = Column(Date, nullable=True)
+    periodo_fin = Column(Date, nullable=True)
+    severidad = Column(Integer, nullable=False, default=1)
+    impacto_eur = Column(Float, nullable=False, default=0.0)
+    confianza = Column(Float, nullable=False, default=0.0)
+    valor_actual = Column(Float, nullable=True)
+    valor_esperado = Column(Float, nullable=True)
+    desviacion = Column(Float, nullable=True)
+    evidencia = Column(Text, nullable=False, default="{}")
+    fingerprint = Column(String(64), nullable=False)
+    estado = Column(String(20), nullable=False, default="nueva")
+    primera_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ultima_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
+
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"
     empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)

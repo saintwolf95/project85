@@ -9,6 +9,7 @@ from .database import SessionLocalRO
 from .models import AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
 from .copilot_service import get_openai_client, validate_read_only_sql
 from .agent_metrics import build_agent_dossier
+from .agent_signals import build_evidence_bundle, get_active_signals, refresh_agent_signals
 
 logger = logging.getLogger(__name__)
 MADRID_TZ = ZoneInfo("Europe/Madrid")
@@ -93,6 +94,25 @@ def ejecutar_consulta_sql(db: Session, query: str, empresa_id: int) -> str:
 def run_cognitive_agent(db: Session, empresa_id: int, agent_name: str, system_prompt: str, alertas: list) -> str:
     """Ejecuta un agente cognitivo con GPT-4o y Tool Calling."""
     client = get_openai_client()
+    if client:
+        # El modelo solo narra el paquete de evidencia; no tiene herramientas SQL.
+        evidence = build_evidence_bundle(db, empresa_id, agent_name.lower())
+        context = get_business_context(db, empresa_id)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": (
+                "Narra exclusivamente el EVIDENCE BUNDLE. No calcules datos, no ejecutes SQL, no "
+                "inventes causas ni cifras. Cita importe, periodo y confianza; si no hay señales, indícalo.\n\n"
+                f"EVIDENCE BUNDLE:\n{json.dumps(evidence, ensure_ascii=False, default=str)}\n\n"
+                f"CONTEXTO:\n{context or 'No configurado.'}"
+            )},
+        ]
+        try:
+            response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
+            return response.choices[0].message.content
+        except Exception as error:
+            logger.error("Error narrando señales de %s: %s", agent_name, error)
+            return f"Error al generar informe de {agent_name}."
     if not client:
         return "⚠️ Error: API Key de OpenAI no configurada."
 
@@ -580,6 +600,39 @@ Formato obligatorio de salida (Markdown):
         logger.error(f"Error en CEO IA: {e}")
         return "No se pudo generar la síntesis ejecutiva en este momento."
 
+def run_ceo_from_signals(db: Session, empresa_id: int) -> str:
+    """CEO consolida las 5-7 señales de mayor prioridad, no informes narrativos."""
+    client = get_openai_client()
+    if not client:
+        return "Error: API Key de OpenAI no configurada para el CEO."
+    bundle = build_evidence_bundle(db, empresa_id, "ceo", limit=7)
+    prompt = (
+        "Eres CEO IA. Resume únicamente las señales verificadas del JSON. No calcules ni inventes. "
+        "Busca tensiones entre ventas, margen e inventario solo si ambas evidencias las sustentan. "
+        "Da hasta tres prioridades en una tabla con evidencia, responsable, métrica y horizonte. "
+        "Incluye límites y confianza.\n\nEVIDENCE BUNDLE:\n" + json.dumps(bundle, ensure_ascii=False, default=str)
+    )
+    try:
+        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0.2)
+        return response.choices[0].message.content
+    except Exception as error:
+        logger.error("Error consolidando señales CEO: %s", error)
+        return "No se pudo generar la síntesis ejecutiva en este momento."
+
+
+def narrate_agent_signals(db: Session, empresa_id: int, agent: str) -> str:
+    """Genera la lectura departamental sin ejecutar la lógica antigua de alertas."""
+    roles = {
+        "maria": "Eres María, responsable de inventario. Explica riesgos de nivel, cobertura y capital inmovilizado.",
+        "lucia": "Eres Lucía, responsable de ventas. Explica variaciones comerciales y concentración.",
+        "mattia": "Eres Mattia, responsable financiero. Explica rentabilidad y erosión de margen.",
+    }
+    return run_cognitive_agent(
+        db, empresa_id, agent, roles[agent] +
+        " Responde sin saludos, con hallazgos, lectura prudente, decisiones y límites.", []
+    )
+
+
 def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_fase2: bool):
     """
     Ejecuta el flujo completo dependiendo de los switches encendidos.
@@ -588,15 +641,23 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
     maria_md, lucia_md, mattia_md = None, None, None
     
     if run_fase1:
-        a_maria, maria_md = run_maria_agent(db, empresa_id)
-        a_lucia, lucia_md = run_lucia_agent(db, empresa_id)
-        a_mattia, mattia_md = run_mattia_agent(db, empresa_id)
-        alertas_fase1 = a_maria + a_lucia + a_mattia
+        # Una única pasada de detectores actualiza fingerprints, persistencia y resoluciones.
+        refresh_agent_signals(db, empresa_id)
+        maria_md = narrate_agent_signals(db, empresa_id, "maria")
+        lucia_md = narrate_agent_signals(db, empresa_id, "lucia")
+        mattia_md = narrate_agent_signals(db, empresa_id, "mattia")
+        alertas_fase1 = [
+            {
+                "agente": signal.agente, "detector": signal.detector, "entidad": signal.entidad_id,
+                "impacto_eur": signal.impacto_eur, "confianza": signal.confianza, "estado": signal.estado,
+            }
+            for signal in get_active_signals(db, empresa_id, limit=100)
+        ]
         
     ceo_summary = None
     business_context = get_business_context(db, empresa_id)
     if run_fase2 and run_fase1:
-        ceo_summary = run_ceo_agent(maria_md, lucia_md, mattia_md, business_context)
+        ceo_summary = run_ceo_from_signals(db, empresa_id)
     elif run_fase2 and not run_fase1:
         previous = db.query(AgentInsights).filter(
             AgentInsights.empresa_id == empresa_id,
@@ -605,12 +666,7 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
             AgentInsights.fase1_mattia_md.isnot(None),
         ).order_by(AgentInsights.fecha.desc()).first()
         if previous:
-            ceo_summary = run_ceo_agent(
-                previous.fase1_maria_md,
-                previous.fase1_lucia_md,
-                previous.fase1_mattia_md,
-                business_context,
-            )
+            ceo_summary = run_ceo_from_signals(db, empresa_id)
         else:
             ceo_summary = "No hay informes departamentales previos completos para consolidar."
         
@@ -663,6 +719,7 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
     dossier = dossier or build_agent_dossier(db, empresa_id, normalized_agent)
     dossier_text = json.dumps(dossier, ensure_ascii=False, default=str)
     business_context = get_business_context(db, empresa_id)
+    evidence_bundle = build_evidence_bundle(db, empresa_id, normalized_agent, limit=7)
 
     if normalized_agent == "maria":
         sys_prompt = f"Eres María, Analista Experta de Inventario de la empresa. Habla siempre en primera persona como María. Analiza inventario, quiebres, excesos y cobertura; puedes consultar ventas por producto, familia, cliente, KD o comercial cuando ayuden a explicar la demanda. Deriva análisis comerciales o financieros profundos a Lucía o Mattia. Basa tus respuestas en tu memoria de los últimos 7 días:\n{memoria_md}"
@@ -676,6 +733,9 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
         sys_prompt = f"Eres un asistente analítico basado en estos reportes:\n{memoria_md}"
 
     sys_prompt += (
+        "\n\nREGLA: eres narrador de evidencia; no puedes ejecutar SQL ni recalcular cifras. "
+        "Usa solo las señales verificadas. Si la petición requiere un dato que no aparece, indícalo."
+        "\n\nEVIDENCE BUNDLE VERIFICADO:\n" + json.dumps(evidence_bundle, ensure_ascii=False, default=str) +
         "\n\nEXPEDIENTE ACTUAL PRECALCULADO:\n" + dossier_text +
         "\n\nCONTEXTO DEL NEGOCIO:\n" + (business_context or "No configurado.") +
         "\nReglas: ventas son euros de ingreso_total; unidades solo cuando se soliciten. "
@@ -719,7 +779,6 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
             response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=messages,
-                tools=tools,
                 temperature=0.3
             )
             message = response.choices[0].message

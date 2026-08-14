@@ -54,6 +54,29 @@ def ensure_inventory_history_schema() -> None:
             ON inventario_historico (fecha_inventario)
         """))
 
+
+def ensure_agent_signals_schema() -> None:
+    """Crea las señales persistentes también cuando producción omite create_all."""
+    if not IS_POSTGRES:
+        return
+    from sqlalchemy import text
+    with engine.begin() as connection:
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_signals (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                agente VARCHAR(40) NOT NULL, detector VARCHAR(120) NOT NULL,
+                entidad_tipo VARCHAR(40), entidad_id VARCHAR(255), periodo_inicio DATE, periodo_fin DATE,
+                severidad SMALLINT NOT NULL DEFAULT 1, impacto_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                confianza DOUBLE PRECISION NOT NULL DEFAULT 0, valor_actual DOUBLE PRECISION,
+                valor_esperado DOUBLE PRECISION, desviacion DOUBLE PRECISION, evidencia TEXT NOT NULL DEFAULT '{}',
+                fingerprint VARCHAR(64) NOT NULL, estado VARCHAR(20) NOT NULL DEFAULT 'nueva',
+                primera_deteccion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ultima_deteccion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_agent_signals_empresa_fingerprint UNIQUE (empresa_id, fingerprint)
+            )
+        """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_estado ON agent_signals (empresa_id, estado)"))
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     daily_task = None
@@ -64,6 +87,7 @@ async def lifespan(app: FastAPI):
     if IS_PRODUCTION and not ALLOW_SCHEMA_INIT:
         try:
             ensure_inventory_history_schema()
+            ensure_agent_signals_schema()
             logger.info("[STARTUP] Esquema de histórico de inventario verificado.")
         except Exception:
             logger.exception("[STARTUP] No se pudo verificar el esquema de histórico de inventario.")
@@ -148,7 +172,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.24.0",
+    version="1.25.0",
     lifespan=lifespan
 )
 

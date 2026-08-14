@@ -63,3 +63,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - v1.18 elevó el límite de catálogo analítico a 20.000 SKU para ABCXYZ y previsión.
 - v1.19 corrigió la memoria de aclaraciones del Copilot.
 - v1.20 amplió los períodos naturales y el formato de fecha/hora de mensajes.
+# Actualización v1.25 — señales verificadas de Control IA
+
+- El flujo de agentes usa `agent_signals`: detectores deterministas producen evidencia y el LLM solo narra, contextualiza y recomienda sobre ese JSON. No conceder SQL ni cálculo libre al LLM en este flujo.
+- Cada señal mantiene entidad, ventana, severidad, impacto EUR, confianza, evidencia y `fingerprint`; se deduplica como `persistente` y se resuelve cuando deja de detectarse.
+- El CEO consolida las 5-7 señales con mayor impacto/confianza. El inventario empieza el 06/08/2026: hasta ampliar la muestra, usar detectores de nivel y no tendencias ni XYZ fiables.

@@ -26,7 +26,7 @@ def _number(value, default=0.0):
 
 def _fingerprint(signal: dict) -> str:
     raw = "|".join(str(signal.get(field) or "") for field in (
-        "agente", "detector", "entidad_tipo", "entidad_id", "periodo_inicio", "periodo_fin"
+        "agente", "detector", "entidad_tipo", "entidad_id"
     ))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -71,20 +71,21 @@ def _benjamini_hochberg(pvalues: list[float], alpha: float = FDR_ALPHA) -> set[i
     return {index for index, _ in ordered[:accepted_until]} if accepted_until > 0 else set()
 
 
-def _robust_temporal_tests(db: Session, empresa_id: int, entities: list[str], ps: date, pe: date, cs: date, ce: date) -> dict[str, dict]:
-    """Mediana+MAD y CUSUM de ventas diarias; apto para picos comerciales."""
+def _robust_temporal_tests(db: Session, empresa_id: int, entities: list[str], ps: date, pe: date, cs: date, ce: date, metric: str = "ventas") -> dict[str, dict]:
+    """Mediana+MAD y CUSUM sobre la métrica diaria correcta."""
     if not entities:
         return {}
     rows = db.execute(text("""
-        SELECT COALESCE(p.familia, 'Sin familia') entidad, v.fecha_venta fecha, SUM(v.ingreso_total) ventas
+        SELECT COALESCE(p.familia, 'Sin familia') entidad, v.fecha_venta fecha,
+          SUM(CASE WHEN :metric = 'mgd' THEN v.margen_destino_eur ELSE v.ingreso_total END) valor
         FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
         WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :ps AND :ce
         GROUP BY COALESCE(p.familia, 'Sin familia'), v.fecha_venta
-    """), {"empresa_id": empresa_id, "ps": ps, "ce": ce}).mappings().all()
+    """), {"empresa_id": empresa_id, "ps": ps, "ce": ce, "metric": metric}).mappings().all()
     dates = [ps + timedelta(days=offset) for offset in range((ce - ps).days + 1)]
     series = defaultdict(dict)
     for row in rows:
-        series[row["entidad"]][row["fecha"]] = _number(row["ventas"])
+        series[row["entidad"]][row["fecha"]] = _number(row["valor"])
     result = {}
     for entity in entities:
         values = series[entity]
@@ -110,7 +111,7 @@ def _robust_temporal_tests(db: Session, empresa_id: int, entities: list[str], ps
             else:
                 break
         result[entity] = {
-            "p_value": _normal_lower_tail(z), "apto": True, "baseline_mediana_eur_dia": median,
+            "metrica": metric, "p_value": _normal_lower_tail(z), "apto": True, "baseline_mediana_eur_dia": median,
             "mad_eur_dia": mad, "mediana_actual_eur_dia": current_median, "z_robusto": z,
             "cusum_inferior": cusum, "dias_consecutivos_bajos": streak,
             "persistente": streak >= 3 or abs(cusum) >= 5 * scale,
@@ -279,7 +280,7 @@ def _finance_signals(db: Session, empresa_id: int) -> list[dict]:
             signals.append(_signal("mattia", "erosion_mgd_familia", "familia", row["entidad"], cs, ce,
                                    4 if pp - pa >= 5 else 3, mp - ma, confidence, pa, pp,
                                    {"metodo": "ratio MGD ponderado por ventas en periodos equivalentes", "periodo_actual": [str(cs), str(ce)], "periodo_base": [str(ps), str(pe)], "ventas_actuales_eur": va, "ventas_base_eur": vp, "mgd_actual_eur": ma, "mgd_base_eur": mp, "mgd_actual_pct": pa, "mgd_base_pct": pp, "variacion_pp": pa - pp}))
-    temporal = _robust_temporal_tests(db, empresa_id, [signal["entidad_id"] for signal in signals], ps, pe, cs, ce)
+    temporal = _robust_temporal_tests(db, empresa_id, [signal["entidad_id"] for signal in signals], ps, pe, cs, ce, metric="mgd")
     accepted = _benjamini_hochberg([temporal[signal["entidad_id"]]["p_value"] for signal in signals])
     filtered = []
     for index, signal in enumerate(signals):

@@ -429,6 +429,17 @@ export const getAgentStudies = async (agentName: string): Promise<AgentStudies> 
   return response.data;
 };
 
+export interface AgentInvestigation {
+  report: string | null;
+  mode: 'verified' | 'fallback' | 'blocked';
+  verification: { valid: boolean; orphan_numbers: string[]; uncited_claims?: Array<{ line: number; numbers: string[] }> };
+}
+
+export const runAgentInvestigation = async (agentName: string, question: string): Promise<AgentInvestigation> => {
+  const response = await api.post(`/agents/${agentName}/investigations`, { question });
+  return response.data;
+};
+
 export interface AgentDataReadiness {
   registros_ventas: number;
   productos_con_ventas: number;

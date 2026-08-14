@@ -145,10 +145,24 @@ def _numeric_forms(value: Any) -> set[str]:
 def verify_report(report: str, evidence: dict[str, dict]) -> dict:
     cited = set(re.findall(r"\[(e\d+)\]", report))
     valid_keys = set(evidence)
-    allowed_numbers = set().union(*(_numeric_forms(item) for item in evidence.values()))
-    numbers = set(NUMBER.findall(report))
-    orphan_numbers = sorted(number for number in numbers if number.rstrip("%") not in allowed_numbers and number not in allowed_numbers)
-    return {"valid": not (orphan_numbers or not cited or not cited.issubset(valid_keys)), "citations": sorted(cited), "orphan_numbers": orphan_numbers, "missing_or_invalid_citations": sorted(cited - valid_keys)}
+    orphan_numbers, uncited_claims = [], []
+    for line_number, line in enumerate(report.splitlines(), start=1):
+        numbers = NUMBER.findall(line)
+        if not numbers:
+            continue
+        line_citations = set(re.findall(r"\[(e\d+)\]", line))
+        if not line_citations:
+            uncited_claims.append({"line": line_number, "numbers": numbers})
+            continue
+        allowed = set().union(*(_numeric_forms(evidence[key]) for key in line_citations if key in evidence))
+        orphan_numbers.extend(number for number in numbers if number.rstrip("%") not in allowed and number not in allowed)
+    orphan_numbers = sorted(set(orphan_numbers))
+    invalid_citations = sorted(cited - valid_keys)
+    return {
+        "valid": not (orphan_numbers or uncited_claims or not cited or invalid_citations),
+        "citations": sorted(cited), "orphan_numbers": orphan_numbers,
+        "uncited_claims": uncited_claims, "missing_or_invalid_citations": invalid_citations,
+    }
 
 
 def _fallback_report(evidence: dict[str, dict]) -> str:
@@ -168,7 +182,7 @@ def redact_and_verify(question: str, plan: list[str], evidence: dict[str, dict])
         "descartadas explica solo hipótesis contrastadas por evidencia; en qué dato falta declara la limitación necesaria."
     )
     for attempt in range(2):
-        extra = "" if attempt == 0 else " Corrige: no uses cifras huérfanas y cita cada afirmación cuantitativa."
+        extra = "" if attempt == 0 else " Corrige: cada línea con una cifra debe llevar su [eN] y cada cifra debe existir en ese mismo bloque de evidencia."
         response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": instruction + extra + "\n" + json.dumps({"pregunta": question, "plan": plan, "evidence": evidence}, ensure_ascii=False, default=str)}], temperature=0)
         report = response.choices[0].message.content
         verification = verify_report(report, evidence)

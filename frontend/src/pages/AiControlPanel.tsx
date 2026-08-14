@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness, ensureDailyAgentReport, getAgentStudies } from '../services/api';
-import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness, AgentStudies } from '../services/api';
+import { getAgentSettings, updateAgentSettings, getAllAgentInsights, runAgentAnalysis, getAgentChat, sendAgentMessage, getBusinessContext, updateBusinessContext, getAgentDataReadiness, ensureDailyAgentReport, getAgentStudies, runAgentInvestigation } from '../services/api';
+import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness, AgentStudies, AgentInvestigation } from '../services/api';
 import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles, PanelRight, Boxes, UserRoundSearch, BriefcaseBusiness, FlaskConical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
@@ -85,6 +85,9 @@ export const AiControlPanel = () => {
   const [isStudiesLoading, setIsStudiesLoading] = useState(false);
   const [studiesError, setStudiesError] = useState<string | null>(null);
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [investigation, setInvestigation] = useState<AgentInvestigation | null>(null);
+  const [isInvestigating, setIsInvestigating] = useState(false);
+  const [investigationError, setInvestigationError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Cerebro del Negocio
@@ -99,6 +102,8 @@ export const AiControlPanel = () => {
       setStudyTab('report');
       setAgentStudies(null);
       setStudiesError(null);
+      setInvestigation(null);
+      setInvestigationError(null);
       setIsChatLoading(true);
       setIsStudiesLoading(true);
       getAgentChat(selectedAgent)
@@ -132,6 +137,20 @@ export const AiControlPanel = () => {
       setAgentChatHistory([...updatedHistory, { role: 'assistant', content: 'No se pudo conectar con el agente. Inténtalo de nuevo.' }]);
     } finally {
       setIsChatLoading(false);
+    }
+  };
+
+  const handleInvestigation = async () => {
+    if (!selectedAgent || isInvestigating) return;
+    setIsInvestigating(true);
+    setInvestigationError(null);
+    try {
+      const question = `Investiga la señal prioritaria actual de ${AGENTS_INFO[selectedAgent].role} y explica sus impulsores.`;
+      setInvestigation(await runAgentInvestigation(selectedAgent, question));
+    } catch (error: any) {
+      setInvestigationError(error.response?.data?.detail || 'No se pudo verificar la investigación.');
+    } finally {
+      setIsInvestigating(false);
     }
   };
 
@@ -716,6 +735,18 @@ export const AiControlPanel = () => {
                     </div>
                   )}
                   {studyTab === 'report' && dailyError && <div className="mb-5 text-sm text-amber-700 dark:text-amber-300">{dailyError}</div>}
+                  {studyTab === 'report' && (
+                    <div className="mb-5 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 bg-brand-blue/5 dark:bg-brand-cyan/5 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div><p className="text-sm font-semibold text-slate-800 dark:text-white">Investigación verificable</p><p className="text-xs text-slate-500">Cada cifra se valida contra su bloque de evidencia antes de mostrarse.</p></div>
+                        <button type="button" onClick={handleInvestigation} disabled={isInvestigating} className="px-3 py-2 text-xs rounded-lg bg-brand-blue text-white hover:bg-blue-700 disabled:opacity-50">
+                          {isInvestigating ? 'Verificando...' : 'Investigar señal'}
+                        </button>
+                      </div>
+                      {investigationError && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">{investigationError}</p>}
+                      {investigation?.report && <div className="mt-3 prose dark:prose-invert max-w-none text-sm"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{investigation.report}</ReactMarkdown></div>}
+                    </div>
+                  )}
                   {studyTab === 'report' && reportInsight && reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] ? (
                     <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
                       <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight])}</ReactMarkdown>

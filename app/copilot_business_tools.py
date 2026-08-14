@@ -38,27 +38,50 @@ def buscar_senales(db: Session, empresa_id: int, agente: str | None = None, enti
 
 
 def descomponer_variacion(db: Session, empresa_id: int, periodo_a: tuple[date, date], periodo_b: tuple[date, date], dimension: str = "familia", value: str | None = None) -> list[dict[str, Any]]:
-    """Puente precio × volumen por familia/marca/sección, con consulta parametrizada."""
+    """Puente precio, volumen, mix de SKU y clientes con consultas parametrizadas."""
     column = {"familia": "p.familia", "marca": "p.marca", "seccion": "p.seccion"}.get(dimension, "p.familia")
     filter_sql, params = "", {"empresa_id": empresa_id, "a_start": periodo_a[0], "a_end": periodo_a[1], "b_start": periodo_b[0], "b_end": periodo_b[1]}
     if value:
         filter_sql = f" AND {column} = :value"
         params["value"] = value
     rows = db.execute(text(f"""
-        SELECT COALESCE({column}, 'Sin dato') entidad,
+        SELECT COALESCE({column}, 'Sin dato') entidad, p.id producto_id,
           SUM(CASE WHEN v.fecha_venta BETWEEN :a_start AND :a_end THEN v.ingreso_total ELSE 0 END) ventas_a,
           SUM(CASE WHEN v.fecha_venta BETWEEN :b_start AND :b_end THEN v.ingreso_total ELSE 0 END) ventas_b,
           SUM(CASE WHEN v.fecha_venta BETWEEN :a_start AND :a_end THEN v.cantidad_vendida ELSE 0 END) unidades_a,
           SUM(CASE WHEN v.fecha_venta BETWEEN :b_start AND :b_end THEN v.cantidad_vendida ELSE 0 END) unidades_b
         FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
         WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :a_start AND :b_end {filter_sql}
-        GROUP BY COALESCE({column}, 'Sin dato')
+        GROUP BY COALESCE({column}, 'Sin dato'), p.id
     """), params).mappings().all()
-    result = []
+    grouped: dict[str, list[dict]] = {}
     for row in rows:
-        ua, ub, va, vb = (float(row[key] or 0) for key in ("unidades_a", "unidades_b", "ventas_a", "ventas_b"))
-        price_a, price_b = (va / ua if ua else 0), (vb / ub if ub else 0)
-        result.append({"entidad": row["entidad"], "ventas_periodo_a_eur": va, "ventas_periodo_b_eur": vb, "efecto_volumen_eur": (ub - ua) * price_a, "efecto_precio_eur": (price_b - price_a) * ub, "precio_medio_a_eur": price_a, "precio_medio_b_eur": price_b})
+        grouped.setdefault(row["entidad"], []).append(dict(row))
+    customer_rows = db.execute(text(f"""
+        SELECT COALESCE({column}, 'Sin dato') entidad, COALESCE(c.nombre, 'Cliente sin identificar') cliente,
+          SUM(CASE WHEN v.fecha_venta BETWEEN :a_start AND :a_end THEN v.ingreso_total ELSE 0 END) ventas_a,
+          SUM(CASE WHEN v.fecha_venta BETWEEN :b_start AND :b_end THEN v.ingreso_total ELSE 0 END) ventas_b
+        FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id LEFT JOIN clientes c ON c.id=v.cliente_id
+        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :a_start AND :b_end {filter_sql}
+        GROUP BY COALESCE({column}, 'Sin dato'), COALESCE(c.nombre, 'Cliente sin identificar')
+    """), params).mappings().all()
+    customers: dict[str, list[dict]] = {}
+    for row in customer_rows:
+        customers.setdefault(row["entidad"], []).append({"cliente": row["cliente"], "variacion_eur": float(row["ventas_b"] or 0) - float(row["ventas_a"] or 0)})
+    result = []
+    for entity, products in grouped.items():
+        ua_total, ub_total = sum(float(row["unidades_a"] or 0) for row in products), sum(float(row["unidades_b"] or 0) for row in products)
+        va_total, vb_total = sum(float(row["ventas_a"] or 0) for row in products), sum(float(row["ventas_b"] or 0) for row in products)
+        base_price = va_total / ua_total if ua_total else 0
+        volume = mix = price = 0.0
+        for row in products:
+            ua, ub, va, vb = (float(row[key] or 0) for key in ("unidades_a", "unidades_b", "ventas_a", "ventas_b"))
+            product_base_price, product_current_price = (va / ua if ua else base_price), (vb / ub if ub else base_price)
+            quantity_change = ub - ua
+            volume += quantity_change * base_price
+            mix += quantity_change * (product_base_price - base_price)
+            price += (product_current_price - product_base_price) * ub
+        result.append({"entidad": entity, "ventas_periodo_a_eur": va_total, "ventas_periodo_b_eur": vb_total, "efecto_volumen_eur": volume, "efecto_mix_eur": mix, "efecto_precio_eur": price, "precio_medio_a_eur": base_price, "precio_medio_b_eur": vb_total / ub_total if ub_total else 0, "clientes_impulsores": sorted(customers.get(entity, []), key=lambda item: item["variacion_eur"])[:5]})
     return sorted(result, key=lambda item: abs(item["ventas_periodo_b_eur"] - item["ventas_periodo_a_eur"]), reverse=True)
 
 

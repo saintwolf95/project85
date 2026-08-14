@@ -26,3 +26,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - `app/agent_investigations.py` implementa plan → recolección desde `CATALOG` → redacción con `[eN]` → verificación. No añadir SQL generado por LLM.
 - La API `POST /agents/{agent_name}/investigations` devuelve el plan, el bundle `e1...eN`, informe y resultado de verificación. Si quedan números huérfanos o citas inválidas, no publicar el informe.
 - Los informes deben incluir Hipótesis descartadas y Qué dato falta; no afirmar que una hipótesis fue descartada sin bloque de evidencia correspondiente.
+
+## Actualización v1.29 — garantías de publicación
+
+- No incluir `periodo_inicio`/`periodo_fin` en el fingerprint: la señal debe persistir aunque se actualice la ventana y solo resolverse al desaparecer del detector.
+- El validador exige que cada línea que contenga cifras tenga referencia `[eN]`; cada cifra se compara exclusivamente con el bloque citado, con formatos de redondeo permitidos.
+- La acción “Investigar señal” en Control IA consume la API contractual y no muestra una redacción bloqueada.

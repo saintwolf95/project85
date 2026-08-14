@@ -109,6 +109,9 @@ class AgentChatRequest(BaseModel):
     chat_id: Optional[int] = None
     history: List[AgentChatMessage] = Field(..., min_length=1, max_length=20)
 
+class AgentInvestigationRequest(BaseModel):
+    question: str = Field(..., min_length=8, max_length=1200)
+
 class LibreriaDocumentoResponse(BaseModel):
     id: int
     filename: str

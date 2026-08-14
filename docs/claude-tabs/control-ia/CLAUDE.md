@@ -20,3 +20,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Las caídas temporales de ventas y MGD pasan por mediana/MAD, CUSUM y Benjamini-Hochberg (`FDR=10%`). No usar normalidad ni media±2σ sobre picos comerciales.
 - La alerta exige evidencia estadística corregida y persistencia; el p-valor nunca determina el orden de negocio.
 - `MAX_NEW_SIGNALS_PER_AGENT_PER_DAY=5` es una regla de producto: admitir solo las cinco nuevas de mayor impacto por agente y día.
+
+## Actualización v1.27 — investigación verificable
+
+- `app/agent_investigations.py` implementa plan → recolección desde `CATALOG` → redacción con `[eN]` → verificación. No añadir SQL generado por LLM.
+- La API `POST /agents/{agent_name}/investigations` devuelve el plan, el bundle `e1...eN`, informe y resultado de verificación. Si quedan números huérfanos o citas inválidas, no publicar el informe.

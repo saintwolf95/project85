@@ -4,11 +4,12 @@ import logging
 from ..database import get_db
 from ..models import Usuario, AgentSettings, AgentInsights
 from ..api.deps import get_current_user, get_current_active_admin
-from ..schemas import AgentInsightResponse
+from ..schemas import AgentInsightResponse, AgentInvestigationRequest
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..agent_studies import ALLOWED_STUDY_AGENTS, ensure_agent_study_snapshot
 from ..core.rate_limit import limiter
+from ..agent_investigations import run_investigation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -78,6 +79,25 @@ def get_agent_studies(request: Request, agent_name: str, current_user: Usuario =
     except Exception:
         logger.exception("Error preparando estudios de %s", normalized)
         raise HTTPException(status_code=500, detail="No se pudieron preparar los estudios analíticos")
+
+@router.post("/agents/{agent_name}/investigations")
+@limiter.limit("3/minute")
+def investigate_agent(request: Request, agent_name: str, payload: AgentInvestigationRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    normalized = validate_agent_name(agent_name).replace("í", "i")
+    if normalized not in ALLOWED_STUDY_AGENTS:
+        raise HTTPException(status_code=422, detail="Las investigaciones están disponibles para María, Lucía y Mattia.")
+    try:
+        result = run_investigation(db, current_user.empresa_id, normalized, payload.question)
+        if result["mode"] == "blocked":
+            raise HTTPException(status_code=422, detail="La redacción no superó la verificación contra la evidencia.")
+        return result
+    except HTTPException:
+        raise
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+    except Exception:
+        logger.exception("Error en investigación contractual de %s", normalized)
+        raise HTTPException(status_code=500, detail="No se pudo completar la investigación")
 
 from typing import List
 @router.get("/agents/insights/history", response_model=List[AgentInsightResponse])

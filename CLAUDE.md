@@ -74,3 +74,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Para detectores temporales, usar mediana móvil y MAD en lugar de media y desviación típica; validar anomalías con CUSUM de nivel persistente y Benjamini-Hochberg con FDR del 10%.
 - El p-valor solo filtra la entrada. La prioridad siempre es impacto EUR × confianza × severidad; no ordenar alertas por significación estadística.
 - Máximo cinco señales nuevas por agente y día. Si el umbral genera más, seleccionar las cinco de mayor impacto y revisar el detector antes de ampliar el límite.
+
+## Actualización v1.27 — investigaciones con contrato de evidencia
+
+- Control IA investiga mediante cuatro fases: plan limitado a catálogo, recolección con consultas parametrizadas, redacción con referencias `[eN]` y verificación automática antes de publicar.
+- La ruta `POST /agents/{agent_name}/investigations` nunca acepta SQL. Si una cifra o una cita no existe en el bundle, el informe se reintenta una vez y después se bloquea.

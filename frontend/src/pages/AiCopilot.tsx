@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments, getCopilotCapabilities } from '../services/api';
+import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, renameCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments, getCopilotCapabilities } from '../services/api';
 import type { CopilotCapabilities, CopilotChat, LibreriaDocument } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Pencil, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -435,6 +435,19 @@ export const AiCopilot = () => {
     }
   };
 
+  const handleRenameChat = async (e: React.MouseEvent, chat: CopilotChat) => {
+    e.stopPropagation();
+    const titulo = window.prompt('Nombre del chat', chat.titulo)?.trim();
+    if (!titulo || titulo === chat.titulo) return;
+    try {
+      const renamed = await renameCopilotChat(chat.id, titulo);
+      setChats(prev => prev.map(item => item.id === chat.id ? renamed : item));
+    } catch (error) {
+      console.error('Error renombrando chat', error);
+      setChatError(getCopilotErrorMessage(error));
+    }
+  };
+
   const handleSend = async (textOverride?: string) => {
     const userText = (typeof textOverride === 'string' ? textOverride : input).trim();
     if (!userText || isLoading) return;
@@ -631,9 +644,14 @@ export const AiCopilot = () => {
                     {chat.titulo}
                   </span>
                 </div>
-                <button onClick={(e) => handleDeleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-all" title="Eliminar chat">
-                  <Trash2 size={14} />
-                </button>
+                <div className="flex items-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                  <button onClick={(e) => handleRenameChat(e, chat)} className="p-1.5 text-slate-400 hover:text-brand-blue dark:hover:text-brand-cyan hover:bg-brand-blue/10 dark:hover:bg-brand-cyan/10 rounded-md transition-all" title="Renombrar chat" aria-label="Renombrar chat">
+                    <Pencil size={14} />
+                  </button>
+                  <button onClick={(e) => handleDeleteChat(e, chat.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-md transition-all" title="Eliminar chat" aria-label="Eliminar chat">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             ))
           )}

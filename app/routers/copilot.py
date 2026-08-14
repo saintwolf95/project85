@@ -44,6 +44,9 @@ class ChatResponse(BaseModel):
     chat_id: int
     message_id: int
 
+class RenameChatRequest(BaseModel):
+    titulo: str = Field(..., min_length=1, max_length=100)
+
 class ContextoRequest(BaseModel):
     contexto_negocio: str = Field(..., max_length=MAX_CONTEXT_CHARS)
 
@@ -169,6 +172,20 @@ def get_chat_history(chat_id: int, db: Session = Depends(get_db), current_user: 
         for m in mensajes
     ]
 
+@router.put("/chats/{chat_id}")
+def rename_chat(chat_id: int, payload: RenameChatRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
+    chat = db.query(CopilotChat).filter(
+        CopilotChat.id == chat_id,
+        CopilotChat.usuario_id == current_user.id,
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat no encontrado")
+    chat.titulo = payload.titulo.strip()
+    chat.actualizado_en = datetime.utcnow()
+    db.commit()
+    db.refresh(chat)
+    return {"id": chat.id, "titulo": chat.titulo, "actualizado_en": chat.actualizado_en}
+
 @router.delete("/chats/{chat_id}")
 def delete_chat(chat_id: int, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
@@ -193,8 +210,6 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
             chat = db.query(CopilotChat).filter(CopilotChat.id == chat_id, CopilotChat.usuario_id == current_user.id).first()
             if not chat:
                 raise HTTPException(status_code=404, detail="Chat no encontrado")
-            if len(payload.history) == 1:
-                chat.titulo = payload.history[-1].content[:30] + "..."
             chat.actualizado_en = datetime.utcnow()
             db.commit()
 

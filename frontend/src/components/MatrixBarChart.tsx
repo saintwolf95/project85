@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, CartesianGrid } from 'recharts';
 import type { ProductMetrics } from '../services/api';
 
@@ -7,6 +7,7 @@ interface MatrixBarChartProps {
 }
 
 export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
+  const [viewMode, setViewMode] = useState<'count' | 'inventory'>('count');
   const chartData = useMemo(() => {
     const metrics = {
       AX: { name: 'AX', count: 0, inv: 0, sales: 0, color: '#3b82f6', risk: 'Bajo' },
@@ -29,8 +30,8 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
       }
     });
 
-    return Object.values(metrics).sort((a, b) => b.count - a.count);
-  }, [data]);
+    return Object.values(metrics).sort((a, b) => b[viewMode === 'count' ? 'count' : 'inv'] - a[viewMode === 'count' ? 'count' : 'inv']);
+  }, [data, viewMode]);
 
   const formatEuro = (value: number) => {
     if (value >= 1000000) return `€${(value / 1000000).toFixed(1)}M`;
@@ -68,6 +69,25 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
         Clasificación según ventas EUR 90D (A/B/C) e inventario EUR actual (X/Y/Z).
       </p>
       
+      <div className="mb-4 inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 bg-slate-50 dark:bg-slate-800/70" aria-label="Métrica de distribución">
+        <button
+          type="button"
+          onClick={() => setViewMode('count')}
+          aria-pressed={viewMode === 'count'}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'count' ? 'bg-brand-blue text-white dark:bg-brand-cyan dark:text-brand-dark shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+        >
+          Artículos
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('inventory')}
+          aria-pressed={viewMode === 'inventory'}
+          className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === 'inventory' ? 'bg-brand-blue text-white dark:bg-brand-cyan dark:text-brand-dark shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+        >
+          Inventario €
+        </button>
+      </div>
+
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
@@ -84,10 +104,11 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
             <YAxis 
               axisLine={false} 
               tickLine={false} 
-              tick={{ fill: '#64748b', fontSize: 11 }} 
+              tick={{ fill: '#64748b', fontSize: 11 }}
+              tickFormatter={viewMode === 'inventory' ? formatEuro : undefined}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-            <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={50}>
+            <Bar dataKey={viewMode === 'count' ? 'count' : 'inv'} radius={[4, 4, 0, 0]} maxBarSize={50}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

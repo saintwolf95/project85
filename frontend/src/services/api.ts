@@ -323,6 +323,11 @@ export const deleteCopilotChat = async (chatId: number): Promise<{ success: bool
   return response.data;
 };
 
+export const renameCopilotChat = async (chatId: number, titulo: string): Promise<CopilotChat> => {
+  const response = await api.put(`/copilot/chats/${chatId}`, { titulo });
+  return response.data;
+};
+
 export const getBusinessContext = async (): Promise<string> => {
   const response = await api.get('/copilot/context');
   return response.data.contexto_negocio;

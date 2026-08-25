@@ -13,7 +13,7 @@ from app.analitica_ventas import (
     respuesta_analitica_cumple_contrato,
 )
 from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica, resolver_periodo_anterior
-from app.copilot_service import build_followups_marker, build_sql_export_marker, extract_signed_sql_export
+from app.copilot_service import build_followups_marker, build_metrics_marker, build_sql_export_marker, extract_signed_sql_export
 
 
 class AnaliticaVentasTests(unittest.TestCase):
@@ -22,6 +22,12 @@ class AnaliticaVentasTests(unittest.TestCase):
 
         self.assertEqual(inicio, date(2025, 5, 1))
         self.assertEqual(fin, date(2025, 7, 24))
+
+    def test_mes_actual_compara_los_mismos_dias_del_mes_anterior(self):
+        inicio, fin = resolver_periodo_anterior("mes_actual", date(2026, 8, 1), date(2026, 8, 14))
+
+        self.assertEqual(inicio, date(2026, 7, 1))
+        self.assertEqual(fin, date(2026, 7, 14))
 
     def test_accion_de_desglose_explica_el_anio_fiscal(self):
         marker = build_followups_marker(IntentoSemantico(
@@ -127,6 +133,12 @@ class AnaliticaVentasTests(unittest.TestCase):
         self.assertIn("Portátiles", respuesta)
         self.assertIn("POR-100", respuesta)
         self.assertNotIn("potenciar ventas", respuesta.casefold())
+
+        marker = build_metrics_marker(dossier)
+        payload = marker.removeprefix("<!-- copilot_metrics: ").removesuffix(" -->")
+        metricas = json.loads(base64.b64decode(payload))["data"]
+        self.assertEqual(metricas["ventas_eur"], 947600)
+        self.assertEqual(metricas["variacion_ventas_pct"], -5.24)
 
         acciones = crear_acciones_seguimiento(dossier)
         self.assertEqual(len(acciones), 4)

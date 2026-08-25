@@ -167,8 +167,10 @@ def resolver_periodo_anterior(periodo: str | None, fecha_inicio: date | None, fe
     if not periodo or not fecha_inicio or not fecha_fin:
         return None, None
     if periodo == "mes_actual":
-        fin_anterior = fecha_inicio - timedelta(days=1)
-        return fin_anterior.replace(day=1), fin_anterior
+        fin_mes_anterior = fecha_inicio - timedelta(days=1)
+        inicio_anterior = fin_mes_anterior.replace(day=1)
+        dias_transcurridos = (fecha_fin - fecha_inicio).days
+        return inicio_anterior, min(inicio_anterior + timedelta(days=dias_transcurridos), fin_mes_anterior)
     if periodo == "anio_fiscal":
         return fecha_inicio.replace(year=fecha_inicio.year - 1), fecha_fin.replace(year=fecha_fin.year - 1)
     dias = (fecha_fin - fecha_inicio).days + 1

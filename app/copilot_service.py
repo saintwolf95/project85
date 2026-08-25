@@ -55,28 +55,48 @@ def build_sql_export_marker(
     return f"<!-- sql_export: {sql_b64}.{_export_signature(sql_b64, trusted_query, params_b64)}.{scope}.{params_b64} -->"
 
 
-def build_metrics_marker(raw_data: list, sql_query: str = "") -> str:
+def build_metrics_marker(raw_data: Any, sql_query: str = "") -> str:
     """Adjunta KPIs estructurados solo para resultados agregados de una fila."""
-    if not isinstance(raw_data, list) or len(raw_data) != 1 or not isinstance(raw_data[0], dict):
+    if isinstance(raw_data, dict) and isinstance(raw_data.get("resultados"), dict):
+        rows = raw_data["resultados"].get("resumen", [])
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            return ""
+        summary = rows[0]
+        numeric_data = {
+            "ventas_eur": summary.get("ventas_periodo_actual"),
+            "variacion_ventas_eur": summary.get("ventas_variacion_absoluta"),
+            "variacion_ventas_pct": summary.get("ventas_variacion_pct"),
+            "margen_eur": summary.get("margen_periodo_actual"),
+            "variacion_margen_pct": summary.get("margen_variacion_pct"),
+            "sku_con_venta": summary.get("productos_actuales"),
+        }
+        numeric_data = {
+            key: float(value)
+            for key, value in numeric_data.items()
+            if isinstance(value, Number) and not isinstance(value, bool)
+        }
+        formato = "eur"
+    elif isinstance(raw_data, list) and len(raw_data) == 1 and isinstance(raw_data[0], dict):
+        numeric_data = {
+            clave: float(valor) if isinstance(valor, Number) and not isinstance(valor, bool) else valor
+            for clave, valor in raw_data[0].items()
+            if isinstance(valor, Number) and not isinstance(valor, bool)
+        }
+        is_percentage_metric = bool(
+            re.search(r"\bAS\s+(?:margen_pct|mgd_pct)\b", sql_query, flags=re.IGNORECASE)
+            or "NULLIF(SUM(vh.ingreso_total), 0) * 100" in sql_query
+        )
+        formato = (
+            "porcentaje"
+            if is_percentage_metric
+            else "unidades"
+            if "ventas_unidades" in sql_query
+            else "eur"
+        )
+    else:
         return ""
-    numeric_data = {
-        clave: float(valor) if isinstance(valor, Number) and not isinstance(valor, bool) else valor
-        for clave, valor in raw_data[0].items()
-        if isinstance(valor, Number) and not isinstance(valor, bool)
-    }
     if not numeric_data:
         return ""
-    is_percentage_metric = bool(
-        re.search(r"\bAS\s+(?:margen_pct|mgd_pct)\b", sql_query, flags=re.IGNORECASE)
-        or "NULLIF(SUM(vh.ingreso_total), 0) * 100" in sql_query
-    )
-    formato = (
-        "porcentaje"
-        if is_percentage_metric
-        else "unidades"
-        if "ventas_unidades" in sql_query
-        else "eur"
-    )
     encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato}).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_metrics: {encoded} -->"
 
@@ -538,19 +558,21 @@ def interpret_results(
     client = get_openai_client()
     if not client:
         if es_dossier:
-            return renderizar_respuesta_analitica(raw_data)
+            fallback = renderizar_respuesta_analitica(raw_data)
+            metrics_marker = build_metrics_marker(raw_data)
+            return f"{fallback}\n\n{metrics_marker}" if metrics_marker else fallback
         return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
     if model_preference in ["thinking", "ultra_thinking"]:
         contrato_dossier = contrato_respuesta_analitica() if es_dossier else ""
         INTERPRET_PROMPT = f"""
 Eres SupplyChain AI, un **Analista de Negocio y Científico de Datos Senior** experto en operaciones, cadena de suministro y finanzas corporativas.
-Como estás operando con un modelo de razonamiento avanzado, tu objetivo es realizar un análisis **profundo, exhaustivo y altamente inteligente**.
+Como estás operando con un modelo de razonamiento avanzado, tu objetivo es realizar un análisis **riguroso, priorizado y útil para decidir**.
 
 REGLAS ESTRICTAS PARA MODO AVANZADO:
-1. **Análisis Profundo y Verborrea Analítica:** Usa un lenguaje profesional y detallado. Explora los datos a fondo, haz cruces de variables, identifica patrones ocultos, correlaciones y anomalías. Tómate la libertad de escribir más palabras para explicar la situación de forma magistral.
-2. **Gestión de Riesgos y Oportunidades:** Enumera proactivamente riesgos (ej: roturas de stock inminentes, sobre-stock financiero, dependencias) y aporta oportunidades de optimización y planes de acción claros.
-3. **Consultoría y Predicción:** Aporta recomendaciones estratégicas y proyecciones. Justifica matemáticamente tus conclusiones basándote estrictamente en los datos devueltos.
+1. **Profundidad sin verborrea:** Prioriza las 3 conclusiones que más explican el impacto EUR. Usa frases cortas, evita introducciones y no repitas en prosa lo que ya aparece en una tabla.
+2. **Decisiones verificables:** Distingue hecho, interpretación e hipótesis. Recomienda una comprobación concreta y medible; no inventes riesgos, oportunidades ni causalidad fuera del dossier.
+3. **Jerarquía ejecutiva:** Empieza por fechas comparables, KPI y diagnóstico. Después muestra impulsores, tabla y acciones. Una respuesta avanzada debe ser más precisa, no simplemente más larga.
 4. **Gráficos Dinámicos:** TIENES LA CAPACIDAD DE RENDERIZAR GRÁFICOS REALES. Si el usuario pide un gráfico o si el contexto analítico lo pide, INYECTA al final de tu mensaje un bloque de código estrictamente JSON con la siguiente estructura (elige entre 'bar', 'line', 'pie'):
 ```json
 {{
@@ -649,7 +671,7 @@ Contexto del Negocio: {contexto}
         )
     if es_dossier and not respuesta_analitica_cumple_contrato(reply):
         logger.warning("La interpretación analítica no cumplió el contrato; se usa el respaldo determinista.")
-        return renderizar_respuesta_analitica(raw_data)
+        reply = renderizar_respuesta_analitica(raw_data)
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
         reply += f"\n\n{build_sql_export_marker(sql_query, trusted_query, export_params)}"

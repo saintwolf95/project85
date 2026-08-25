@@ -96,3 +96,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `app/agents_service.py` no conserva rutas SQL o informes manuales heredados: todos los agentes narran evidence bundles.
 - La validación de evidencia reutilizable vive en `app/evidence_contract.py` y debe cubrirse con pruebas unitarias. El límite diario cuenta solo señales activas, no las resueltas.
+
+## Actualización v1.31 — respuesta ejecutiva del Copilot
+
+- “Este mes” se compara contra los mismos días transcurridos del mes anterior; nunca presentar un mes parcial frente a un mes completo como una variación válida.
+- Thinking prioriza tres conclusiones por impacto EUR, KPI estructurados, tablas legibles y acciones verificables. La profundidad analítica no se mide por longitud ni permite causalidad no demostrada.
+- Los recuentos distintos de producto se nombran “SKU con venta”. Las ventas negativas se tratan como devoluciones, abonos o ajustes pendientes de validar, no como una caída de demanda inferida.

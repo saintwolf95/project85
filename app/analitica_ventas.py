@@ -46,12 +46,12 @@ DIMENSIONES_VENTAS = {
 }
 
 ENCABEZADOS_RESPUESTA_ANALITICA = (
-    "Conclusión ejecutiva",
-    "Principales impulsores",
-    "Top 5 caídas",
+    "Resumen ejecutivo",
+    "Qué explica el cambio",
+    "Top 5 movimientos",
     "Lectura ABC",
-    "Acciones verificables",
-    "Limitaciones",
+    "Qué haría ahora",
+    "Calidad del análisis",
 )
 
 
@@ -135,8 +135,10 @@ def crear_cte_abc_ventas() -> str:
 
 def _rango_anterior(periodo: str | None, inicio: date, fin: date) -> tuple[date, date]:
     if periodo == "mes_actual":
-        fin_anterior = inicio - timedelta(days=1)
-        return fin_anterior.replace(day=1), fin_anterior
+        fin_mes_anterior = inicio - timedelta(days=1)
+        inicio_anterior = fin_mes_anterior.replace(day=1)
+        dias_transcurridos = (fin - inicio).days
+        return inicio_anterior, min(inicio_anterior + timedelta(days=dias_transcurridos), fin_mes_anterior)
     if periodo == "anio_fiscal":
         return inicio.replace(year=inicio.year - 1), fin.replace(year=fin.year - 1)
     dias = (fin - inicio).days + 1
@@ -283,11 +285,16 @@ def contrato_respuesta_analitica() -> str:
     return f"""
 CONTRATO OBLIGATORIO PARA EL DOSSIER ANALÍTICO:
 - Usa exactamente estos apartados Markdown y en este orden: {encabezados}.
+- Abre el resumen indicando las fechas exactas de ambos periodos y confirma que tienen la misma duración.
+- Prioriza decisiones sobre extensión: máximo tres hallazgos en “Qué explica el cambio” y máximo tres acciones. Cada viñeta debe comenzar por una conclusión en negrita y continuar con su evidencia.
 - Cada conclusión debe citar al menos un importe, porcentaje, periodo o producto del dossier.
 - Explica únicamente impulsores observados en los datos. No presentes una correlación como causa comercial demostrada.
 - No inventes cifras, porcentajes, precios, motivos de clientes ni información fuera del dossier.
-- En “Top 5 caídas” muestra una tabla Markdown con SKU, producto, familia, ABC, periodo actual, periodo anterior y variación.
-- En “Acciones verificables” indica qué segmento revisar, qué métrica lo justifica y qué desglose debe consultarse después. Prohíbe frases genéricas como “potenciar ventas”, “mejorar campañas” o “optimizar la estrategia”.
+- Llama “SKU con venta” al recuento de productos; no lo presentes como unidades vendidas.
+- Si una venta es negativa, descríbela como devolución, abono o ajuste contable pendiente de validar. No la atribuyas a precio, inventario o demanda sin evidencia documental.
+- En “Top 5 movimientos” muestra una tabla Markdown compacta con SKU, producto, familia, ABC, actual, anterior y variación. No repitas la tabla en prosa.
+- En “Qué haría ahora” indica prioridad, impacto que la justifica y siguiente desglose verificable. Prohíbe frases genéricas como “potenciar ventas”, “mejorar campañas” u “optimizar la estrategia”.
+- “Calidad del análisis” debe ser breve: solo limitaciones que cambian la decisión. No relegues aquí una comparación de distinta duración; esa comparación está prohibida.
 - Si no hay caída o no hay datos suficientes, dilo explícitamente en el apartado correspondiente.
 """
 
@@ -350,28 +357,28 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
     periodo_anterior = dossier.get("periodo_anterior", {})
     sentido = "crecen" if _numero(variacion) >= 0 else "caen"
     lineas = [
-        "## Conclusión ejecutiva",
+        "## Resumen ejecutivo",
         (
-            f"Las ventas {sentido} hasta {_eur(variacion)} ({_porcentaje(variacion_pct)}) "
-            f"frente al periodo comparable: {_eur(ventas_actuales)} entre "
-            f"{periodo_actual.get('inicio', 'N/D')} y {periodo_actual.get('fin', 'N/D')}, "
-            f"frente a {_eur(ventas_anteriores)} entre {periodo_anterior.get('inicio', 'N/D')} "
-            f"y {periodo_anterior.get('fin', 'N/D')}."
+            f"**Las ventas {sentido} {_eur(variacion)} ({_porcentaje(variacion_pct)}).** "
+            f"El periodo actual va del **{periodo_actual.get('inicio', 'N/D')}** al "
+            f"**{periodo_actual.get('fin', 'N/D')}** ({_eur(ventas_actuales)}) y se compara con "
+            f"{periodo_anterior.get('inicio', 'N/D')}–{periodo_anterior.get('fin', 'N/D')} "
+            f"({_eur(ventas_anteriores)}), usando el mismo número de días."
         ),
-        "\n## Principales impulsores",
+        "\n## Qué explica el cambio",
     ]
     impulsor = _principal_impulsor(resultados)
     if impulsor:
         dimension, fila = impulsor
         lineas.append(
-            f"- El principal impulsor observado es {dimension} **{fila.get('agrupacion', 'Sin clasificar')}**: "
+            f"- **Principal impacto — {dimension} {fila.get('agrupacion', 'Sin clasificar')}:** "
             f"{_eur(fila.get('ventas_variacion_absoluta'))} ({_porcentaje(fila.get('ventas_variacion_pct'))}) "
-            f"respecto al periodo anterior. Este dato explica el movimiento contable; no demuestra por sí solo su causa comercial."
+            f"respecto al periodo anterior. Explica el movimiento observado, no su causa comercial."
         )
     else:
         lineas.append("- No hay un impulsor negativo identificable con los datos del periodo comparable.")
 
-    lineas.extend(("\n## Top 5 caídas", "| SKU | Producto | Familia | ABC | Periodo actual | Periodo anterior | Variación |", "| --- | --- | --- | --- | ---: | ---: | ---: |"))
+    lineas.extend(("\n## Top 5 movimientos", "| SKU | Producto | Familia | ABC | Actual | Anterior | Variación |", "| --- | --- | --- | --- | ---: | ---: | ---: |"))
     caidas = [
         fila for fila in resultados.get("top_caidas_sku", [])
         if isinstance(fila, dict) and _numero(fila.get("ventas_variacion_absoluta")) < 0
@@ -398,25 +405,25 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
     else:
         lineas.append("| N/D | 0 | €0,00 | €0,00 |")
 
-    lineas.append("\n## Acciones verificables")
+    lineas.append("\n## Qué haría ahora")
     if impulsor:
         dimension, fila = impulsor
         lineas.append(
-            f"- Revisar **{dimension} {fila.get('agrupacion', 'Sin clasificar')}**: su variación de "
-            f"{_eur(fila.get('ventas_variacion_absoluta'))} justifica desglosar por marca y SKU antes de decidir una intervención."
+            f"1. **Validar {dimension} {fila.get('agrupacion', 'Sin clasificar')}:** su impacto de "
+            f"{_eur(fila.get('ventas_variacion_absoluta'))} justifica revisar documentos, marca y SKU antes de intervenir."
         )
     if caidas:
         primer_sku = caidas[0]
         lineas.append(
-            f"- Analizar el SKU **{primer_sku.get('sku', 'N/D')}** y sus unidades, precio medio y margen; "
+            f"2. **Abrir el SKU {primer_sku.get('sku', 'N/D')}:** revisar unidades, precio medio y margen; "
             f"es la mayor caída identificada ({_eur(primer_sku.get('ventas_variacion_absoluta'))})."
         )
     if not impulsor and not caidas:
         lineas.append("- No se propone una intervención hasta disponer de una variación negativa segmentada.")
 
     lineas.extend((
-        "\n## Limitaciones",
-        "- El análisis describe variaciones observadas en ventas. No permite atribuir causas comerciales sin datos adicionales de precio, disponibilidad, promociones o mercado.",
+        "\n## Calidad del análisis",
+        "- La comparación usa ventanas equivalentes. Las variaciones están verificadas en ventas; atribuir una causa exige contrastar documentos, unidades, precio, disponibilidad o promociones.",
     ))
     return "\n".join(lineas)
 

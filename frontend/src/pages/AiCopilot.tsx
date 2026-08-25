@@ -79,6 +79,10 @@ const METRIC_LABELS: Record<string, string> = {
   variacion_absoluta: 'Variación',
   variacion_pct: 'Variación %',
   variacion_pp: 'Variación p.p.',
+  variacion_ventas_eur: 'Variación ventas',
+  variacion_ventas_pct: 'Variación ventas %',
+  variacion_margen_pct: 'Variación margen %',
+  sku_con_venta: 'SKU con venta',
   productos: 'Productos',
   clientes: 'Clientes',
   productos_alerta: 'Productos en alerta',
@@ -88,7 +92,7 @@ const METRIC_LABELS: Record<string, string> = {
 const formatMetricValue = (key: string, value: number, formato?: CopilotMetricPayload['formato']) => {
   const isPercent = key.includes('pct') || key.includes('_pp') || formato === 'porcentaje' && key.includes('periodo');
   if (isPercent) return `${value.toLocaleString('es-ES', { maximumFractionDigits: 2 })}%`;
-  if (key === 'productos' || key.includes('unidades') || formato === 'unidades') {
+  if (key === 'productos' || key === 'sku_con_venta' || key.includes('unidades') || formato === 'unidades') {
     return value.toLocaleString('es-ES', { maximumFractionDigits: 0 });
   }
   if (formato === 'eur' || /(eur|ventas|beneficio|margen|inventario|variacion)/.test(key)) {
@@ -782,7 +786,7 @@ export const AiCopilot = () => {
           ) : (
           messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex gap-4 max-w-[90%] md:max-w-[80%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex gap-4 max-w-[96%] ${msg.role === 'user' ? 'md:max-w-[80%] flex-row-reverse' : 'md:max-w-[94%] flex-row'}`}>
 
                 {/* Avatar */}
                 <div className="flex-shrink-0 mt-1 hidden md:block">
@@ -799,10 +803,10 @@ export const AiCopilot = () => {
 
                 {/* Burbuja */}
                 <div className="flex flex-col gap-1">
-                  <div className={`relative group p-4 rounded-2xl whitespace-pre-wrap leading-relaxed text-sm ${
+                  <div className={`relative group p-4 rounded-2xl leading-relaxed text-sm ${
                     msg.role === 'user'
-                      ? 'bg-brand-blue text-white rounded-tr-sm shadow-sm'
-                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-brand-cyan/30 rounded-tl-sm shadow-sm'
+                      ? 'whitespace-pre-wrap bg-brand-blue text-white rounded-tr-sm shadow-sm'
+                      : 'whitespace-normal bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-brand-cyan/30 rounded-tl-sm shadow-sm'
                   }`}>
                     {msg.role === 'user' ? (
                       msg.content
@@ -810,7 +814,7 @@ export const AiCopilot = () => {
                       <>
                         <CopyButton text={msg.content} />
                         <CopilotMetricCards content={msg.content} />
-                        <div className="prose dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-slate-100 dark:prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-200 dark:prose-pre:border-slate-700 prose-a:text-brand-blue dark:prose-a:text-brand-cyan prose-table:text-sm prose-th:bg-slate-200 dark:prose-th:bg-slate-700 prose-td:border prose-th:border prose-td:border-slate-300 dark:prose-td:border-slate-600 prose-td:p-2 prose-th:p-2">
+                        <div className="copilot-markdown max-w-none">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeSanitize]}

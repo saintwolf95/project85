@@ -326,7 +326,14 @@ def refresh_agent_signals(db: Session, empresa_id: int) -> list[AgentSignal]:
             if row.estado != "descartada":
                 row.estado = "persistente"
         else:
-            db.add(AgentSignal(**{key: value for key, value in data.items() if key != "evidencia"}, evidencia=json.dumps(data["evidencia"], ensure_ascii=False, default=str), estado="nueva", primera_deteccion=now, ultima_deteccion=now))
+            db.add(AgentSignal(
+                empresa_id=empresa_id,
+                **{key: value for key, value in data.items() if key != "evidencia"},
+                evidencia=json.dumps(data["evidencia"], ensure_ascii=False, default=str),
+                estado="nueva",
+                primera_deteccion=now,
+                ultima_deteccion=now,
+            ))
     for row in existing.values():
         if row.detector in detector_names and row.fingerprint not in fingerprints and row.estado in ACTIVE_STATES:
             row.estado = "resuelta"

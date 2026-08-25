@@ -37,3 +37,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - No reintroducir tool-calling SQL en `agents_service.py`; sus únicos datos de entrada son señales y evidence bundles.
 - `evidence_contract.py` centraliza el verificador cifra→cita. Mantener pruebas para redondeo permitido, cifra sin cita y cita que apunta al bloque equivocado.
+
+## Actualización v1.36 — persistencia de señales
+
+- `refresh_agent_signals` asigna explícitamente el `empresa_id` al crear cada `AgentSignal`; nunca confiar en que el detector lo incluya en su diccionario.
+- La ruta de nueva ejecución revierte la transacción si falla el flujo, registra el detalle técnico en backend y mantiene un mensaje seguro para el frontend.
+- La persistencia de una señal nueva debe estar cubierta por una prueba que valide el aislamiento multiempresa.

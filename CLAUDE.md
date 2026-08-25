@@ -124,3 +124,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Las consultas mensuales del Copilot recuperan juntas ventas, unidades, margen, MGD, SKU con venta y cobertura real. La tabla se renderiza de forma determinista e indica siempre la última fecha disponible.
 - Interpretar fechas naturales como `desde el 5 de mayo de 2025 hasta la última fecha disponible` para cualquier mes y año. La frase `número de SKU con venta` es una métrica, nunca un filtro por el SKU `con`.
 - En ventas, `Sustituir` reemplaza solo las fechas comprendidas por el archivo. Nunca elimina FY anteriores ni clientes compartidos; una carga del ejercicio actual debe conservar el histórico interanual.
+
+## Actualización v1.36 — persistencia multiempresa de señales
+
+- Toda señal nueva de Control IA debe persistirse con el `empresa_id` de la ejecución. El identificador no forma parte del detector ni puede quedar implícito en el evidence bundle.
+- Si una ejecución de agentes falla después de abrir una transacción, la ruta debe ejecutar `rollback` antes de devolver el error para no dejar la sesión en estado inválido.
+- Mantener una prueba de regresión que cree una señal nueva y confirme su asociación con la empresa solicitante.

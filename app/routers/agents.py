@@ -38,6 +38,7 @@ def run_agents(request: Request, current_user: Usuario = Depends(get_current_act
         insight = execute_agents_workflow(db, current_user.empresa_id, settings.fase1_active, settings.fase2_active)
         return insight
     except Exception as e:
+        db.rollback()
         logger.error(f"Error ejecutando agentes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno ejecutando agentes.")
 

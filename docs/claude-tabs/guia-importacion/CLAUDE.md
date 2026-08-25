@@ -16,3 +16,7 @@ La guía y Data Engineering informan un máximo de 50 MB por CSV/XLSX y 100.000 
 ## Actualización v1.33
 
 Los CSV pueden contener nombres con comas y medidas en pulgadas siempre que estén correctamente entrecomillados. La importación debe conservar las 21 columnas de ventas sin desplazamientos.
+
+## Actualización v1.34
+
+La guía debe explicar que las columnas `ClientePK` y `Nombre Cliente` deben existir, aunque sus celdas pueden estar vacías. La importación asigna `SIN-CLIENTE` y `Sin nombre cliente` cuando no hay identificación disponible.

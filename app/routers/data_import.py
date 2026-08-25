@@ -44,6 +44,8 @@ MAX_REPORTED_WARNINGS = 100
 SUPPORTED_DATASETS = {"products", "inventory", "sales"}
 POWER_BI_TRAILER_PREFIXES = ("total", "subtotal", "filtros_aplicados", "filters_applied")
 PERCENTAGE_LOSS_FLOOR = -200.0
+MISSING_CLIENT_PK = "SIN-CLIENTE"
+MISSING_CLIENT_NAME = "Sin nombre cliente"
 
 DATASET_CONFIG = {
     "products": {
@@ -666,6 +668,13 @@ def _validate_rows(
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
                 if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
                     margen_destino_pct = margen_destino_eur / float(ingreso) * 100
+                cliente_pk = _optional_text(row.get("cliente_pk"), "ClientePK", 120)
+                nombre_cliente = _optional_text(row.get("nombre_cliente"), "Nombre Cliente", 255)
+                if not cliente_pk:
+                    cliente_pk = MISSING_CLIENT_PK
+                    nombre_cliente = MISSING_CLIENT_NAME
+                elif not nombre_cliente:
+                    nombre_cliente = MISSING_CLIENT_NAME
                 valid_rows.append({
                     "sku": sku,
                     "nombre": _required_text(row.get("nombre"), "Nombre Articulo", 255),
@@ -684,8 +693,8 @@ def _validate_rows(
                     "seccion": _optional_text(row.get("seccion"), "Nombre Seccion"),
                     "ean": _optional_text(row.get("ean"), "EAN", 80),
                     "product_manager": _optional_text(row.get("product_manager"), "Product Manager"),
-                    "cliente_pk": _required_text(row.get("cliente_pk"), "ClientePK", 120),
-                    "nombre_cliente": _required_text(row.get("nombre_cliente"), "Nombre Cliente", 255),
+                    "cliente_pk": cliente_pk,
+                    "nombre_cliente": nombre_cliente,
                     "kd": (_optional_text(row.get("kd"), "KD", 120) or "NO").upper(),
                     "tipo_cliente": _optional_text(row.get("tipo_cliente"), "Tipo Cliente", 120),
                     "comercial_cliente": _optional_text(row.get("comercial_cliente"), "Nombre Comercial", 255),

@@ -18,3 +18,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 ## Actualización v1.33
 
 El lector CSV conserva correctamente campos entrecomillados con comas y pulgadas. Antes de una carga fraccionada, dividir siempre por fechas completas para que dos partes no compartan una misma clave diaria de venta.
+
+## Actualización v1.34
+
+Las ventas con celdas de cliente vacías son válidas: sin `ClientePK` se asigna el cliente técnico `SIN-CLIENTE` y el nombre `Sin nombre cliente`; si solo falta el nombre, se conserva el identificador original y se usa el nombre de respaldo.

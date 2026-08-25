@@ -113,3 +113,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - El lector CSV fija `doublequote=True` tras detectar el delimitador. Los nombres de artículos con pulgadas y comas, como `27" IPS, HDMI`, no deben desplazar las dimensiones posteriores.
 - La carga histórica FY2025 entregada cubre datos reales desde el 05/05/2025 hasta el 30/04/2026; no inventar actividad para el 01–04/05/2025, aunque el calendario fiscal general comience el 1 de mayo.
+
+## Actualización v1.34 — ventas sin cliente identificado
+
+- Las columnas `ClientePK` y `Nombre Cliente` siguen siendo obligatorias en la plantilla, pero sus celdas pueden venir vacías.
+- Si falta `ClientePK`, la venta se vincula al cliente técnico `SIN-CLIENTE` con nombre `Sin nombre cliente`. Si existe el identificador y solo falta el nombre, se conserva el identificador y se aplica el mismo nombre de respaldo.

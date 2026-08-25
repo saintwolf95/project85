@@ -62,6 +62,32 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(valid[0]["comercial_cliente"], "Ana")
         self.assertEqual(valid[0]["comercial_factura"], "Luis")
 
+    def test_asigna_cliente_tecnico_si_identificador_y_nombre_estan_vacios(self):
+        headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
+        row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))
+        row["cliente_pk"] = ""
+        row["nombre_cliente"] = ""
+
+        valid, errors, warnings = _validate_rows("sales", [row])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertEqual(valid[0]["cliente_pk"], "SIN-CLIENTE")
+        self.assertEqual(valid[0]["nombre_cliente"], "Sin nombre cliente")
+
+    def test_conserva_cliente_pk_si_solo_falta_el_nombre(self):
+        headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
+        row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))
+        row["cliente_pk"] = "CLI-SIN-NOMBRE"
+        row["nombre_cliente"] = ""
+
+        valid, errors, warnings = _validate_rows("sales", [row])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertEqual(valid[0]["cliente_pk"], "CLI-SIN-NOMBRE")
+        self.assertEqual(valid[0]["nombre_cliente"], "Sin nombre cliente")
+
     def test_ignora_total_y_filtros_de_power_bi_al_final(self):
         output = io.StringIO()
         writer = csv.writer(output)

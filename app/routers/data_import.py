@@ -33,8 +33,10 @@ from ..models import (
 router = APIRouter(prefix="/data-import", tags=["data-import"])
 logger = logging.getLogger(__name__)
 
-MAX_IMPORT_FILE_SIZE = 20 * 1024 * 1024
-MAX_XLSX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024
+MAX_IMPORT_FILE_SIZE = 50 * 1024 * 1024
+MAX_XLSX_UNCOMPRESSED_SIZE = 512 * 1024 * 1024
+MAX_XLSX_COMPRESSION_RATIO = 200
+MAX_XLSX_ARCHIVE_ENTRIES = 2_000
 MAX_IMPORT_ROWS = 100_000
 MAX_IMPORT_COLUMNS = 64
 MAX_REPORTED_ERRORS = 100
@@ -434,12 +436,33 @@ def _is_power_bi_trailer(row: dict[str, str]) -> bool:
     return normalized.startswith(POWER_BI_TRAILER_PREFIXES)
 
 
+def _validate_xlsx_archive(content: bytes) -> None:
+    """Permite libros grandes y bloquea patrones propios de una bomba ZIP."""
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        members = archive.infolist()
+        if len(members) > MAX_XLSX_ARCHIVE_ENTRIES:
+            raise HTTPException(
+                status_code=400,
+                detail="El XLSX contiene demasiados componentes internos para procesarlo de forma segura.",
+            )
+        total_uncompressed = sum(item.file_size for item in members)
+        if total_uncompressed > MAX_XLSX_UNCOMPRESSED_SIZE:
+            raise HTTPException(
+                status_code=400,
+                detail="El contenido interno del XLSX supera el límite de 512 MB.",
+            )
+        total_compressed = sum(item.compress_size for item in members)
+        compression_ratio = total_uncompressed / max(total_compressed, 1)
+        if compression_ratio > MAX_XLSX_COMPRESSION_RATIO:
+            raise HTTPException(
+                status_code=400,
+                detail="El XLSX presenta una compresión anómala y no puede procesarse de forma segura.",
+            )
+
+
 def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
     try:
-        with zipfile.ZipFile(io.BytesIO(content)) as archive:
-            total_uncompressed = sum(item.file_size for item in archive.infolist())
-            if total_uncompressed > MAX_XLSX_UNCOMPRESSED_SIZE:
-                raise HTTPException(status_code=400, detail="El XLSX descomprimido supera el limite de seguridad.")
+        _validate_xlsx_archive(content)
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
     except (zipfile.BadZipFile, InvalidFileException, OSError) as exc:
         raise HTTPException(status_code=400, detail="El archivo XLSX no es valido.") from exc
@@ -537,7 +560,7 @@ async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[
 
     content = await file.read(MAX_IMPORT_FILE_SIZE + 1)
     if len(content) > MAX_IMPORT_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="El archivo supera el limite de 20 MB.")
+        raise HTTPException(status_code=400, detail="El archivo supera el límite de 50 MB.")
     return _read_xlsx(content, dataset) if extension == "xlsx" else _read_csv(content, dataset)
 
 

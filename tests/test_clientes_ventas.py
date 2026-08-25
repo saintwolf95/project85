@@ -1,8 +1,12 @@
 import csv
+import hashlib
 import io
 import unittest
+import zipfile
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _validate_rows
+from fastapi import HTTPException
+
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _validate_rows, _validate_xlsx_archive
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -78,6 +82,22 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(_margin_percentage_with_loss_floor(-300.0, 100.0), -200.0)
         self.assertEqual(_margin_percentage_with_loss_floor(-12.0, 100.0), -12.0)
         self.assertEqual(_parse_percentage("-123018,6%", "% MGD"), -200.0)
+
+    def test_xlsx_normal_no_se_rechaza_por_su_contenido_descomprimido(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            varied_content = b"".join(hashlib.sha256(str(index).encode()).digest() for index in range(500))
+            archive.writestr("xl/worksheets/sheet1.xml", varied_content)
+
+        _validate_xlsx_archive(output.getvalue())
+
+    def test_xlsx_con_ratio_de_compresion_anomalo_se_bloquea(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("xl/worksheets/sheet1.xml", b"0" * 1_000_000)
+
+        with self.assertRaisesRegex(HTTPException, "compresión anómala"):
+            _validate_xlsx_archive(output.getvalue())
 
 
 if __name__ == "__main__":

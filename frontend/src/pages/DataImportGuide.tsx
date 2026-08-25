@@ -126,7 +126,7 @@ export const DataImportGuide = () => (
           <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />Excel <code>.xlsx</code> o CSV UTF-8.</li>
           <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />Fechas Excel o formatos YYYY-MM-DD y DD/MM/YYYY.</li>
           <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />Importes con coma o punto decimal y porcentajes como 24,5%, 24,5 o 0,245.</li>
-          <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />Máximo: 20 MB, 100.000 filas y 64 columnas.</li>
+          <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />Máximo: 50 MB, 100.000 filas y 64 columnas.</li>
           <li className="flex gap-2"><CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />EAN y ArticuloPK deben mantenerse como texto cuando puedan contener ceros iniciales.</li>
         </ul>
       </div>

@@ -9,3 +9,6 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Indicar que ventas puede cubrir el ejercicio fiscal y que inventario tiene histórico desde el 06/08/2026; no afirmar disponibilidad previa de stock histórico.
 - Cualquier cambio de requisito, plantilla, validación o cálculo debe actualizar también esta guía en la misma versión.
 
+## Actualización v1.32
+
+La guía y Data Engineering informan un máximo de 50 MB por CSV/XLSX y 100.000 filas. El XLSX puede ocupar hasta 512 MB internamente siempre que no presente un patrón de compresión anómalo.

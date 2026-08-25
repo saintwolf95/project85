@@ -25,6 +25,7 @@ import type {
   DataImportValidation,
 } from '../services/api';
 
+const MAX_IMPORT_FILE_SIZE_MB = 50;
 
 const DATASETS: Array<{
   id: DataImportDataset;
@@ -150,8 +151,8 @@ export const DataEngineering = () => {
       setError('Selecciona un archivo CSV o XLSX.');
       return;
     }
-    if (selectedFile.size > 20 * 1024 * 1024) {
-      setError('El archivo supera el límite de 20 MB.');
+    if (selectedFile.size > MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024) {
+      setError(`El archivo supera el límite de ${MAX_IMPORT_FILE_SIZE_MB} MB.`);
       return;
     }
     setFile(selectedFile);
@@ -387,7 +388,7 @@ export const DataEngineering = () => {
                 >
                   Seleccionar archivo
                 </button>
-                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo 20 MB / 100.000 filas</p>
+                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo {MAX_IMPORT_FILE_SIZE_MB} MB / 100.000 filas</p>
               </>
             )}
           </div>

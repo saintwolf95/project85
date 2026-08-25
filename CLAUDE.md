@@ -118,3 +118,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Las columnas `ClientePK` y `Nombre Cliente` siguen siendo obligatorias en la plantilla, pero sus celdas pueden venir vacías.
 - Si falta `ClientePK`, la venta se vincula al cliente técnico `SIN-CLIENTE` con nombre `Sin nombre cliente`. Si existe el identificador y solo falta el nombre, se conserva el identificador y se aplica el mismo nombre de respaldo.
+
+## Actualización v1.35 — evidencia mensual y conservación del histórico
+
+- Las consultas mensuales del Copilot recuperan juntas ventas, unidades, margen, MGD, SKU con venta y cobertura real. La tabla se renderiza de forma determinista e indica siempre la última fecha disponible.
+- Interpretar fechas naturales como `desde el 5 de mayo de 2025 hasta la última fecha disponible` para cualquier mes y año. La frase `número de SKU con venta` es una métrica, nunca un filtro por el SKU `con`.
+- En ventas, `Sustituir` reemplaza solo las fechas comprendidas por el archivo. Nunca elimina FY anteriores ni clientes compartidos; una carga del ejercicio actual debe conservar el histórico interanual.

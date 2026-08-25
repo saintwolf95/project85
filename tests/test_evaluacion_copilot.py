@@ -147,6 +147,30 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 self.assertEqual(inicio, inicio_esperado)
                 self.assertEqual(fin, fin_esperado)
 
+    def test_resolver_periodo_desde_dia_natural_hasta_ultima_fecha_disponible(self):
+        periodo, inicio, fin = resolver_periodo(
+            "Desde el 5 de mayo de 2025 hasta la última fecha disponible",
+            hoy=date(2026, 8, 25),
+        )
+
+        self.assertEqual(periodo, "rango_personalizado")
+        self.assertEqual(inicio, date(2025, 5, 5))
+        self.assertEqual(fin, date(2026, 8, 25))
+
+    def test_numero_de_sku_con_venta_no_se_interpreta_como_filtro(self):
+        intento, aclaracion = analizar_intencion([{
+            "role": "user",
+            "content": (
+                "Muéstrame las ventas mensuales desde el 5 de mayo de 2025 hasta la última fecha "
+                "disponible, con ventas, unidades, margen, MGD y número de SKU con venta."
+            ),
+        }])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.agrupacion, "mes")
+        self.assertNotIn("sku", intento.parametros)
+
     def test_solicitud_excel_mensual_hereda_el_periodo_aclarado(self):
         intento, aclaracion = analizar_intencion([
             {"role": "user", "content": "Dame un Excel de las ventas por mes"},

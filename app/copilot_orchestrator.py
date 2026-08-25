@@ -78,6 +78,42 @@ def _ultimo_dia_mes(anio: int, mes: int) -> date:
     return date(siguiente_anio, siguiente_mes, 1) - timedelta(days=1)
 
 
+def _resolver_rango_fechas_naturales(normalizado: str, fecha_hoy: date) -> tuple[date, date] | None:
+    """Resuelve rangos como «desde el 5 de mayo de 2025 hasta hoy»."""
+    nombres_meses = "|".join(MESES_ES)
+    inicio_match = re.search(
+        rf"\bdesde\s+(?:el\s+)?(\d{{1,2}})\s+de\s+({nombres_meses})(?:\s+de)?\s+(\d{{4}})\b",
+        normalizado,
+    )
+    if not inicio_match:
+        return None
+    try:
+        inicio = date(
+            int(inicio_match.group(3)),
+            MESES_ES[inicio_match.group(2)],
+            int(inicio_match.group(1)),
+        )
+    except ValueError:
+        return None
+
+    fin_match = re.search(
+        rf"\b(?:hasta|al)\s+(?:el\s+)?(\d{{1,2}})\s+de\s+({nombres_meses})(?:\s+de)?\s+(\d{{4}})\b",
+        normalizado,
+    )
+    if fin_match:
+        try:
+            fin = date(int(fin_match.group(3)), MESES_ES[fin_match.group(2)], int(fin_match.group(1)))
+        except ValueError:
+            return None
+    else:
+        # «Hasta hoy» y «hasta la última fecha disponible» consultan hasta hoy;
+        # la cobertura real se obtiene con MAX(fecha_venta), nunca se inventa.
+        fin = fecha_hoy
+    if inicio > fin or inicio > fecha_hoy:
+        return None
+    return inicio, min(fin, fecha_hoy)
+
+
 def _resolver_rango_meses(normalizado: str, fecha_hoy: date) -> tuple[date, date] | None:
     """Resuelve meses y rangos expresados en lenguaje natural."""
     nombres_meses = "|".join(MESES_ES)
@@ -139,6 +175,10 @@ def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, d
         fin = _parsear_fecha(rango.group(2)) if rango.group(2) else fecha_hoy
         if inicio and fin and inicio <= fin:
             return "rango_personalizado", inicio, min(fin, fecha_hoy)
+
+    rango_natural = _resolver_rango_fechas_naturales(normalizado, fecha_hoy)
+    if rango_natural:
+        return "rango_personalizado", *rango_natural
 
     rango_meses = _resolver_rango_meses(normalizado, fecha_hoy)
     if rango_meses:
@@ -235,7 +275,7 @@ def detectar_agrupacion(texto: str) -> str | None:
         return "cliente"
     if _contiene(normalizado, ("por kd", "kd y no kd")):
         return "kd"
-    if re.search(r"\b(?:por|cada)\s+mes(?:es)?\b", normalizado) or _contiene(normalizado, ("mensual", "mes a mes")):
+    if re.search(r"\b(?:por|cada)\s+mes(?:es)?\b", normalizado) or _contiene(normalizado, ("mensual", "mensuales", "mes a mes")):
         return "mes"
     if _contiene(normalizado, ("por familia/marca", "por familia marca", "por familia y marca")):
         return "familia_marca"
@@ -282,9 +322,13 @@ def detectar_filtros(texto: str) -> dict[str, str]:
     if cuadrante:
         filtros["matriz_abc"] = cuadrante.group(1).upper()
 
-    sku = re.search(r"\bsku\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9_-]*)", texto, flags=re.IGNORECASE)
+    sku = re.search(r"\bsku\s*([:#])?\s*([A-Za-z0-9][A-Za-z0-9_-]*)", texto, flags=re.IGNORECASE)
     if sku:
-        filtros["sku"] = sku.group(1).strip()
+        candidato = sku.group(2).strip()
+        # «número de SKU con venta» describe una métrica, no filtra el SKU
+        # llamado "con". Sin separador explícito solo aceptamos códigos.
+        if sku.group(1) or re.search(r"[0-9_-]", candidato):
+            filtros["sku"] = candidato
 
     campos = {
         "familia": ("familia",),
@@ -349,7 +393,11 @@ def _tiene_filtro_no_soportado(texto: str) -> bool:
         return True
     if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm", "cliente", "comercial", "kd")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
         return True
-    if _contiene(normalizado, ("sku",)) and not detectar_filtros(texto):
+    menciona_recuento_sku = bool(re.search(
+        r"\b(?:numero|cantidad|recuento)\s+de\s+sku\b|\bsku\s+con\s+venta\b",
+        normalizado,
+    ))
+    if _contiene(normalizado, ("sku",)) and not menciona_recuento_sku and not detectar_filtros(texto):
         return True
     return False
 
@@ -658,6 +706,34 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         usa_abc_dinamico = "abc" in intento.parametros
         campo_abc = "ca.abc" if usa_abc_dinamico else "pm.abc"
         condiciones = _condiciones_sql(intento, incluir_periodo=True, campo_abc=campo_abc)
+        if intento.agrupacion == "mes" and not intento.comparacion:
+            usa_clientes = any(campo in intento.parametros for campo in {
+                "cliente_pk", "nombre_cliente", "tipo_cliente", "comercial_cliente",
+            })
+            join_clientes = "LEFT JOIN clientes c ON c.id = vh.cliente_id" if usa_clientes else ""
+            join_metricas_mensuales = (
+                "LEFT JOIN producto_metricas pm ON pm.producto_id = p.id"
+                if any(campo in intento.parametros for campo in ("xyz", "matriz_abc")) else ""
+            )
+            sql = f"""{crear_cte_abc_ventas() if usa_abc_dinamico else ''}
+                SELECT SUBSTR(CAST(vh.fecha_venta AS TEXT), 1, 7) AS agrupacion,
+                       COALESCE(SUM(vh.ingreso_total), 0) AS ventas_eur,
+                       COALESCE(SUM(vh.cantidad_vendida), 0) AS unidades,
+                       COALESCE(SUM(vh.margen_bruto_eur), 0) AS margen_eur,
+                       COALESCE(SUM(vh.margen_destino_eur), 0) AS mgd_eur,
+                       COUNT(DISTINCT vh.producto_id) AS productos,
+                       MIN(vh.fecha_venta) AS fecha_minima,
+                       MAX(vh.fecha_venta) AS fecha_maxima
+                FROM ventas_historicas vh
+                JOIN productos p ON p.id = vh.producto_id
+                {join_clientes}
+                {join_metricas_mensuales}
+                {'LEFT JOIN clasificacion_abc ca ON ca.producto_id = p.id' if usa_abc_dinamico else ''}
+                WHERE {condiciones}
+                GROUP BY SUBSTR(CAST(vh.fecha_venta AS TEXT), 1, 7)
+                ORDER BY agrupacion ASC
+            """
+            return sql, dict(intento.parametros)
         es_porcentaje = intento.medida in ("margen_pct", "mgd_pct")
         expresion_agregada = (
             "CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0 "

@@ -31,3 +31,9 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - Las respuestas gerenciales de Thinking usan ventanas comparables de igual duración, muestran sus fechas y ordenan el contenido como resumen, impulsores, movimientos, ABC, acciones y calidad.
 - El frontend presenta KPI en tarjetas y las tablas Markdown con bordes, separación, ancho útil y desplazamiento horizontal. Mantener `copilot-markdown` al cambiar el renderizador.
 - Limitar el cuerpo a hallazgos que cambien una decisión. No repetir tablas en prosa ni atribuir ventas negativas a precio, inventario o demanda sin evidencia adicional.
+
+## Actualización v1.35
+
+- Un desglose mensual devuelve en una sola consulta ventas netas, unidades, margen, MGD, SKU con venta, fecha mínima y fecha máxima de cada mes.
+- La salida mensual es determinista: separa ejercicios fiscales, muestra cobertura por fila, suma las métricas y declara el último día real con datos. No permitir tablas con `N/D` si existen ventas diarias.
+- El parser admite días expresados con meses naturales y no confunde `número de SKU con venta` con un filtro de artículo.

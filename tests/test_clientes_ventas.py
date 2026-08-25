@@ -6,10 +6,14 @@ import zipfile
 
 from fastapi import HTTPException
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _validate_rows, _validate_xlsx_archive
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
 
 
 class ClientesVentasTests(unittest.TestCase):
+    def test_sustitucion_de_ventas_se_limita_al_periodo_del_archivo(self):
+        self.assertEqual(_resolve_sales_mode("upsert_keys", True), "replace_period")
+        self.assertEqual(_resolve_sales_mode("upsert_keys", False), "upsert_keys")
+
     def test_fivemin_ventas_exige_dimensiones_de_cliente(self):
         required = DATASET_CONFIG["sales"]["required"]
 

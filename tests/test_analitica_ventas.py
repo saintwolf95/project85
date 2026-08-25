@@ -10,6 +10,7 @@ from app.analitica_ventas import (
     crear_acciones_seguimiento,
     rango_clasificacion_abc,
     renderizar_respuesta_analitica,
+    renderizar_resumen_mensual,
     respuesta_analitica_cumple_contrato,
 )
 from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica, resolver_periodo_anterior
@@ -90,6 +91,53 @@ class AnaliticaVentasTests(unittest.TestCase):
         self.assertEqual(intento.tipo, "ventas")
         self.assertEqual(intento.periodo, "mes_actual")
         self.assertTrue(intento.comparacion)
+
+    def test_desglose_mensual_incluye_todas_las_metricas_y_cobertura(self):
+        motor = create_engine("sqlite://")
+        with motor.begin() as conexion:
+            conexion.execute(text("""
+                CREATE TABLE productos (id INTEGER PRIMARY KEY, empresa_id INTEGER NOT NULL)
+            """))
+            conexion.execute(text("""
+                CREATE TABLE ventas_historicas (
+                    producto_id INTEGER NOT NULL, fecha_venta DATE NOT NULL,
+                    ingreso_total FLOAT NOT NULL, cantidad_vendida INTEGER NOT NULL,
+                    margen_bruto_eur FLOAT NOT NULL, margen_destino_eur FLOAT NOT NULL
+                )
+            """))
+            conexion.execute(text("INSERT INTO productos (id, empresa_id) VALUES (1, 7), (2, 7)"))
+            conexion.execute(text("""
+                INSERT INTO ventas_historicas
+                    (producto_id, fecha_venta, ingreso_total, cantidad_vendida, margen_bruto_eur, margen_destino_eur)
+                VALUES
+                    (1, '2025-05-05', 100, 2, 20, 15),
+                    (2, '2025-05-31', 50, 1, 8, 6),
+                    (1, '2025-06-30', 200, 4, 40, 30)
+            """))
+            intento = IntentoSemantico(
+                tipo="rentabilidad",
+                medida="mgd_eur",
+                periodo="rango_personalizado",
+                fecha_inicio=date(2025, 5, 5),
+                fecha_fin=date(2025, 6, 30),
+                agrupacion="mes",
+                parametros={"fecha_inicio": date(2025, 5, 5), "fecha_fin": date(2025, 6, 30)},
+            )
+            consulta, parametros = crear_consulta_semantica(intento)
+            filas = [dict(fila) for fila in conexion.execute(
+                text(consulta), {"empresa_id": 7, **parametros}
+            ).mappings().all()]
+
+        self.assertEqual(len(filas), 2)
+        self.assertEqual(filas[0]["ventas_eur"], 150)
+        self.assertEqual(filas[0]["unidades"], 3)
+        self.assertEqual(filas[0]["margen_eur"], 28)
+        self.assertEqual(filas[0]["mgd_eur"], 21)
+        self.assertEqual(str(filas[0]["fecha_minima"]), "2025-05-05")
+        respuesta = renderizar_resumen_mensual(filas)
+        self.assertIn("Último día con datos de ventas: 30-06-2025", respuesta)
+        self.assertIn("| Mayo 2025 | €150,00 | 3 | €28,00 | €21,00 | 2 |", respuesta)
+        self.assertIn("Suma de ventas mensuales:** €350,00", respuesta)
 
     def test_respaldo_analitico_cumple_contrato_y_cita_evidencias(self):
         dossier = {

@@ -22,3 +22,7 @@ El lector CSV conserva correctamente campos entrecomillados con comas y pulgadas
 ## Actualización v1.34
 
 Las ventas con celdas de cliente vacías son válidas: sin `ClientePK` se asigna el cliente técnico `SIN-CLIENTE` y el nombre `Sin nombre cliente`; si solo falta el nombre, se conserva el identificador original y se usa el nombre de respaldo.
+
+## Actualización v1.35
+
+La sustitución de ventas se limita al intervalo entre la primera y la última fecha del archivo. Debe conservar ventas de otros ejercicios y no borrar clientes; la interfaz tiene que explicar este alcance antes de cargar.

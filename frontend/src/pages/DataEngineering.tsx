@@ -408,11 +408,11 @@ export const DataEngineering = () => {
                   htmlFor="replace-existing-catalog"
                   className="block cursor-pointer text-sm font-medium text-amber-900 dark:text-amber-300"
                 >
-                  Sustituir los datos actuales
+                  {dataset === 'sales' ? 'Sustituir las ventas del periodo del archivo' : 'Sustituir los datos actuales'}
                 </label>
                 <span id="replace-existing-description" className="block text-xs text-amber-700 dark:text-amber-400">
                   {dataset === 'sales'
-                    ? 'Elimina todas las ventas y clientes anteriores antes de cargar este fichero completo. Conserva el catálogo y el inventario.'
+                    ? 'Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva FY anteriores, clientes, catálogo e inventario.'
                     : 'Elimina productos, stock, ventas y métricas de esta empresa. Actívalo solo para una sustitución completa.'}
                 </span>
               </span>

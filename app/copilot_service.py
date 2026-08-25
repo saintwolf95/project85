@@ -816,6 +816,13 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
 
         sql_query, query_params = crear_consulta_semantica(intento)
         raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
+        if not error and intento.agrupacion == "mes" and not intento.comparacion:
+            from .analitica_ventas import renderizar_resumen_mensual
+
+            reply = renderizar_resumen_mensual(raw_data or [])
+            export_marker = build_sql_export_marker(sql_query, trusted_query=True, query_params=query_params)
+            followups = build_followups_marker(intento)
+            return "\n\n".join(parte for parte in (reply, export_marker, followups) if parte)
         reply = interpret_results(
             history,
             sql_query,

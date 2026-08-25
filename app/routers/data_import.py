@@ -760,22 +760,12 @@ def _clear_company_operational_data(db: Session, empresa_id: int) -> None:
     db.query(EmpresaEstadisticas).filter(EmpresaEstadisticas.empresa_id == empresa_id).delete(synchronize_session=False)
 
 
-def _clear_company_sales_data(db: Session, empresa_id: int) -> None:
-    product_ids = [
-        product_id
-        for (product_id,) in db.query(Producto.id).filter(Producto.empresa_id == empresa_id).all()
-    ]
-    if product_ids:
-        db.query(VentaHistorica).filter(
-            VentaHistorica.producto_id.in_(product_ids)
-        ).delete(synchronize_session=False)
-        db.query(ProductoMetricas).filter(
-            ProductoMetricas.producto_id.in_(product_ids)
-        ).delete(synchronize_session=False)
-    db.query(Cliente).filter(Cliente.empresa_id == empresa_id).delete(synchronize_session=False)
-    db.query(EmpresaEstadisticas).filter(
-        EmpresaEstadisticas.empresa_id == empresa_id
-    ).delete(synchronize_session=False)
+def _resolve_sales_mode(sales_mode: str, replace_existing: bool) -> str:
+    if sales_mode not in {"upsert_keys", "replace_period"}:
+        raise HTTPException(status_code=400, detail="Modo de actualizacion de ventas no soportado.")
+    # La sustitución de ventas solo afecta las fechas cubiertas por el archivo.
+    # Nunca debe borrar el FY anterior ni clientes compartidos con ese histórico.
+    return "replace_period" if replace_existing else sales_mode
 
 
 def _refresh_metrics(db: Session, empresa_id: int) -> None:
@@ -872,8 +862,7 @@ async def load_import(
     current_user: Usuario = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
 ):
-    if sales_mode not in {"upsert_keys", "replace_period"}:
-        raise HTTPException(status_code=400, detail="Modo de actualizacion de ventas no soportado.")
+    sales_mode = _resolve_sales_mode(sales_mode, replace_existing if dataset == "sales" else False)
 
     source_rows, metadata = await _read_tabular_file(file, dataset)
     valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
@@ -982,9 +971,6 @@ async def load_import(
             created = max(0, len(records) - updated)
 
         else:
-            if replace_existing:
-                _clear_company_sales_data(db, empresa_id)
-                db.flush()
             products = _company_products(db, empresa_id)
             clients = _company_clients(db, empresa_id)
             latest_product_rows: dict[str, dict[str, Any]] = {}

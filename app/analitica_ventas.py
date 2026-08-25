@@ -5,7 +5,7 @@ calcula siempre desde las ventas reales de los ultimos 90 dias.
 """
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import re
 import unicodedata
 from typing import Any
@@ -327,6 +327,98 @@ def _eur(valor: Any) -> str:
 
 def _porcentaje(valor: Any) -> str:
     return f"{_numero(valor):.1f}".replace(".", ",") + "%"
+
+
+def _entero(valor: Any) -> str:
+    return f"{int(_numero(valor)):,}".replace(",", ".")
+
+
+MESES_RESPUESTA = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+
+
+def _fecha_resultado(valor: Any) -> date | None:
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    try:
+        return date.fromisoformat(str(valor))
+    except (TypeError, ValueError):
+        return None
+
+
+def _etiqueta_fiscal(periodo: str) -> str:
+    anio, mes = (int(parte) for parte in periodo.split("-", 1))
+    return f"FY{anio if mes >= 5 else anio - 1}"
+
+
+def renderizar_resumen_mensual(filas: list[dict[str, Any]]) -> str:
+    """Presenta la evidencia mensual sin delegar cifras o cobertura al LLM."""
+    filas_validas = [fila for fila in filas if isinstance(fila, dict) and fila.get("agrupacion")]
+    if not filas_validas:
+        return "No hay ventas registradas en el periodo solicitado."
+
+    fechas_minimas = [_fecha_resultado(fila.get("fecha_minima")) for fila in filas_validas]
+    fechas_maximas = [_fecha_resultado(fila.get("fecha_maxima")) for fila in filas_validas]
+    fechas_minimas = [fecha for fecha in fechas_minimas if fecha]
+    fechas_maximas = [fecha for fecha in fechas_maximas if fecha]
+    primera_fecha = min(fechas_minimas) if fechas_minimas else None
+    ultima_fecha = max(fechas_maximas) if fechas_maximas else None
+
+    lineas = [
+        f"**Último día con datos de ventas: {ultima_fecha.strftime('%d-%m-%Y') if ultima_fecha else 'N/D'}**",
+        (
+            f"Cobertura real: **{primera_fecha.strftime('%d-%m-%Y')} – {ultima_fecha.strftime('%d-%m-%Y')}**."
+            if primera_fecha and ultima_fecha else "Cobertura real no disponible."
+        ),
+    ]
+    fiscal_actual = None
+    for fila in filas_validas:
+        periodo = str(fila["agrupacion"])
+        fiscal = _etiqueta_fiscal(periodo)
+        if fiscal != fiscal_actual:
+            fiscal_actual = fiscal
+            lineas.extend((
+                f"\n### {fiscal}",
+                "| Mes | Ventas netas | Unidades | Margen | MGD | SKU con venta | Cobertura |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | --- |",
+            ))
+        anio, mes = (int(parte) for parte in periodo.split("-", 1))
+        fecha_minima = _fecha_resultado(fila.get("fecha_minima"))
+        fecha_maxima = _fecha_resultado(fila.get("fecha_maxima"))
+        cobertura = (
+            f"{fecha_minima.strftime('%d-%m-%Y')} – {fecha_maxima.strftime('%d-%m-%Y')}"
+            if fecha_minima and fecha_maxima else "N/D"
+        )
+        lineas.append(
+            f"| {MESES_RESPUESTA[mes - 1].capitalize()} {anio} | {_eur(fila.get('ventas_eur'))} | "
+            f"{_entero(fila.get('unidades'))} | {_eur(fila.get('margen_eur'))} | "
+            f"{_eur(fila.get('mgd_eur'))} | {_entero(fila.get('productos'))} | {cobertura} |"
+        )
+
+    total_ventas = sum(_numero(fila.get("ventas_eur")) for fila in filas_validas)
+    total_unidades = sum(_numero(fila.get("unidades")) for fila in filas_validas)
+    total_margen = sum(_numero(fila.get("margen_eur")) for fila in filas_validas)
+    total_mgd = sum(_numero(fila.get("mgd_eur")) for fila in filas_validas)
+    lineas.extend((
+        "\n### Comprobación",
+        f"- **Suma de ventas mensuales:** {_eur(total_ventas)}.",
+        f"- **Unidades:** {_entero(total_unidades)} · **Margen:** {_eur(total_margen)} · **MGD:** {_eur(total_mgd)}.",
+        "- Cada mes se obtiene directamente de las ventas diarias; no se han agrupado meses ni reconstruido importes por diferencia.",
+    ))
+    if primera_fecha and primera_fecha.day != 1:
+        lineas.append(f"- El primer mes es parcial: comienza el {primera_fecha.strftime('%d-%m-%Y')}.")
+    if ultima_fecha and ultima_fecha != _ultimo_dia_mes_respuesta(ultima_fecha):
+        lineas.append(f"- El último mes es parcial: termina en el último dato disponible, {ultima_fecha.strftime('%d-%m-%Y')}.")
+    return "\n".join(lineas)
+
+
+def _ultimo_dia_mes_respuesta(fecha: date) -> date:
+    siguiente = (fecha.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return siguiente - timedelta(days=1)
 
 
 def _primera_fila(resultados: dict[str, Any], nombre: str) -> dict[str, Any]:

@@ -14,3 +14,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - Se admiten CSV/XLSX de hasta 50 MB y XLSX con hasta 512 MB internos. La protección inspecciona también un máximo de 2.000 componentes y ratio de compresión 200:1.
 - El límite de filas continúa en 100.000 para proteger la memoria durante validación y carga. Los mensajes de interfaz deben coincidir con estos límites.
+
+## Actualización v1.33
+
+El lector CSV conserva correctamente campos entrecomillados con comas y pulgadas. Antes de una carga fraccionada, dividir siempre por fechas completas para que dos partes no compartan una misma clave diaria de venta.

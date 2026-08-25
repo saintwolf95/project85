@@ -108,3 +108,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Data Engineering admite archivos CSV/XLSX de hasta 50 MB y libros XLSX con hasta 512 MB de contenido interno, manteniendo el límite operativo de 100.000 filas.
 - No volver a usar solo el tamaño descomprimido como detector de seguridad: validar además cantidad de componentes y ratio de compresión para distinguir un Excel comercial normal de una bomba ZIP.
 - Mantener sincronizados los límites visibles en Data Engineering, Guía de Importación y backend.
+
+## Actualización v1.33 — CSV comerciales con comillas
+
+- El lector CSV fija `doublequote=True` tras detectar el delimitador. Los nombres de artículos con pulgadas y comas, como `27" IPS, HDMI`, no deben desplazar las dimensiones posteriores.
+- La carga histórica FY2025 entregada cubre datos reales desde el 05/05/2025 hasta el 30/04/2026; no inventar actividad para el 01–04/05/2025, aunque el calendario fiscal general comience el 1 de mayo.

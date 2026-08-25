@@ -515,7 +515,15 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
     except csv.Error:
         dialect = csv.excel
 
-    reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
+    # Power BI exporta nombres con pulgadas (27\") y comas. Sniffer puede
+    # inferir doublequote=False y desplazar todas las columnas posteriores.
+    reader = csv.DictReader(
+        io.StringIO(decoded),
+        delimiter=dialect.delimiter,
+        quotechar='"',
+        doublequote=True,
+        skipinitialspace=dialect.skipinitialspace,
+    )
     if not reader.fieldnames:
         raise HTTPException(status_code=400, detail="El CSV no contiene cabeceras.")
     normalized_headers = _canonicalize_headers(list(reader.fieldnames), dataset)

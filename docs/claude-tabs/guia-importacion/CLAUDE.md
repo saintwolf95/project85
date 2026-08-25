@@ -12,3 +12,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 ## Actualización v1.32
 
 La guía y Data Engineering informan un máximo de 50 MB por CSV/XLSX y 100.000 filas. El XLSX puede ocupar hasta 512 MB internamente siempre que no presente un patrón de compresión anómalo.
+
+## Actualización v1.33
+
+Los CSV pueden contener nombres con comas y medidas en pulgadas siempre que estén correctamente entrecomillados. La importación debe conservar las 21 columnas de ventas sin desplazamientos.

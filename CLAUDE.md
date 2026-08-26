@@ -137,3 +137,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - FYTD compara los mismos días naturales del ejercicio anterior; 30D y 90D usan la ventana inmediatamente anterior de igual duración. Mostrar un aviso cuando el histórico no cubra por completo el comparable.
 - La vista gerencial integra ventas, MGD, inventario, disponibilidad Clase A, capital sin ventas 90D, impulsores por familia y matriz ABCXYZ. Los filtros de familia proceden del catálogo real.
 - La respuesta ejecutiva usa caché de cinco minutos por empresa, período y familia; toda carga de Data Engineering debe invalidarla junto con las métricas ABCXYZ.
+
+## Actualización v1.38 — legibilidad ejecutiva responsive
+
+- Los KPI monetarios principales usan notación compacta en la cabecera (`24,39 M€`) y conservan el detalle exacto en comparativas y desgloses; no truncar importes críticos por falta de ancho.
+- Los contenedores de Recharts deben admitir `min-width: 0` dentro del grid para evitar dimensiones negativas durante el render responsive.

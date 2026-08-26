@@ -17,3 +17,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Los módulos de decisión muestran principal caída y crecimiento por familia, capital sin ventas 90D, evolución mensual y mapa ABCXYZ alternable por inventario EUR, ventas 90D o número de SKU.
 - Las opciones del filtro de familia vienen del backend. No mantener catálogos o variaciones porcentuales ficticias en el componente.
 - La caché del Dashboard dura cinco minutos y se invalida al finalizar una importación; su clave siempre incluye empresa, período y familia.
+
+## Actualización v1.38 — presentación de importes
+
+- Mostrar ventas, MGD e inventario en notación compacta dentro de las tarjetas principales para mantenerlos legibles en escritorio estrecho y tablet. Las variaciones conservan el valor absoluto completo.
+- Mantener `min-w-0` en los paneles de gráficos para que Recharts calcule correctamente el ancho disponible.

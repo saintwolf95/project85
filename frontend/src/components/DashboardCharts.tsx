@@ -64,7 +64,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-7">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-7">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-slate-950 dark:text-white">Evolución comercial mensual</h2>
@@ -89,7 +89,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">
+      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">
         <div className="mb-5">
           <h2 className="text-base font-bold text-slate-950 dark:text-white">Familias que explican el cambio</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Variación absoluta frente al período comparable. Haz clic para filtrar.</p>

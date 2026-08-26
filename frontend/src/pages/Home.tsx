@@ -15,6 +15,9 @@ const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('e
 }).format(new Date(`${value}T00:00:00Z`)) : 'Sin datos';
 
 const signedEUR = (value: number) => `${value >= 0 ? '+' : '−'}${formatEUR(Math.abs(value))}`;
+const executiveEUR = (value: number) => new Intl.NumberFormat('es-ES', {
+  style: 'currency', currency: 'EUR', notation: 'compact', maximumFractionDigits: 2,
+}).format(value);
 
 const periodLabels: Record<DashboardPeriod, string> = {
   fytd: 'Año fiscal',
@@ -128,7 +131,7 @@ export const Home = () => {
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ExecutiveKpiCard
           title="Ventas netas"
-          value={formatEUR(data.actual.ventas_eur)}
+          value={executiveEUR(data.actual.ventas_eur)}
           description="Facturación neta del período, incluyendo devoluciones y ajustes registrados."
           icon={ShoppingCart}
           accent="blue"
@@ -138,7 +141,7 @@ export const Home = () => {
         />
         <ExecutiveKpiCard
           title="Margen destino (MGD)"
-          value={formatEUR(data.actual.mgd_eur)}
+          value={executiveEUR(data.actual.mgd_eur)}
           description="Contribución económica después del margen comercial informado."
           icon={CircleDollarSign}
           accent="emerald"
@@ -148,7 +151,7 @@ export const Home = () => {
         />
         <ExecutiveKpiCard
           title="Valor de inventario"
-          value={formatEUR(data.inventario.valor_eur)}
+          value={executiveEUR(data.inventario.valor_eur)}
           description="Capital valorado en el último snapshot disponible de inventario."
           icon={Box}
           accent="cyan"

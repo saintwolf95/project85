@@ -266,8 +266,8 @@ def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd"
         "calidad": {
             "comparable_completo": coverage["ventas_desde"] <= previous_start,
             "aviso_comparable": None if coverage["ventas_desde"] <= previous_start else (
-                f"El histórico comparable comienza el {coverage['ventas_desde']}; "
-                f"no existen registros entre el {previous_start} y el día anterior."
+                f"El histórico comparable comienza el {coverage['ventas_desde'].strftime('%d/%m/%Y')}; "
+                f"no existen registros entre el {previous_start.strftime('%d/%m/%Y')} y el día anterior."
             ),
         },
         "actual": current,

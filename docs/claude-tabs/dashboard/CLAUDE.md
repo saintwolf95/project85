@@ -26,3 +26,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 ## Actualización v1.39 — contenedores de gráficos
 
 - Cada `ResponsiveContainer` debe declarar `minWidth={0}` además del ancho y alto relativos, para evitar advertencias y renders transitorios con dimensiones negativas al montar la vista.
+
+## Actualización v1.40 — dimensión inicial
+
+- Mantener una `initialDimension` positiva en los gráficos responsive; se usa solo hasta la primera medición real del contenedor y evita avisos durante el montaje.

@@ -146,3 +146,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 ## Actualización v1.39 — estabilidad inicial de gráficos
 
 - Configurar también `minWidth={0}` en cada `ResponsiveContainer` del Dashboard. Evita el cálculo transitorio de ancho negativo que Recharts puede realizar antes de que el grid responsive quede dimensionado.
+
+## Actualización v1.40 — primer render de gráficos
+
+- Los gráficos del Dashboard declaran una `initialDimension` positiva. Recharts puede validar el contenedor antes de que `ResizeObserver` mida el grid; la dimensión inicial evita advertencias sin fijar el tamaño responsive definitivo.

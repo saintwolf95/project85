@@ -76,7 +76,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
           </div>
         </div>
         <div className="h-[320px] w-full">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 1, height: 320 }}>
             <ComposedChart data={monthly} margin={{ top: 10, right: 8, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.18} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="#94a3b8" />
@@ -95,7 +95,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Variación absoluta frente al período comparable. Haz clic para filtrar.</p>
         </div>
         <div className="h-[320px] w-full">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 1, height: 320 }}>
             <BarChart data={drivers} layout="vertical" margin={{ top: 5, right: 18, left: 4, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.18} />
               <XAxis type="number" tickFormatter={compactEUR} tickLine={false} axisLine={false} fontSize={10} stroke="#94a3b8" />

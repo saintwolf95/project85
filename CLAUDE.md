@@ -142,3 +142,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Los KPI monetarios principales usan notación compacta en la cabecera (`24,39 M€`) y conservan el detalle exacto en comparativas y desgloses; no truncar importes críticos por falta de ancho.
 - Los contenedores de Recharts deben admitir `min-width: 0` dentro del grid para evitar dimensiones negativas durante el render responsive.
+
+## Actualización v1.39 — estabilidad inicial de gráficos
+
+- Configurar también `minWidth={0}` en cada `ResponsiveContainer` del Dashboard. Evita el cálculo transitorio de ancho negativo que Recharts puede realizar antes de que el grid responsive quede dimensionado.

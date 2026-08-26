@@ -22,3 +22,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - Mostrar ventas, MGD e inventario en notación compacta dentro de las tarjetas principales para mantenerlos legibles en escritorio estrecho y tablet. Las variaciones conservan el valor absoluto completo.
 - Mantener `min-w-0` en los paneles de gráficos para que Recharts calcule correctamente el ancho disponible.
+
+## Actualización v1.39 — contenedores de gráficos
+
+- Cada `ResponsiveContainer` debe declarar `minWidth={0}` además del ancho y alto relativos, para evitar advertencias y renders transitorios con dimensiones negativas al montar la vista.

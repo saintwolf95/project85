@@ -51,12 +51,23 @@ export interface DashboardKPIsResponse {
 }
 
 export type DashboardPeriod = 'fytd' | '90d' | '30d';
+export type DashboardBreakdownDimension = 'comercial' | 'cliente' | 'familia' | 'marca' | 'seccion';
+export interface DashboardFilters {
+  familia?: string;
+  marca?: string;
+  familia_marca?: string;
+  seccion?: string;
+}
 
 export interface DashboardExecutiveResponse {
   ready: boolean;
   message?: string;
   period: DashboardPeriod;
   familia: string | null;
+  filtros: {
+    seleccion: Record<'familia' | 'marca' | 'familia_marca' | 'seccion', string | null>;
+    opciones: { familias: string[]; marcas: string[]; familias_marca: string[]; secciones: string[] };
+  };
   periodo_actual: { inicio: string; fin: string };
   periodo_comparable: { inicio: string; fin: string };
   cobertura: {
@@ -98,7 +109,16 @@ export interface DashboardExecutiveResponse {
     capital_sin_ventas_90d_eur: number;
     capital_clase_c_eur: number;
   };
-  serie_mensual: { mes: string; ventas_eur: number; mgd_eur: number }[];
+  serie_mensual: {
+    mes: string;
+    mes_anterior: string;
+    ventas_eur: number;
+    ventas_anterior_eur: number;
+    variacion_eur: number;
+    variacion_pct: number | null;
+    mgd_eur: number;
+    mgd_anterior_eur: number;
+  }[];
   impulsores_familia: {
     familia: string;
     actual_eur: number;
@@ -107,6 +127,23 @@ export interface DashboardExecutiveResponse {
     variacion_pct: number | null;
   }[];
   cuadrantes: { cuadrante: string; skus: number; inventario_eur: number; ventas_90d_eur: number }[];
+  desglose: {
+    dimension: DashboardBreakdownDimension;
+    etiqueta: string;
+    filas: {
+      entidad: string;
+      ventas_eur: number;
+      ventas_anterior_eur: number;
+      variacion_eur: number;
+      variacion_pct: number | null;
+      peso_pct: number;
+      unidades: number;
+      margen_eur: number;
+      margen_pct: number | null;
+      mgd_eur: number;
+      skus: number;
+    }[];
+  };
   familias: string[];
 }
 
@@ -385,10 +422,11 @@ export const deleteCopilotChat = async (chatId: number): Promise<{ success: bool
 
 export const getExecutiveDashboard = async (
   period: DashboardPeriod = 'fytd',
-  familia?: string,
+  filters: DashboardFilters = {},
+  breakdown: DashboardBreakdownDimension = 'comercial',
 ): Promise<DashboardExecutiveResponse> => {
-  const params: Record<string, string> = { period };
-  if (familia) params.familia = familia;
+  const params: Record<string, string> = { period, breakdown };
+  Object.entries(filters).forEach(([key, value]) => { if (value) params[key] = value; });
   const response = await api.get('/analytics/dashboard-executive', { params });
   return response.data;
 };

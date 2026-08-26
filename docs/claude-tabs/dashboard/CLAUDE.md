@@ -30,3 +30,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 ## Actualización v1.40 — dimensión inicial
 
 - Mantener una `initialDimension` positiva en los gráficos responsive; se usa solo hasta la primera medición real del contenedor y evita avisos durante el montaje.
+
+## Actualización v1.41 — filtros y detalle comercial
+
+- Los filtros de familia, marca, Familia/Marca y sección son acumulativos y afectan KPIs, inventario, impulsores, serie mensual, matriz ABCXYZ y tabla de detalle.
+- El interruptor de comparación anual del gráfico muestra ventas del mismo intervalo un año antes y una tabla mensual con diferencia absoluta y porcentual.
+- La subvista Detalle de ventas permite alternar entre comercial de factura, cliente, familia, marca y sección. Mantener búsqueda, ordenación, formato condicional y un máximo de 100 segmentos devueltos por SQL.

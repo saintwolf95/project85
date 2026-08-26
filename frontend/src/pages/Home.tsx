@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, ArrowRight, BarChart3, Box, CalendarDays, CircleDollarSign,
-  Database, PackageCheck, RefreshCw, ShieldAlert, ShoppingCart, Users,
+  Database, Filter, LayoutDashboard, PackageCheck, RefreshCw, ShieldAlert,
+  ShoppingCart, TableProperties, Users, X,
 } from 'lucide-react';
+import { DashboardBreakdown } from '../components/DashboardBreakdown';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { ExecutiveKpiCard } from '../components/DashboardMetrics';
 import { getExecutiveDashboard } from '../services/api';
-import type { DashboardExecutiveResponse, DashboardPeriod } from '../services/api';
+import type { DashboardBreakdownDimension, DashboardExecutiveResponse, DashboardFilters, DashboardPeriod } from '../services/api';
 import { formatEUR } from '../utils/formatters';
 
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-ES', {
@@ -28,19 +30,21 @@ const periodLabels: Record<DashboardPeriod, string> = {
 export const Home = () => {
   const navigate = useNavigate();
   const [period, setPeriod] = useState<DashboardPeriod>('fytd');
-  const [family, setFamily] = useState('');
+  const [filters, setFilters] = useState<DashboardFilters>({});
+  const [breakdown, setBreakdown] = useState<DashboardBreakdownDimension>('comercial');
+  const [view, setView] = useState<'summary' | 'detail'>('summary');
   const [data, setData] = useState<DashboardExecutiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    getExecutiveDashboard(period, family || undefined)
+    getExecutiveDashboard(period, filters, breakdown)
       .then(result => { if (active) setData(result); })
       .catch(() => { if (active) setError('No se pudo preparar la vista ejecutiva. Inténtalo de nuevo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [period, family]);
+  }, [period, filters, breakdown]);
 
   const changePeriod = (next: DashboardPeriod) => {
     setLoading(true);
@@ -48,10 +52,14 @@ export const Home = () => {
     setPeriod(next);
   };
 
-  const changeFamily = (next: string) => {
+  const changeFilter = (key: keyof DashboardFilters, next: string) => {
     setLoading(true);
     setError('');
-    setFamily(next);
+    setFilters(current => ({ ...current, [key]: next || undefined }));
+  };
+  const changeFamily = (next: string) => changeFilter('familia', next);
+  const changeBreakdown = (next: DashboardBreakdownDimension) => {
+    setLoading(true); setError(''); setBreakdown(next);
   };
 
   const management = useMemo(() => {
@@ -112,10 +120,6 @@ export const Home = () => {
             </div>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <select value={family} onChange={event => changeFamily(event.target.value)} className="min-w-56 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-              <option value="">Todas las familias</option>
-              {data.familias.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
             <div className="flex rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
               {(Object.keys(periodLabels) as DashboardPeriod[]).map(key => (
                 <button key={key} onClick={() => changePeriod(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${period === key ? 'bg-blue-600 text-white shadow-sm dark:bg-cyan-500 dark:text-slate-950' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>
@@ -125,9 +129,26 @@ export const Home = () => {
             </div>
           </div>
         </div>
+        <div className="relative mt-5 rounded-2xl border border-slate-200/80 bg-white/75 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/35">
+          <div className="mb-2 flex items-center justify-between"><span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500"><Filter size={13} />Filtros de negocio</span>{Object.values(filters).some(Boolean) && <button onClick={() => { setLoading(true); setFilters({}); }} className="flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline dark:text-cyan-400"><X size={12} />Limpiar filtros</button>}</div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {([
+              ['familia', 'Todas las familias', data.filtros.opciones.familias],
+              ['marca', 'Todas las marcas', data.filtros.opciones.marcas],
+              ['familia_marca', 'Todas las Familia/Marca', data.filtros.opciones.familias_marca],
+              ['seccion', 'Todas las secciones', data.filtros.opciones.secciones],
+            ] as [keyof DashboardFilters, string, string[]][]).map(([key, placeholder, options]) => <select key={key} value={filters[key] || ''} onChange={event => changeFilter(key, event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><option value="">{placeholder}</option>{options.map(item => <option key={item} value={item}>{item}</option>)}</select>)}
+          </div>
+        </div>
         {loading && <div className="absolute bottom-0 left-0 h-0.5 w-full overflow-hidden bg-blue-100 dark:bg-slate-800"><div className="h-full w-1/2 animate-pulse bg-blue-500" /></div>}
       </header>
 
+      <nav className="flex w-fit rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-brand-surface">
+        <button onClick={() => setView('summary')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition ${view === 'summary' ? 'bg-blue-600 text-white shadow-sm dark:bg-cyan-500 dark:text-slate-950' : 'text-slate-500'}`}><LayoutDashboard size={15} />Resumen ejecutivo</button>
+        <button onClick={() => setView('detail')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold transition ${view === 'detail' ? 'bg-blue-600 text-white shadow-sm dark:bg-cyan-500 dark:text-slate-950' : 'text-slate-500'}`}><TableProperties size={15} />Detalle de ventas</button>
+      </nav>
+
+      {view === 'summary' ? <>
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <ExecutiveKpiCard
           title="Ventas netas"
@@ -217,6 +238,7 @@ export const Home = () => {
       </section>
 
       <DashboardCharts data={data} onFamilyClick={changeFamily} />
+      </> : <DashboardBreakdown data={data} dimension={breakdown} loading={loading} onDimensionChange={changeBreakdown} />}
 
       <footer className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-brand-surface dark:text-slate-400">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">

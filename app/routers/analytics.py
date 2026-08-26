@@ -17,10 +17,16 @@ MAX_INVENTORY_ANALYTICS_LIMIT = 20_000
 def get_executive_dashboard(
     period: str = Query("fytd", pattern="^(fytd|90d|30d)$"),
     familia: Optional[str] = Query(None),
+    marca: Optional[str] = Query(None),
+    familia_marca: Optional[str] = Query(None),
+    seccion: Optional[str] = Query(None),
+    breakdown: str = Query("comercial", pattern="^(comercial|cliente|familia|marca|seccion)$"),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return build_executive_dashboard(db, current_user.empresa_id, period, familia)
+    return build_executive_dashboard(
+        db, current_user.empresa_id, period, familia, marca, familia_marca, seccion, breakdown
+    )
 
 @router.get("/inventory-abc", response_model=schemas.InventoryAnalyticsResponse)
 def get_inventory_abc(

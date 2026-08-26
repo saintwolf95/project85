@@ -150,3 +150,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 ## Actualización v1.40 — primer render de gráficos
 
 - Los gráficos del Dashboard declaran una `initialDimension` positiva. Recharts puede validar el contenedor antes de que `ResizeObserver` mida el grid; la dimensión inicial evita advertencias sin fijar el tamaño responsive definitivo.
+
+## Actualización v1.41 — segmentación y comparativa gerencial
+
+- El Dashboard filtra en backend por familia, marca, Familia/Marca y sección. Todas las consultas de ventas, inventario, ABCXYZ y desgloses deben aplicar simultáneamente esos filtros y `empresa_id`.
+- La evolución mensual incluye comparación contra las mismas fechas del año anterior, con meses sin actividad a cero y variaciones calculadas en backend.
+- La vista Detalle de ventas agrupa mediante una lista blanca SQL por comercial de factura, cliente, familia, marca o sección. Entrega ventas actuales/anteriores, variación, peso, unidades, margen, MGD y SKU; no calcular estos agregados desde una muestra del frontend.

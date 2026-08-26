@@ -46,6 +46,7 @@ const TooltipBox = ({ active, payload, label }: TooltipBoxProps) => {
 
 export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) => {
   const [matrixMetric, setMatrixMetric] = useState<'inventario_eur' | 'ventas_90d_eur' | 'skus'>('inventario_eur');
+  const [compareYoY, setCompareYoY] = useState(true);
   const monthly = useMemo(() => data.serie_mensual.map(item => ({ ...item, label: monthLabel(item.mes) })), [data.serie_mensual]);
   const drivers = useMemo(() => data.impulsores_familia.slice(0, 7).reverse(), [data.impulsores_familia]);
   const matrix = useMemo(() => {
@@ -70,9 +71,11 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
             <h2 className="text-base font-bold text-slate-950 dark:text-white">Evolución comercial mensual</h2>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ventas netas y MGD; el último mes puede estar incompleto.</p>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-500">
+          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-slate-500">
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />Ventas</span>
+            {compareYoY && <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-300 dark:bg-slate-600" />Año anterior</span>}
             <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-emerald-400" />MGD</span>
+            <button onClick={() => setCompareYoY(value => !value)} className={`rounded-lg border px-2.5 py-1.5 font-semibold transition ${compareYoY ? 'border-blue-200 bg-blue-50 text-blue-600 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-400' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>Comparar año anterior: {compareYoY ? 'Sí' : 'No'}</button>
           </div>
         </div>
         <div className="h-[320px] w-full">
@@ -82,11 +85,13 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
               <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="#94a3b8" />
               <YAxis tickFormatter={compactEUR} tickLine={false} axisLine={false} width={70} fontSize={11} stroke="#94a3b8" />
               <Tooltip content={<TooltipBox />} />
+              {compareYoY && <Bar name="Ventas año anterior" dataKey="ventas_anterior_eur" fill="#94A3B8" radius={[5, 5, 0, 0]} maxBarSize={30} opacity={0.55} />}
               <Bar name="Ventas netas" dataKey="ventas_eur" fill="#2563EB" radius={[5, 5, 0, 0]} maxBarSize={42} />
               <Line name="MGD" dataKey="mgd_eur" stroke="#34D399" strokeWidth={2.5} dot={{ r: 3, fill: '#34D399' }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
+        {compareYoY && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-slate-900"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Ventas actuales</th><th className="px-3 py-2 text-right">Año anterior</th><th className="px-3 py-2 text-right">Variación</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{monthly.map(item => <tr key={item.mes}><td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{item.label}</td><td className="px-3 py-2 text-right">{formatEUR(item.ventas_eur)}</td><td className="px-3 py-2 text-right text-slate-500">{formatEUR(item.ventas_anterior_eur)}</td><td className={`px-3 py-2 text-right font-bold ${item.variacion_eur >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{item.variacion_eur >= 0 ? '+' : '−'}{formatEUR(Math.abs(item.variacion_eur))}<span className="ml-1 text-[10px] font-medium">({item.variacion_pct == null ? 'sin base' : `${item.variacion_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`})</span></td></tr>)}</tbody></table></div>}
       </section>
 
       <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">

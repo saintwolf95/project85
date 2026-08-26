@@ -50,6 +50,66 @@ export interface DashboardKPIsResponse {
   family_data: {name: string, value: number}[];
 }
 
+export type DashboardPeriod = 'fytd' | '90d' | '30d';
+
+export interface DashboardExecutiveResponse {
+  ready: boolean;
+  message?: string;
+  period: DashboardPeriod;
+  familia: string | null;
+  periodo_actual: { inicio: string; fin: string };
+  periodo_comparable: { inicio: string; fin: string };
+  cobertura: {
+    ventas_desde: string;
+    ventas_hasta: string;
+    inventario_desde: string | null;
+    inventario_hasta: string | null;
+  };
+  calidad: {
+    comparable_completo: boolean;
+    aviso_comparable: string | null;
+  };
+  actual: {
+    ventas_eur: number;
+    unidades: number;
+    margen_eur: number;
+    margen_pct: number | null;
+    mgd_eur: number;
+    mgd_pct: number | null;
+    skus_con_venta: number;
+    clientes_con_venta: number;
+  };
+  anterior: DashboardExecutiveResponse['actual'];
+  variacion: {
+    ventas_pct: number | null;
+    ventas_eur: number;
+    unidades_pct: number | null;
+    margen_pct: number | null;
+    mgd_pct: number | null;
+    mgd_eur: number;
+  };
+  inventario: {
+    fecha: string | null;
+    valor_eur: number;
+    unidades: number;
+    skus: number;
+    clase_a_total: number;
+    clase_a_sin_stock: number;
+    capital_sin_ventas_90d_eur: number;
+    capital_clase_c_eur: number;
+  };
+  serie_mensual: { mes: string; ventas_eur: number; mgd_eur: number }[];
+  impulsores_familia: {
+    familia: string;
+    actual_eur: number;
+    anterior_eur: number;
+    variacion_eur: number;
+    variacion_pct: number | null;
+  }[];
+  cuadrantes: { cuadrante: string; skus: number; inventario_eur: number; ventas_90d_eur: number }[];
+  familias: string[];
+}
+
 export interface AIInsight {
   icono: string;
   titulo: string;
@@ -252,7 +312,7 @@ export const getInventoryAbc = async (
   matriz_abc?: string,
   stock_out_risk?: boolean
 ): Promise<InventoryAnalyticsResponse> => {
-  const params: any = { page, limit };
+  const params: Record<string, string | number | boolean> = { page, limit };
   if (search) params.search = search;
   if (matriz_abc) params.matriz_abc = matriz_abc;
   if (stock_out_risk !== undefined) params.stock_out_risk = stock_out_risk;
@@ -262,7 +322,7 @@ export const getInventoryAbc = async (
 };
 
 export const getDashboardKpis = async (abcClass: string = 'all', familia: string = 'all'): Promise<DashboardKPIsResponse> => {
-  const params: any = {};
+  const params: Record<string, string> = {};
   if (abcClass !== 'all') params.abc_class = abcClass;
   if (familia !== 'all') params.familia = familia;
   const response = await api.get('/analytics/dashboard-kpis', { params });
@@ -270,7 +330,7 @@ export const getDashboardKpis = async (abcClass: string = 'all', familia: string
 };
 
 export const getAiInsights = async (abcClass: string = 'all', familia: string = 'all'): Promise<AIInsight[]> => {
-  const params: any = {};
+  const params: Record<string, string> = {};
   if (abcClass !== 'all') params.abc_class = abcClass;
   if (familia !== 'all') params.familia = familia;
   const response = await api.get('/analytics/insights', { params });
@@ -320,6 +380,16 @@ export const getCopilotChatHistory = async (chatId: number): Promise<CopilotMess
 
 export const deleteCopilotChat = async (chatId: number): Promise<{ success: boolean }> => {
   const response = await api.delete(`/copilot/chats/${chatId}`);
+  return response.data;
+};
+
+export const getExecutiveDashboard = async (
+  period: DashboardPeriod = 'fytd',
+  familia?: string,
+): Promise<DashboardExecutiveResponse> => {
+  const params: Record<string, string> = { period };
+  if (familia) params.familia = familia;
+  const response = await api.get('/analytics/dashboard-executive', { params });
   return response.data;
 };
 
@@ -380,8 +450,8 @@ export const getLatestAgentInsight = async (): Promise<AgentInsight | null> => {
   try {
     const response = await api.get('/agents/insights');
     return response.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) return null;
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) return null;
     throw error;
   }
 };

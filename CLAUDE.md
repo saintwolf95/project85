@@ -130,3 +130,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Toda señal nueva de Control IA debe persistirse con el `empresa_id` de la ejecución. El identificador no forma parte del detector ni puede quedar implícito en el evidence bundle.
 - Si una ejecución de agentes falla después de abrir una transacción, la ruta debe ejecutar `rollback` antes de devolver el error para no dejar la sesión en estado inválido.
 - Mantener una prueba de regresión que cree una señal nueva y confirme su asociación con la empresa solicitante.
+
+## Actualización v1.37 — Dashboard ejecutivo verificable
+
+- El Dashboard consume `GET /analytics/dashboard-executive`; todas las cifras, períodos y comparables se calculan en backend con `empresa_id`. No introducir tendencias o porcentajes estáticos en el frontend.
+- FYTD compara los mismos días naturales del ejercicio anterior; 30D y 90D usan la ventana inmediatamente anterior de igual duración. Mostrar un aviso cuando el histórico no cubra por completo el comparable.
+- La vista gerencial integra ventas, MGD, inventario, disponibilidad Clase A, capital sin ventas 90D, impulsores por familia y matriz ABCXYZ. Los filtros de familia proceden del catálogo real.
+- La respuesta ejecutiva usa caché de cinco minutos por empresa, período y familia; toda carga de Data Engineering debe invalidarla junto con las métricas ABCXYZ.

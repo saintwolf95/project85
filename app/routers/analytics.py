@@ -5,11 +5,22 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import schemas, services
+from ..dashboard_service import build_executive_dashboard
 from ..models import Usuario
 from ..api.deps import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 MAX_INVENTORY_ANALYTICS_LIMIT = 20_000
+
+
+@router.get("/dashboard-executive")
+def get_executive_dashboard(
+    period: str = Query("fytd", pattern="^(fytd|90d|30d)$"),
+    familia: Optional[str] = Query(None),
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return build_executive_dashboard(db, current_user.empresa_id, period, familia)
 
 @router.get("/inventory-abc", response_model=schemas.InventoryAnalyticsResponse)
 def get_inventory_abc(

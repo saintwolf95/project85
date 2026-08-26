@@ -1,343 +1,227 @@
-import { useEffect, useState, useMemo } from 'react';
-import { getDashboardKpis, getInventoryAbc, getAiInsights } from '../services/api';
-import type { DashboardKPIsResponse, ProductMetrics, AIInsight } from '../services/api';
-import { AlertTriangle, TrendingUp, PackageX, Sparkles, Filter } from 'lucide-react';
-import { DashboardMetrics } from '../components/DashboardMetrics';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle, ArrowRight, BarChart3, Box, CalendarDays, CircleDollarSign,
+  Database, PackageCheck, RefreshCw, ShieldAlert, ShoppingCart, Users,
+} from 'lucide-react';
 import { DashboardCharts } from '../components/DashboardCharts';
-import { GaugeChart } from '../components/GaugeChart';
-import { ProductModal } from '../components/ProductModal';
-import { InsightModal } from '../components/InsightModal';
+import { ExecutiveKpiCard } from '../components/DashboardMetrics';
+import { getExecutiveDashboard } from '../services/api';
+import type { DashboardExecutiveResponse, DashboardPeriod } from '../services/api';
+import { formatEUR } from '../utils/formatters';
+
+const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('es-ES', {
+  day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC',
+}).format(new Date(`${value}T00:00:00Z`)) : 'Sin datos';
+
+const signedEUR = (value: number) => `${value >= 0 ? '+' : '−'}${formatEUR(Math.abs(value))}`;
+
+const periodLabels: Record<DashboardPeriod, string> = {
+  fytd: 'Año fiscal',
+  '90d': 'Últimos 90 días',
+  '30d': 'Últimos 30 días',
+};
 
 export const Home = () => {
+  const navigate = useNavigate();
+  const [period, setPeriod] = useState<DashboardPeriod>('fytd');
+  const [family, setFamily] = useState('');
+  const [data, setData] = useState<DashboardExecutiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [kpiData, setKpiData] = useState<DashboardKPIsResponse | null>(null);
-  const [inventory, setInventory] = useState<ProductMetrics[]>([]);
-  const [insights, setInsights] = useState<AIInsight[]>([]);
-  const [selectedInsight, setSelectedInsight] = useState<AIInsight | null>(null);
-
-  // Filters
-  const [abcFilter, setAbcFilter] = useState('all');
-  const [familyFilter, setFamilyFilter] = useState('all');
-  const [pmFilter, setPmFilter] = useState('all');
-  const [sectionFilter, setSectionFilter] = useState('all');
-
-  // Modal State
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
-  const [modalProducts, setModalProducts] = useState<ProductMetrics[]>([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        setLoading(true);
-        const [kpis, abc, aiData] = await Promise.all([
-          getDashboardKpis(abcFilter, familyFilter),
-          getInventoryAbc(1, 500, undefined, abcFilter === 'all' ? undefined : abcFilter),
-          getAiInsights(abcFilter, familyFilter)
-        ]);
-        
-        // If familyFilter is active, we also need to manually filter the abc data by familia
-        let filteredInv = abc.data;
-        if (familyFilter !== 'all') {
-            filteredInv = filteredInv.filter(item => item.familia === familyFilter);
-        }
-        if (pmFilter !== 'all') {
-            filteredInv = filteredInv.filter(item => item.product_manager === pmFilter);
-        }
-        if (sectionFilter !== 'all') {
-            filteredInv = filteredInv.filter(item => item.seccion === sectionFilter);
-        }
+    let active = true;
+    getExecutiveDashboard(period, family || undefined)
+      .then(result => { if (active) setData(result); })
+      .catch(() => { if (active) setError('No se pudo preparar la vista ejecutiva. Inténtalo de nuevo.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [period, family]);
 
-        setKpiData(kpis);
-        setInventory(filteredInv);
-        setInsights(aiData);
-      } catch (err) {
-        console.error("Error fetching dashboard data", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
-  }, [abcFilter, familyFilter, pmFilter, sectionFilter]);
-
-  // Compute Metrics
-  const metrics = useMemo(() => {
-    if (!kpiData) return { totalSkus: 0, totalUnidades: 0, promedioCosto: 0, familiaTop: '' };
-    return {
-      totalSkus: kpiData.total_skus,
-      totalUnidades: kpiData.volumen_total,
-      promedioCosto: kpiData.costo_promedio,
-      familiaTop: kpiData.familia_top || 'N/A'
-    };
-  }, [kpiData]);
-
-  // Compute Chart Data
-  const chartData = useMemo(() => {
-    if (!kpiData) return { abcData: [], familyData: [] };
-    return {
-      abcData: kpiData.abc_data || [],
-      familyData: kpiData.family_data || []
-    };
-  }, [kpiData]);
-
-  // Handlers for Interactivity
-  const handleAbcClick = (data: any) => {
-    if (!data || !data.name) return;
-    const match = data.name.match(/Clase ([XYZ])/);
-    if (!match) return;
-    const selectedClass = match[1];
-    const filtered = inventory.filter(item => item.xyz === selectedClass);
-    setModalTitle(`Productos Clase ${selectedClass} (Inventario EUR)`);
-    setModalProducts(filtered);
-    setModalOpen(true);
+  const changePeriod = (next: DashboardPeriod) => {
+    setLoading(true);
+    setError('');
+    setPeriod(next);
   };
 
-  const handleFamilyClick = (data: any) => {
-    if (!data || !data.name) return;
-    const selectedFamily = data.name;
-    const filtered = inventory.filter(item => item.familia === selectedFamily);
-    setModalTitle(`Familia: ${selectedFamily}`);
-    setModalProducts(filtered);
-    setModalOpen(true);
+  const changeFamily = (next: string) => {
+    setLoading(true);
+    setError('');
+    setFamily(next);
   };
 
-  const getHealthScore = () => {
-    if (!kpiData) return { score: 100, label: 'Calculando...', color: 'text-slate-400', reasons: [] };
-    let score = 100;
-    const reasons = [];
-    const totalItems = kpiData.total_skus || 1;
+  const management = useMemo(() => {
+    if (!data?.ready) return null;
+    const decline = data.impulsores_familia.find(item => item.variacion_eur < 0);
+    const growth = data.impulsores_familia.find(item => item.variacion_eur > 0);
+    const inactivePct = data.inventario.valor_eur
+      ? data.inventario.capital_sin_ventas_90d_eur / data.inventario.valor_eur * 100 : 0;
+    const availabilityA = data.inventario.clase_a_total
+      ? (data.inventario.clase_a_total - data.inventario.clase_a_sin_stock) / data.inventario.clase_a_total * 100 : 100;
+    return { decline, growth, inactivePct, availabilityA };
+  }, [data]);
 
-    if (kpiData.total_alertas_criticas > 0) {
-        const percentage = (kpiData.total_alertas_criticas / totalItems) * 100;
-        const pts = Math.min(60, Math.round(percentage)); 
-        if (pts > 0) {
-            score -= pts;
-            reasons.push(`-${pts} pts (${percentage.toFixed(1)}% del catálogo con riesgo de rotura)`);
-        }
-    }
-    
-    if (kpiData.salud_stock_clase_a > 0) {
-        const totalClaseA = inventory.filter(i => i.matriz_abc?.startsWith('A')).length || 1;
-        const percentageA = (kpiData.salud_stock_clase_a / totalClaseA) * 100;
-        const pts = Math.min(30, Math.round(percentageA * 0.5)); 
-        if (pts > 0) {
-            score -= pts;
-            reasons.push(`-${pts} pts (Penalización severa: ${percentageA.toFixed(1)}% de la Clase A en riesgo)`);
-        }
-    }
-    
-    // Evaluate frozen capital in C class
-    const frozenC = inventory.filter(i => i.matriz_abc?.includes('C') && i.unidades_venta_90d === 0);
-    if (frozenC.length > 0) {
-        const valFrozen = frozenC.reduce((acc, i) => acc + i.valor_inv, 0);
-        const valTotal = kpiData.valor_total_inventario || 1;
-        const percFrozen = (valFrozen / valTotal) * 100;
-        if (percFrozen > 5) {
-            const pts = Math.min(10, Math.round(percFrozen)); 
-            if (pts > 0) {
-                score -= pts;
-                reasons.push(`-${pts} pts (${percFrozen.toFixed(1)}% del capital inmovilizado en Clase C)`);
-            }
-        }
-    }
-
-    if (reasons.length === 0) reasons.push("+100 pts por inventario sano y optimizado.");
-
-    score = Math.max(0, score);
-    
-    if (score === 100) return { score, label: 'ÓPTIMO', color: 'text-brand-cyan', reasons };
-    if (score >= 70) return { score, label: 'REGULAR', color: 'text-amber-500', reasons };
-    return { score, label: 'CRÍTICO', color: 'text-red-500', reasons };
-  };
-
-  if (loading) {
+  if (loading && !data) {
     return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue dark:border-brand-cyan mb-4 shadow-none dark:shadow-[0_0_15px_var(--color-brand-cyan)]"></div>
-        <p className="text-brand-blue dark:text-brand-cyan font-medium">Iniciando Dashboard Ejecutivo...</p>
+      <div className="space-y-6 animate-pulse">
+        <div className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {[0, 1, 2, 3].map(item => <div key={item} className="h-48 rounded-2xl bg-slate-200 dark:bg-slate-800" />)}
+        </div>
+        <div className="h-80 rounded-2xl bg-slate-200 dark:bg-slate-800" />
       </div>
     );
   }
 
-  const healthInfo = getHealthScore();
+  if (error || !data?.ready || !management) {
+    return (
+      <div className="flex min-h-80 flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50 p-8 text-center dark:border-red-900/60 dark:bg-red-950/20">
+        <AlertTriangle className="mb-3 text-red-500" size={34} />
+        <h1 className="text-lg font-bold text-slate-950 dark:text-white">Dashboard no disponible</h1>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{error || data?.message || 'No hay datos suficientes.'}</p>
+      </div>
+    );
+  }
 
-  const getInsightIcon = (icono: string, tipo: string) => {
-    const color = tipo === 'warning' ? 'text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-500/10' : 
-                  tipo === 'success' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10' : 
-                  'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-500/10';
-    if (icono === 'alert') return <AlertTriangle className={`w-8 h-8 p-1.5 rounded-lg ${color}`} />;
-    if (icono === 'trending-up') return <TrendingUp className={`w-8 h-8 p-1.5 rounded-lg ${color}`} />;
-    return <PackageX className={`w-8 h-8 p-1.5 rounded-lg ${color}`} />;
-  };
+  const comparableLabel = `${formatDate(data.periodo_comparable.inicio)} – ${formatDate(data.periodo_comparable.fin)}`;
+  const currentLabel = `${formatDate(data.periodo_actual.inicio)} – ${formatDate(data.periodo_actual.fin)}`;
+  const coverageA = data.inventario.clase_a_total
+    ? management.availabilityA : 0;
 
   return (
-    <div className="animate-in fade-in duration-500 space-y-8 pb-10">
-      
-      {/* Header with Filters */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="title-corporate text-3xl mb-2">Dashboard Ejecutivo</h1>
-          <p className="text-slate-600 dark:text-slate-400 text-lg">Resumen global e inteligencia de inventario interactiva.</p>
-        </div>
-        <div className="flex flex-row flex-wrap sm:flex-nowrap gap-3">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <select 
-              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-              value={abcFilter}
-              onChange={(e) => setAbcFilter(e.target.value)}
-            >
-              <option value="all">Todas las Clases ABC</option>
-              <option value="A">Solo Clase A (AA, AB, AC)</option>
-              <option value="B">Solo Clase B (BA, BB, BC)</option>
-              <option value="C">Solo Clase C (CA, CB, CC)</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <select 
-              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-              value={familyFilter}
-              onChange={(e) => setFamilyFilter(e.target.value)}
-            >
-              <option value="all">Todas las Categorías</option>
-              <option value="Portátiles">Portátiles</option>
-              <option value="Móviles">Móviles</option>
-              <option value="Ordenadores">Ordenadores</option>
-              <option value="Tarjetas Gráficas">Tarjetas Gráficas</option>
-              <option value="Reproductores">Reproductores</option>
-              <option value="Periféricos">Periféricos</option>
-              <option value="Monitores">Monitores</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <select 
-              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-              value={pmFilter}
-              onChange={(e) => setPmFilter(e.target.value)}
-            >
-              <option value="all">Todos los PMs</option>
-              <option value="JAC">JAC</option>
-              <option value="AMI">AMI</option>
-              <option value="LKT">LKT</option>
-              <option value="UCR">UCR</option>
-              <option value="TDS">TDS</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <select 
-              className="bg-transparent text-sm font-medium text-slate-700 dark:text-slate-300 focus:outline-none"
-              value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
-            >
-              <option value="all">Todas las Secciones</option>
-              <option value="Informática">Informática</option>
-              <option value="Telefonía">Telefonía</option>
-              <option value="Componentes">Componentes</option>
-              <option value="Audio">Audio</option>
-              <option value="Accesorios">Accesorios</option>
-              <option value="General">General</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        
-        {/* Left Column (2/3 width) */}
-        <div className="xl:col-span-2 space-y-8">
-          {/* Main Status Widget with Gauge */}
-          <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm flex flex-col md:flex-row gap-8 items-center">
-            <div className="flex-1 w-full text-center md:text-left">
-              <h3 className="title-corporate text-lg mb-4">Salud General</h3>
-              <GaugeChart score={healthInfo.score} />
-              <p className={`text-xl font-bold mt-2 ${healthInfo.color} uppercase tracking-wider text-center`}>{healthInfo.label}</p>
+    <div className="space-y-6 pb-10 animate-in fade-in duration-500">
+      <header className="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-white to-blue-50 p-5 shadow-sm dark:border-slate-800 dark:from-brand-surface dark:via-brand-surface dark:to-blue-950/40 md:p-6">
+        <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-cyan-400">
+              <BarChart3 size={15} /> Centro de decisión
             </div>
-            <div className="flex-1 w-full border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 pt-4 md:pt-0 md:pl-8">
-              <h4 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wider">Justificación del Score</h4>
-              <ul className="space-y-2">
-                {healthInfo.reasons.map((reason, idx) => (
-                  <li key={idx} className="text-sm text-slate-700 dark:text-slate-300 flex items-start gap-2">
-                    <span className="mt-1 block w-1.5 h-1.5 rounded-full bg-brand-blue dark:bg-brand-cyan shrink-0"></span>
-                    {reason}
-                  </li>
-                ))}
-              </ul>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-white md:text-3xl">Dashboard Ejecutivo</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
+              Rendimiento comercial, rentabilidad e inventario en una sola lectura. Las comparativas usan períodos de igual duración y las cifras se calculan sobre datos reales.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5"><CalendarDays size={14} />Actual: {currentLabel}</span>
+              <span className="flex items-center gap-1.5"><Database size={14} />Ventas hasta {formatDate(data.cobertura.ventas_hasta)}</span>
+              <span className="flex items-center gap-1.5"><Box size={14} />Inventario a {formatDate(data.cobertura.inventario_hasta)}</span>
             </div>
           </div>
-
-          {/* Mini KPIs Grid */}
-          <DashboardMetrics {...metrics} />
-
-          {/* Interactive Charts */}
-          <DashboardCharts 
-            abcData={chartData.abcData} 
-            familyData={chartData.familyData} 
-            onAbcClick={handleAbcClick} 
-            onFamilyClick={handleFamilyClick} 
-          />
-        </div>
-
-        {/* Right Column - AI Insights Feed */}
-        <div className="xl:col-span-1">
-          <div className="bg-gradient-to-b from-brand-blue/5 to-transparent dark:from-brand-cyan/10 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xl h-full">
-            <div className="flex items-center gap-3 mb-6 border-b border-slate-200 dark:border-slate-800 pb-4">
-              <div className="p-2 bg-brand-blue dark:bg-brand-cyan/20 rounded-lg shadow-sm">
-                <Sparkles className="w-6 h-6 text-white dark:text-brand-cyan" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">AI Insights</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Recomendaciones proactivas en vivo</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {insights.map((insight, idx) => (
-                <div 
-                  key={idx} 
-                  onClick={() => setSelectedInsight(insight)}
-                  className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-5 hover:border-brand-blue/30 dark:hover:border-brand-cyan/30 transition-colors shadow-sm cursor-pointer group"
-                >
-                  <div className="flex items-start gap-4">
-                    {getInsightIcon(insight.icono, insight.tipo)}
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-200 mb-1 group-hover:text-brand-blue dark:group-hover:text-brand-cyan transition-colors">{insight.titulo}</h4>
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{insight.sugerencia}</p>
-                    </div>
-                  </div>
-                </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <select value={family} onChange={event => changeFamily(event.target.value)} className="min-w-56 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              <option value="">Todas las familias</option>
+              {data.familias.map(item => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <div className="flex rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
+              {(Object.keys(periodLabels) as DashboardPeriod[]).map(key => (
+                <button key={key} onClick={() => changePeriod(key)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${period === key ? 'bg-blue-600 text-white shadow-sm dark:bg-cyan-500 dark:text-slate-950' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>
+                  {periodLabels[key]}
+                </button>
               ))}
-              
-              {insights.length === 0 && !loading && (
-                <div className="text-center py-10 text-slate-500">
-                  Todo luce perfecto. Sin alertas nuevas.
-                </div>
-              )}
             </div>
           </div>
         </div>
+        {loading && <div className="absolute bottom-0 left-0 h-0.5 w-full overflow-hidden bg-blue-100 dark:bg-slate-800"><div className="h-full w-1/2 animate-pulse bg-blue-500" /></div>}
+      </header>
 
-      </div>
-
-      {/* Pop-up Modal (Glassmorphism) */}
-      <ProductModal 
-        isOpen={modalOpen} 
-        onClose={() => setModalOpen(false)} 
-        title={modalTitle} 
-        products={modalProducts} 
-      />
-
-      {/* Modal de AI Insights */}
-      {selectedInsight && (
-        <InsightModal 
-          insight={selectedInsight} 
-          inventory={inventory} 
-          onClose={() => setSelectedInsight(null)} 
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <ExecutiveKpiCard
+          title="Ventas netas"
+          value={formatEUR(data.actual.ventas_eur)}
+          description="Facturación neta del período, incluyendo devoluciones y ajustes registrados."
+          icon={ShoppingCart}
+          accent="blue"
+          change={data.variacion.ventas_pct}
+          changeLabel="vs período comparable"
+          detail={`${signedEUR(data.variacion.ventas_eur)} · ${data.actual.unidades.toLocaleString('es-ES')} uds.`}
         />
-      )}
+        <ExecutiveKpiCard
+          title="Margen destino (MGD)"
+          value={formatEUR(data.actual.mgd_eur)}
+          description="Contribución económica después del margen comercial informado."
+          icon={CircleDollarSign}
+          accent="emerald"
+          change={data.variacion.mgd_pct}
+          changeLabel="vs período comparable"
+          detail={`${(data.actual.mgd_pct ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })}% sobre ventas · ${signedEUR(data.variacion.mgd_eur)}`}
+        />
+        <ExecutiveKpiCard
+          title="Valor de inventario"
+          value={formatEUR(data.inventario.valor_eur)}
+          description="Capital valorado en el último snapshot disponible de inventario."
+          icon={Box}
+          accent="cyan"
+          change={null}
+          changeLabel={`snapshot ${formatDate(data.inventario.fecha)}`}
+          detail={`${data.inventario.skus.toLocaleString('es-ES')} SKU · ${data.inventario.unidades.toLocaleString('es-ES')} uds.`}
+        />
+        <ExecutiveKpiCard
+          title="Disponibilidad Clase A"
+          value={`${coverageA.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`}
+          description="Porcentaje de los SKU que más venden con unidades disponibles."
+          icon={PackageCheck}
+          accent="amber"
+          change={null}
+          changeLabel="estado actual"
+          detail={`${data.inventario.clase_a_sin_stock.toLocaleString('es-ES')} de ${data.inventario.clase_a_total.toLocaleString('es-ES')} SKU A sin stock`}
+        />
+      </section>
 
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-red-200 bg-red-50/70 p-5 dark:border-red-900/50 dark:bg-red-950/20">
+          <div className="flex items-center gap-2 text-red-600 dark:text-red-400"><ShieldAlert size={18} /><h2 className="text-sm font-bold">Principal caída comercial</h2></div>
+          {management.decline ? (
+            <>
+              <p className="mt-3 text-xl font-bold text-slate-950 dark:text-white">{management.decline.familia}</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Explica una reducción de <strong className="text-red-600 dark:text-red-400">{formatEUR(Math.abs(management.decline.variacion_eur))}</strong> frente al comparable ({management.decline.variacion_pct?.toLocaleString('es-ES')}%).</p>
+              <button onClick={() => changeFamily(management.decline!.familia)} className="mt-4 flex items-center gap-1 text-xs font-bold text-red-600 hover:underline dark:text-red-400">Aislar esta familia <ArrowRight size={13} /></button>
+            </>
+          ) : <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">No hay familias con descenso en el período.</p>}
+        </div>
+
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400"><AlertTriangle size={18} /><h2 className="text-sm font-bold">Capital sin rotación 90D</h2></div>
+          <p className="mt-3 text-xl font-bold text-slate-950 dark:text-white">{formatEUR(data.inventario.capital_sin_ventas_90d_eur)}</p>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Representa el <strong>{management.inactivePct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%</strong> del inventario actual sin ventas en los últimos 90 días.</p>
+          <button onClick={() => navigate('/inventory')} className="mt-4 flex items-center gap-1 text-xs font-bold text-amber-700 hover:underline dark:text-amber-400">Revisar ABCXYZ <ArrowRight size={13} /></button>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400"><RefreshCw size={18} /><h2 className="text-sm font-bold">Mayor impulso positivo</h2></div>
+          {management.growth ? (
+            <>
+              <p className="mt-3 text-xl font-bold text-slate-950 dark:text-white">{management.growth.familia}</p>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Aporta <strong className="text-emerald-600 dark:text-emerald-400">{formatEUR(management.growth.variacion_eur)}</strong> adicionales frente al comparable ({management.growth.variacion_pct?.toLocaleString('es-ES')}%).</p>
+              <button onClick={() => changeFamily(management.growth!.familia)} className="mt-4 flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-400">Ver composición <ArrowRight size={13} /></button>
+            </>
+          ) : <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">Ninguna familia compensa todavía las caídas del período.</p>}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[
+          { label: 'Clientes con venta', value: data.actual.clientes_con_venta.toLocaleString('es-ES'), icon: Users },
+          { label: 'SKU con venta', value: data.actual.skus_con_venta.toLocaleString('es-ES'), icon: ShoppingCart },
+          { label: 'Margen bruto', value: `${(data.actual.margen_pct ?? 0).toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`, icon: CircleDollarSign },
+          { label: 'Inventario Clase C', value: formatEUR(data.inventario.capital_clase_c_eur), icon: Box },
+        ].map(item => (
+          <div key={item.label} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-brand-surface">
+            <item.icon size={18} className="shrink-0 text-blue-500 dark:text-cyan-400" />
+            <div className="min-w-0"><p className="truncate text-[11px] text-slate-500">{item.label}</p><p className="truncate text-sm font-bold text-slate-900 dark:text-white">{item.value}</p></div>
+          </div>
+        ))}
+      </section>
+
+      <DashboardCharts data={data} onFamilyClick={changeFamily} />
+
+      <footer className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-brand-surface dark:text-slate-400">
+        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+          <span>Comparación actual: <strong className="text-slate-700 dark:text-slate-200">{currentLabel}</strong> frente a <strong className="text-slate-700 dark:text-slate-200">{comparableLabel}</strong>.</span>
+          <span>Cobertura disponible: ventas {formatDate(data.cobertura.ventas_desde)}–{formatDate(data.cobertura.ventas_hasta)} · inventario {formatDate(data.cobertura.inventario_desde)}–{formatDate(data.cobertura.inventario_hasta)}.</span>
+        </div>
+        {!data.calidad.comparable_completo && <p className="mt-2 font-medium text-amber-600 dark:text-amber-400">Aviso de cobertura: {data.calidad.aviso_comparable}</p>}
+      </footer>
     </div>
   );
 };

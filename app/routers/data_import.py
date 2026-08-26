@@ -770,8 +770,10 @@ def _resolve_sales_mode(sales_mode: str, replace_existing: bool) -> str:
 
 def _refresh_metrics(db: Session, empresa_id: int) -> None:
     from ..services import invalidate_metrics_cache, sync_metrics_to_db
+    from ..dashboard_service import invalidate_dashboard_cache
 
     invalidate_metrics_cache(empresa_id)
+    invalidate_dashboard_cache(empresa_id)
     sync_metrics_to_db(db, empresa_id)
 
 

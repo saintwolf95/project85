@@ -1,87 +1,52 @@
-import { Package, TrendingUp, DollarSign, Cpu } from 'lucide-react';
-import { formatEUR } from '../utils/formatters';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 
-interface DashboardMetricsProps {
-  totalSkus: number;
-  totalUnidades: number;
-  promedioCosto: number;
-  familiaTop: string;
+interface ExecutiveKpiCardProps {
+  title: string;
+  value: string;
+  description: string;
+  icon: LucideIcon;
+  accent: 'blue' | 'cyan' | 'emerald' | 'amber';
+  change?: number | null;
+  changeLabel?: string;
+  detail: string;
+  inverse?: boolean;
 }
 
-export const DashboardMetrics = ({ totalSkus, totalUnidades, promedioCosto, familiaTop }: DashboardMetricsProps) => {
+const accents = {
+  blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+};
+
+export const ExecutiveKpiCard = ({
+  title, value, description, icon: Icon, accent, change, changeLabel, detail, inverse = false,
+}: ExecutiveKpiCardProps) => {
+  const positive = change != null && (inverse ? change <= 0 : change >= 0);
+  const ChangeIcon = change == null || change === 0 ? Minus : change > 0 ? ArrowUpRight : ArrowDownRight;
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      
-      <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl p-6 hover:border-brand-cyan/50 dark:hover:border-brand-cyan/50 transition-colors shadow-sm dark:shadow-none group">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">SKUs Activos</p>
-            <h3 className="text-3xl font-bold text-slate-900 dark:text-white mt-1 group-hover:text-brand-blue dark:group-hover:text-brand-cyan transition-colors">{totalSkus}</h3>
-          </div>
-          <div className="p-3 bg-brand-blue/10 dark:bg-slate-800 rounded-lg text-brand-blue dark:text-brand-cyan shadow-none dark:group-hover:shadow-[0_0_15px_var(--color-brand-cyan)] transition-shadow">
-            <Package size={24} />
-          </div>
+    <article className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-brand-surface">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">{title}</p>
+          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-slate-950 dark:text-white" title={value}>{value}</p>
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded">▲ +5.2%</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">vs Mes anterior</span>
-        </div>
+        <div className={`rounded-xl border p-2.5 ${accents[accent]}`}><Icon size={21} /></div>
       </div>
-
-      <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl p-6 hover:border-brand-blue/50 dark:hover:border-brand-blue/50 transition-colors shadow-sm dark:shadow-none group">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Volumen Total (Unidades)</p>
-            <h3 className="text-3xl font-bold text-slate-900 dark:text-white mt-1 group-hover:text-brand-blue transition-colors">
-              {totalUnidades.toLocaleString()}
-            </h3>
-          </div>
-          <div className="p-3 bg-brand-blue/10 dark:bg-slate-800 rounded-lg text-brand-blue shadow-none dark:group-hover:shadow-[0_0_15px_var(--color-brand-blue)] transition-shadow">
-            <TrendingUp size={24} />
-          </div>
+      <p className="mt-2 min-h-10 text-xs leading-5 text-slate-500 dark:text-slate-400">{description}</p>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+        <div className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold ${
+          change == null ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' :
+          positive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'
+        }`}>
+          <ChangeIcon size={13} />
+          {change == null ? 'Sin comparable' : `${change > 0 ? '+' : ''}${change.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`}
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-0.5 rounded">▼ -2.1%</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">vs Mes anterior</span>
-        </div>
+        <span className="text-right text-[11px] text-slate-400">{changeLabel}</span>
       </div>
-
-      <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl p-6 hover:border-emerald-500/50 transition-colors shadow-sm dark:shadow-none group">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Costo Promedio (Unit)</p>
-            <h3 className="text-3xl font-bold text-slate-900 dark:text-white mt-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-              {formatEUR(promedioCosto)}
-            </h3>
-          </div>
-          <div className="p-3 bg-emerald-500/10 dark:bg-slate-800 rounded-lg text-emerald-600 dark:text-emerald-400 shadow-none dark:group-hover:shadow-[0_0_15px_rgba(52,211,153,0.5)] transition-shadow">
-            <DollarSign size={24} />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded">▲ +1.8%</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">vs Mes anterior</span>
-        </div>
-      </div>
-
-      <div className="bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl p-6 hover:border-fuchsia-500/50 transition-colors shadow-sm dark:shadow-none group">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Familia Más Valiosa</p>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-1 group-hover:text-fuchsia-600 dark:group-hover:text-fuchsia-400 transition-colors truncate" title={familiaTop}>
-              {familiaTop || 'N/A'}
-            </h3>
-          </div>
-          <div className="p-3 bg-fuchsia-500/10 dark:bg-slate-800 rounded-lg text-fuchsia-600 dark:text-fuchsia-400 shadow-none dark:group-hover:shadow-[0_0_15px_rgba(232,121,249,0.5)] transition-shadow">
-            <Cpu size={24} />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">Sin cambios</span>
-          <span className="text-xs text-slate-400 dark:text-slate-500">vs Mes anterior</span>
-        </div>
-      </div>
-
-    </div>
+      <p className="mt-3 text-xs font-medium text-slate-700 dark:text-slate-300">{detail}</p>
+    </article>
   );
 };

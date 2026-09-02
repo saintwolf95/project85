@@ -17,6 +17,10 @@ const monthLabel = (iso: string) => new Intl.DateTimeFormat('es-ES', {
   month: 'short', year: '2-digit', timeZone: 'UTC',
 }).format(new Date(`${iso}T00:00:00Z`));
 
+const dayMonthLabel = (iso: string) => new Intl.DateTimeFormat('es-ES', {
+  day: '2-digit', month: '2-digit', timeZone: 'UTC',
+}).format(new Date(`${iso}T00:00:00Z`));
+
 interface TooltipEntry {
   dataKey?: string | number;
   color?: string;
@@ -48,6 +52,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
   const [matrixMetric, setMatrixMetric] = useState<'inventario_eur' | 'ventas_90d_eur' | 'skus'>('inventario_eur');
   const [compareYoY, setCompareYoY] = useState(true);
   const monthly = useMemo(() => data.serie_mensual.map(item => ({ ...item, label: monthLabel(item.mes) })), [data.serie_mensual]);
+  const partialMonths = useMemo(() => monthly.filter(item => item.parcial), [monthly]);
   const drivers = useMemo(() => data.impulsores_familia.slice(0, 7).reverse(), [data.impulsores_familia]);
   const matrix = useMemo(() => {
     const byCode = new Map(data.cuadrantes.map(item => [item.cuadrante, item]));
@@ -69,7 +74,10 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold text-slate-950 dark:text-white">Evolución comercial mensual</h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Ventas netas y MGD; el último mes puede estar incompleto.</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Ventas netas y MGD.
+              {partialMonths.length > 0 && ` Meses parciales: ${partialMonths.map(item => `${item.label} (${dayMonthLabel(item.cobertura_inicio)}–${dayMonthLabel(item.cobertura_fin)})`).join(', ')}.`}
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-slate-500">
             <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />Ventas</span>
@@ -91,7 +99,7 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        {compareYoY && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-slate-900"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Ventas actuales</th><th className="px-3 py-2 text-right">Año anterior</th><th className="px-3 py-2 text-right">Variación</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{monthly.map(item => <tr key={item.mes}><td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{item.label}</td><td className="px-3 py-2 text-right">{formatEUR(item.ventas_eur)}</td><td className="px-3 py-2 text-right text-slate-500">{formatEUR(item.ventas_anterior_eur)}</td><td className={`px-3 py-2 text-right font-bold ${item.variacion_eur >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{item.variacion_eur >= 0 ? '+' : '−'}{formatEUR(Math.abs(item.variacion_eur))}<span className="ml-1 text-[10px] font-medium">({item.variacion_pct == null ? 'sin base' : `${item.variacion_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`})</span></td></tr>)}</tbody></table></div>}
+        {compareYoY && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-slate-900"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Ventas actuales</th><th className="px-3 py-2 text-right">Año anterior</th><th className="px-3 py-2 text-right">Variación</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{monthly.map(item => <tr key={item.mes}><td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{item.label}{item.parcial && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Parcial {dayMonthLabel(item.cobertura_inicio)}–{dayMonthLabel(item.cobertura_fin)}</span>}</td><td className="px-3 py-2 text-right">{formatEUR(item.ventas_eur)}</td><td className="px-3 py-2 text-right text-slate-500">{formatEUR(item.ventas_anterior_eur)}</td><td className={`px-3 py-2 text-right font-bold ${item.variacion_eur >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{item.variacion_eur >= 0 ? '+' : '−'}{formatEUR(Math.abs(item.variacion_eur))}<span className="ml-1 text-[10px] font-medium">({item.variacion_pct == null ? 'sin base' : `${item.variacion_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`})</span></td></tr>)}</tbody></table></div>}
       </section>
 
       <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">

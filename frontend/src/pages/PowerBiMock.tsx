@@ -347,23 +347,23 @@ export const PowerBiMock = () => {
                   <ChevronDown size={14} className="text-gray-500 rotate-180"/>
                 </div>
                 <div className="p-2 space-y-2 max-h-40 overflow-auto">
-                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <div className="w-4 h-4 border border-gray-300 flex items-center justify-center bg-transparent">
                     </div>
                     <span>2024</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <div className="w-4 h-4 border border-gray-300 flex items-center justify-center bg-[#F2C811]">
                       <Check size={12} className="text-black"/>
                     </div>
                     <span>2025</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <div className="w-4 h-4 border border-gray-300 flex items-center justify-center bg-[#F2C811]">
                       <Check size={12} className="text-black"/>
                     </div>
                     <span>2026</span>
-                  </label>
+                  </div>
                 </div>
               </div>
 

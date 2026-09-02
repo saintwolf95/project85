@@ -7,3 +7,6 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - No mezclar estos datos de demostración con `fivemin_ventas` ni `fivemin_inventario`, ni usarlos para alimentar ABCXYZ o Copilot.
 - Si se sustituye por una integración real, definir autenticación, aislamiento por empresa, refresco, manejo de errores y procedencia de cada KPI antes de retirar la etiqueta de maqueta.
 
+## Actualización v1.43
+
+- Los controles visuales de la maqueta que no correspondan a campos de formulario no deben representarse mediante etiquetas `label`; conservar semántica accesible aun cuando no tengan funcionalidad real.

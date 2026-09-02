@@ -43,3 +43,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - `refresh_agent_signals` asigna explícitamente el `empresa_id` al crear cada `AgentSignal`; nunca confiar en que el detector lo incluya en su diccionario.
 - La ruta de nueva ejecución revierte la transacción si falla el flujo, registra el detalle técnico en backend y mantiene un mensaje seguro para el frontend.
 - La persistencia de una señal nueva debe estar cubierta por una prueba que valide el aislamiento multiempresa.
+
+## Actualización v1.43
+
+- La interfaz de Control IA debe tipar errores de API como `unknown`, validar la forma de las metodologías recibidas y usar botones nativos para abrir expedientes de agentes.
+- La carga inicial se resuelve desde la promesa de la API, sin invocar desde un efecto funciones que cambien estado de forma síncrona.

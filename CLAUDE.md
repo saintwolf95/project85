@@ -163,3 +163,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Un líder de crecimiento requiere variación positiva y uno de caída requiere variación negativa; si no existe el signo correspondiente, la interfaz debe indicarlo sin elegir un segmento contrario.
 - El desglose por cliente usa `ClientePK` como identidad estable y muestra `ClientePK · Nombre Cliente`; nunca agrupar clientes distintos únicamente porque compartan nombre.
 - Las pruebas que importan la aplicación deben aislar las variables de conexión locales para no depender de un `.env` de producción ni relajar la obligación de `DATABASE_RO_URL` en PostgreSQL real.
+
+## Actualización v1.43 — rendimiento y calidad del frontend
+
+- El Dashboard reutiliza durante 15 minutos las opciones de filtro por empresa y las invalida con cualquier carga de datos. Las comparativas consultan únicamente las dos ventanas exactas, no todo el intervalo intermedio.
+- Cada mes de la serie comercial declara su cobertura real y si es parcial. La interfaz debe señalar todos los meses incompletos, no solo el último punto de la serie.
+- El frontend debe conservar `npm run lint` sin errores ni advertencias: tipar tooltips y exportaciones, usar controles accesibles y no mantener estado que pueda derivarse con `useMemo`.
+- Los contextos React separan el objeto de contexto, el proveedor y el hook consumidor para permitir Fast Refresh sin exportaciones incompatibles.

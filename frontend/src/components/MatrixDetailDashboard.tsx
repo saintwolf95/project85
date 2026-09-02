@@ -264,7 +264,7 @@ export const MatrixDetailDashboard: React.FC<MatrixDetailDashboardProps> = ({ ac
                   <Tooltip
                     cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                     contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff', fontSize: 12 }}
-                    formatter={(value: any) => [formatEUR(value as number), 'Valor']}
+                    formatter={(value: number | string | readonly (number | string)[] | undefined) => [formatEUR(Number(value ?? 0)), 'Valor']}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
                     {chartData.map((_, index) => (

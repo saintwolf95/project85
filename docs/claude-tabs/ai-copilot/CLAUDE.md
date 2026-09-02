@@ -37,3 +37,9 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - Un desglose mensual devuelve en una sola consulta ventas netas, unidades, margen, MGD, SKU con venta, fecha mínima y fecha máxima de cada mes.
 - La salida mensual es determinista: separa ejercicios fiscales, muestra cobertura por fila, suma las métricas y declara el último día real con datos. No permitir tablas con `N/D` si existen ventas diarias.
 - El parser admite días expresados con meses naturales y no confunde `número de SKU con venta` con un filtro de artículo.
+
+## Actualización v1.43
+
+- La carga inicial recupera historial, contexto de negocio y capacidades en un único flujo; evita carreras entre el saludo y la disponibilidad de inventario.
+- Los gráficos embebidos, errores de carga y componentes Markdown deben permanecer tipados y accesibles. No introducir `any`, bloques `catch` vacíos ni fondos clicables sin semántica de botón.
+- Mantener identificadores locales estables con `crypto.randomUUID()` cuando la API todavía no haya devuelto un identificador persistente.

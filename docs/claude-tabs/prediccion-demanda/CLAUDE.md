@@ -9,3 +9,6 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Las gráficas muestran los 20 grupos de mayor proyección. Si se cambia el tamaño de muestra, revisar el rendimiento y explicar su cobertura.
 - Depende de ventas e inventario disponibles en las métricas; manejar estado vacío y errores de API sin presentar ceros como resultado real.
 
+## Actualización v1.43
+
+- Los grupos de previsión y los tooltips usan tipos explícitos; conservar el cálculo memoizado y no recurrir a `any` para admitir nuevas dimensiones.

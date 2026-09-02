@@ -12,6 +12,32 @@ interface ProductHistoryModalProps {
   productoNombre: string;
 }
 
+interface HistoryTooltipEntry {
+  color?: string;
+  name?: string;
+  value?: number | string;
+}
+
+const HistoryTooltip = ({ active, payload, label }: {
+  active?: boolean;
+  payload?: HistoryTooltipEntry[];
+  label?: string;
+}) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
+      <p className="font-bold text-white mb-2">{label}</p>
+      {payload.map((entry, index) => (
+        <div key={`${entry.name || 'serie'}-${index}`} className="flex items-center gap-2 text-sm mb-1">
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: entry.color }} />
+          <span className="text-slate-300">{entry.name}:</span>
+          <span className="font-medium text-white font-mono">{formatEUR(Number(entry.value))}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ isOpen, onClose, productoId, productoNombre }) => {
   const [data, setData] = useState<ProductHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,26 +60,6 @@ export const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ isOpen
   }, [isOpen, productoId]);
 
   if (!isOpen) return null;
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
-          <p className="font-bold text-white mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-sm mb-1">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: entry.color }} />
-              <span className="text-slate-300">{entry.name}:</span>
-              <span className="font-medium text-white font-mono">
-                {formatEUR(entry.value)}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -100,7 +106,7 @@ export const ProductHistoryModal: React.FC<ProductHistoryModalProps> = ({ isOpen
                   />
                   <YAxis yAxisId="left" stroke="#10b981" fontSize={12} tickFormatter={(val) => `€${(val/1000).toFixed(0)}k`} />
                   <YAxis yAxisId="right" orientation="right" stroke="#06b6d4" fontSize={12} tickFormatter={(val) => `€${(val/1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<HistoryTooltip />} />
                   <Legend verticalAlign="top" height={36} />
                   <Line 
                     yAxisId="left"

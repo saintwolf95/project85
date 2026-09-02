@@ -9,6 +9,15 @@ interface MatrixDetailProps {
   products: ProductMetrics[];
 }
 
+const SortIcon = ({ columnKey, activeKey, direction }: {
+  columnKey: keyof ProductMetrics;
+  activeKey: keyof ProductMetrics | null;
+  direction: 'asc' | 'desc';
+}) => {
+  if (activeKey !== columnKey) return <span className="ml-1 opacity-20">↕</span>;
+  return direction === 'asc' ? <span className="ml-1">↑</span> : <span className="ml-1">↓</span>;
+};
+
 export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) => {
   const [sortConfig, setSortConfig] = React.useState<{ key: keyof ProductMetrics | null, direction: 'asc' | 'desc' }>({ key: null, direction: 'asc' });
 
@@ -33,11 +42,6 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
     return 0;
   });
-
-  const SortIcon = ({ columnKey }: { columnKey: keyof ProductMetrics }) => {
-    if (sortConfig.key !== columnKey) return <span className="ml-1 opacity-20">↕</span>;
-    return sortConfig.direction === 'asc' ? <span className="ml-1">↑</span> : <span className="ml-1">↓</span>;
-  };
 
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(products.map(p => ({
@@ -86,12 +90,14 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
           <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
             <tr>
               <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-10">#</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('cod_art')}>CodArt <SortIcon columnKey="cod_art" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>Nombre <SortIcon columnKey="nombre_art" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Categoría <SortIcon columnKey="familia" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas 90D <SortIcon columnKey="ventas_90d" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>Inv. (€) <SortIcon columnKey="valor_inv" /></th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades <SortIcon columnKey="unidades" /></th>
+              {([
+                ['cod_art', 'CodArt', false], ['nombre_art', 'Nombre', false], ['familia', 'Categoría', false],
+                ['ventas_90d', 'Ventas 90D', true], ['valor_inv', 'Inv. (€)', true], ['unidades', 'Unidades', true],
+              ] as [keyof ProductMetrics, string, boolean][]).map(([key, label, right]) => (
+                <th key={key} className={`px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider ${right ? 'text-right ' : ''}cursor-pointer hover:text-brand-cyan`} onClick={() => handleSort(key)}>
+                  {label} <SortIcon columnKey={key} activeKey={sortConfig.key} direction={sortConfig.direction} />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">

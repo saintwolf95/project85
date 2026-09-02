@@ -27,8 +27,10 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
       </div>
 
       {/* Alertas Críticas */}
-      <div 
-        onClick={() => onCardClick && onCardClick('criticas')}
+      <button
+        type="button"
+        disabled={!onCardClick}
+        onClick={() => onCardClick?.('criticas')}
         className={`bg-white dark:bg-brand-surface rounded-xl p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-red-500/50 transition-colors' : ''}`}
       >
         <div>
@@ -40,11 +42,13 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
         <div className="h-12 w-12 bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center border border-red-500/20">
           <AlertTriangle size={24} />
         </div>
-      </div>
+      </button>
 
       {/* Salud Stock Clase A */}
-      <div 
-        onClick={() => onCardClick && onCardClick('claseA')}
+      <button
+        type="button"
+        disabled={!onCardClick}
+        onClick={() => onCardClick?.('claseA')}
         className={`bg-white dark:bg-brand-surface rounded-xl p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-amber-500/50 transition-colors' : ''}`}
       >
         <div>
@@ -56,7 +60,7 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
         <div className={`h-12 w-12 rounded-full flex items-center justify-center border ${kpis.salud_stock_clase_a === 0 ? 'bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan border-brand-blue/20 dark:border-brand-cyan/20' : 'bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20'}`}>
           <ShieldCheck size={24} />
         </div>
-      </div>
+      </button>
     </div>
   );
 };

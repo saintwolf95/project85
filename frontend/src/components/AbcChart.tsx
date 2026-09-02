@@ -6,6 +6,25 @@ interface Props {
   data: ProductMetrics[];
 }
 
+interface AbcChartDatum {
+  name: string;
+  value: number;
+  color: string;
+}
+
+const AbcTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: AbcChartDatum }[] }) => {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0].payload;
+  return (
+    <div className="bg-brand-surface p-3 border border-slate-700 shadow-lg rounded">
+      <p className="font-semibold text-white">{datum.name}</p>
+      <p className="text-sm text-slate-400">
+        Cantidad: <span className="font-bold text-white">{datum.value} productos</span>
+      </p>
+    </div>
+  );
+};
+
 export const AbcChart: React.FC<Props> = ({ data }) => {
   const chartData = useMemo(() => {
     if (!data.length) return [];
@@ -23,21 +42,6 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
       { name: 'Clase Z (Menor inventario EUR)', value: counts.Z, color: '#94A3B8' }, // slate
     ];
   }, [data]);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-brand-surface p-3 border border-slate-700 shadow-lg rounded">
-          <p className="font-semibold text-white">{data.name}</p>
-          <p className="text-sm text-slate-400">
-            Cantidad: <span className="font-bold text-white">{data.value} productos</span>
-          </p>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="bg-brand-surface rounded-xl border border-slate-800 p-6 flex flex-col items-center">
@@ -59,7 +63,7 @@ export const AbcChart: React.FC<Props> = ({ data }) => {
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<AbcTooltip />} />
             <Legend verticalAlign="bottom" height={36}/>
           </PieChart>
         </ResponsiveContainer>

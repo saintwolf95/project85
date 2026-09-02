@@ -135,7 +135,7 @@ export const Home = () => {
             {([
               ['familia', 'Todas las familias', data.filtros.opciones.familias],
               ['marca', 'Todas las marcas', data.filtros.opciones.marcas],
-              ['familia_marca', 'Todas las Familia/Marca', data.filtros.opciones.familias_marca],
+              ['familia_marca', 'Todas las combinaciones Familia/Marca', data.filtros.opciones.familias_marca],
               ['seccion', 'Todas las secciones', data.filtros.opciones.secciones],
             ] as [keyof DashboardFilters, string, string[]][]).map(([key, placeholder, options]) => <select key={key} value={filters[key] || ''} onChange={event => changeFilter(key, event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><option value="">{placeholder}</option>{options.map(item => <option key={item} value={item}>{item}</option>)}</select>)}
           </div>

@@ -46,6 +46,8 @@ FILTER_SQL = """
 """
 _dashboard_cache = TTLCache(maxsize=256, ttl=300)
 _dashboard_cache_lock = RLock()
+_filter_options_cache = TTLCache(maxsize=64, ttl=900)
+_filter_options_cache_lock = RLock()
 
 
 def invalidate_dashboard_cache(empresa_id: int) -> None:
@@ -53,6 +55,8 @@ def invalidate_dashboard_cache(empresa_id: int) -> None:
         for key in list(_dashboard_cache):
             if key[0] == empresa_id:
                 _dashboard_cache.pop(key, None)
+    with _filter_options_cache_lock:
+        _filter_options_cache.pop(empresa_id, None)
 
 
 def _number(value) -> float:
@@ -84,6 +88,11 @@ def _month_starts(start: date, end: date) -> list[date]:
         result.append(month)
         month = date(month.year + (month.month == 12), month.month % 12 + 1, 1)
     return result
+
+
+def _month_end(month: date) -> date:
+    next_month = date(month.year + (month.month == 12), month.month % 12 + 1, 1)
+    return next_month - timedelta(days=1)
 
 
 def comparison_window(anchor: date, period: str) -> tuple[date, date, date, date]:
@@ -145,8 +154,11 @@ def _monthly_series(db: Session, empresa_id: int, start: date, end: date, filter
         previous_month = _shift_year(month)
         current_row, previous_row = current.get(month, {}), previous.get(previous_month, {})
         sales, previous_sales = _number(current_row.get("ventas_eur")), _number(previous_row.get("ventas_eur"))
+        coverage_start, coverage_end = max(month, start), min(_month_end(month), end)
         result.append({
             "mes": str(month), "mes_anterior": str(previous_month),
+            "cobertura_inicio": str(coverage_start), "cobertura_fin": str(coverage_end),
+            "parcial": coverage_start != month or coverage_end != _month_end(month),
             "ventas_eur": sales, "ventas_anterior_eur": previous_sales,
             "variacion_eur": sales - previous_sales, "variacion_pct": _pct(sales, previous_sales),
             "mgd_eur": _number(current_row.get("mgd_eur")),
@@ -171,7 +183,8 @@ def _breakdown(db: Session, empresa_id: int, starts: tuple[date, date], ends: tu
           COUNT(DISTINCT CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.producto_id END) skus
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
         LEFT JOIN clientes c ON c.id = v.cliente_id
-        WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :ps AND :ce {FILTER_SQL}
+        WHERE p.empresa_id = :empresa_id
+          AND ((v.fecha_venta BETWEEN :ps AND :pe) OR (v.fecha_venta BETWEEN :cs AND :ce)) {FILTER_SQL}
         GROUP BY {identifier_expression}, {display_expression}
         HAVING SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN ABS(v.ingreso_total) ELSE 0 END) > 0
             OR SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN ABS(v.ingreso_total) ELSE 0 END) > 0
@@ -208,6 +221,7 @@ def _breakdown(db: Session, empresa_id: int, starts: tuple[date, date], ends: tu
     }
 
 
+@cached(_filter_options_cache, key=lambda _db, empresa_id: empresa_id, lock=_filter_options_cache_lock)
 def _filter_options(db: Session, empresa_id: int) -> dict:
     options = {}
     for key, column in {"familias": "familia", "marcas": "marca", "familias_marca": "familia_marca", "secciones": "seccion"}.items():
@@ -283,7 +297,8 @@ def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd"
           SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END) actual_eur,
           SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END) anterior_eur
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
-        WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :ps AND :ce {FILTER_SQL}
+        WHERE p.empresa_id = :empresa_id
+          AND ((v.fecha_venta BETWEEN :ps AND :pe) OR (v.fecha_venta BETWEEN :cs AND :ce)) {FILTER_SQL}
         GROUP BY COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia')
     """), {"empresa_id": empresa_id, "cs": cs, "ce": ce, "ps": ps, "pe": pe, **filters}).mappings().all()
     drivers = [{"familia": row["familia"], "actual_eur": _number(row["actual_eur"]),
@@ -296,8 +311,12 @@ def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd"
     quadrants = []
     if inventory_date:
         rows = db.execute(text(f"""
-            WITH sales90 AS (SELECT producto_id, SUM(ingreso_total) ventas_90d FROM ventas_historicas
-              WHERE fecha_venta BETWEEN :sales90 AND :anchor GROUP BY producto_id)
+            WITH sales90 AS (
+              SELECT v90.producto_id, SUM(v90.ingreso_total) ventas_90d
+              FROM ventas_historicas v90 JOIN productos p90 ON p90.id = v90.producto_id
+              WHERE p90.empresa_id = :empresa_id AND v90.fecha_venta BETWEEN :sales90 AND :anchor
+              GROUP BY v90.producto_id
+            )
             SELECT COALESCE(pm.matriz_abc, 'Sin clasificar') cuadrante, COUNT(*) skus,
               COALESCE(SUM(ih.inventario_eur), 0) inventario_eur,
               COALESCE(SUM(s.ventas_90d), 0) ventas_90d_eur

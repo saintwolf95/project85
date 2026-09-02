@@ -6,6 +6,36 @@ interface MatrixBarChartProps {
   data: ProductMetrics[];
 }
 
+interface MatrixDatum {
+  name: string;
+  count: number;
+  inv: number;
+  sales: number;
+  color: string;
+  risk: string;
+}
+
+const formatEuro = (value: number) => {
+  if (value >= 1000000) return `€${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `€${(value / 1000).toFixed(0)}k`;
+  return `€${value.toFixed(0)}`;
+};
+
+const MatrixTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: MatrixDatum }[] }) => {
+  if (!active || !payload?.length) return null;
+  const datum = payload[0].payload;
+  return (
+    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-lg shadow-lg">
+      <p className="font-bold text-slate-900 dark:text-white mb-2 text-sm">{datum.name} (Riesgo: {datum.risk})</p>
+      <div className="space-y-1 text-xs">
+        <p className="text-slate-600 dark:text-slate-300"><span className="font-semibold text-slate-900 dark:text-white">Artículos:</span> {datum.count.toLocaleString()}</p>
+        <p className="text-slate-600 dark:text-slate-300"><span className="font-semibold text-slate-900 dark:text-white">Inventario Actual:</span> {formatEuro(datum.inv)}</p>
+        <p className="text-slate-600 dark:text-slate-300"><span className="font-semibold text-slate-900 dark:text-white">Ventas 90D:</span> {formatEuro(datum.sales)}</p>
+      </div>
+    </div>
+  );
+};
+
 export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
   const [viewMode, setViewMode] = useState<'count' | 'inventory'>('count');
   const chartData = useMemo(() => {
@@ -32,35 +62,6 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
 
     return Object.values(metrics).sort((a, b) => b[viewMode === 'count' ? 'count' : 'inv'] - a[viewMode === 'count' ? 'count' : 'inv']);
   }, [data, viewMode]);
-
-  const formatEuro = (value: number) => {
-    if (value >= 1000000) return `€${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `€${(value / 1000).toFixed(0)}k`;
-    return `€${value.toFixed(0)}`;
-  };
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-lg shadow-lg">
-          <p className="font-bold text-slate-900 dark:text-white mb-2 text-sm">{data.name} (Riesgo: {data.risk})</p>
-          <div className="space-y-1 text-xs">
-            <p className="text-slate-600 dark:text-slate-300">
-              <span className="font-semibold text-slate-900 dark:text-white">Artículos:</span> {data.count.toLocaleString()}
-            </p>
-            <p className="text-slate-600 dark:text-slate-300">
-              <span className="font-semibold text-slate-900 dark:text-white">Inventario Actual:</span> {formatEuro(data.inv)}
-            </p>
-            <p className="text-slate-600 dark:text-slate-300">
-              <span className="font-semibold text-slate-900 dark:text-white">Ventas 90D:</span> {formatEuro(data.sales)}
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm w-full mt-4">
@@ -107,7 +108,7 @@ export const MatrixBarChart = ({ data }: MatrixBarChartProps) => {
               tick={{ fill: '#64748b', fontSize: 11 }}
               tickFormatter={viewMode === 'inventory' ? formatEuro : undefined}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
+            <Tooltip content={<MatrixTooltip />} cursor={{ fill: 'transparent' }} />
             <Bar dataKey={viewMode === 'count' ? 'count' : 'inv'} radius={[4, 4, 0, 0]} maxBarSize={50}>
               {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />

@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power, BookOpen } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/useAuth';
+import { useTheme } from '../context/useTheme';
 import { VERSION_APP } from '../config/version';
 
 interface SidebarProps {
@@ -30,7 +30,9 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     <>
       {/* Backdrop para móviles */}
       {isOpen && (
-        <div 
+        <button
+          type="button"
+          aria-label="Cerrar menú"
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden animate-in fade-in"
           onClick={onClose}
         />

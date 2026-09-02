@@ -23,8 +23,8 @@ export default function Login() {
       if (data.session) {
         navigate('/');
       }
-    } catch (err: any) {
-      setError(err.message || 'Credenciales inválidas. Inténtalo de nuevo.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Credenciales inválidas. Inténtalo de nuevo.');
     }
   };
 
@@ -49,12 +49,13 @@ export default function Login() {
             )}
             
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Email corporativo</label>
+              <label htmlFor="login-email" className="text-xs font-medium text-slate-400 uppercase tracking-wider">Email corporativo</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="h-5 w-5 text-slate-500" />
                 </div>
                 <input
+                  id="login-email"
                   type="email"
                   required
                   value={email}
@@ -66,12 +67,13 @@ export default function Login() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider">Contraseña</label>
+              <label htmlFor="login-password" className="text-xs font-medium text-slate-400 uppercase tracking-wider">Contraseña</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="h-5 w-5 text-slate-500" />
                 </div>
                 <input
+                  id="login-password"
                   type="password"
                   required
                   value={password}

@@ -173,7 +173,16 @@ const MODEL_OPTIONS = [
   { value: 'ultra_thinking' as const, label: 'Ultra', sublabel: 'o1', icon: <Brain size={14} />, color: 'text-rose-500 dark:text-rose-400', badge: '💎', desc: 'Máxima profundidad' },
 ];
 
-const CopilotChartRenderer = ({ config }: { config: any }) => {
+interface CopilotChartConfig {
+  type?: string;
+  title?: string;
+  data?: Array<Record<string, string | number>>;
+  xKey?: string;
+  yKey?: string;
+  color?: string;
+}
+
+const CopilotChartRenderer = ({ config }: { config: CopilotChartConfig }) => {
   if (!config || !config.type || !config.data) return null;
   const { type, title, data, xKey, yKey, color } = config;
   const baseColor = color || COLORS[0];
@@ -204,7 +213,7 @@ const CopilotChartRenderer = ({ config }: { config: any }) => {
               <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
               <Legend />
               <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={80} fill={baseColor} label isAnimationActive={false}>
-                {data.map((_: any, index: number) => (
+                {data.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -225,6 +234,27 @@ interface Message {
   timestamp: string;
 }
 
+const formatMessageTimestamp = (value: Date | string = new Date()) => {
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (number: number) => number.toString().padStart(2, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
+};
+
+const now = () => formatMessageTimestamp();
+
+const createGreetingMessage = (capabilities: CopilotCapabilities | null): Message => {
+  const intro = capabilities?.inventario_disponible
+    ? 'También tengo inventario disponible para analizar cobertura, roturas y capital inmovilizado.'
+    : 'Actualmente trabajaré con ventas, rentabilidad y ABC comercial. Las funciones de stock, cobertura y ABCXYZ se activarán cuando cargues inventario.';
+  return {
+    id: 'greeting',
+    role: 'ai',
+    content: `¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tus datos en tiempo real.\n\n${intro}\n\n- [¿Cómo va la empresa este mes?](#prompt:${encodeURIComponent('¿Cómo va la empresa este mes?')})\n- [¿Qué familias y SKU explican las mayores caídas?](#prompt:${encodeURIComponent('Compara las ventas de este mes con el mes anterior y muestra qué familias y SKU explican las mayores caídas')})\n- [¿Qué productos clase A necesitan revisión comercial?](#prompt:${encodeURIComponent('Identifica los productos clase A que más han caído en los últimos 30 días')})`,
+    timestamp: now(),
+  };
+};
+
 interface ChatApiError {
   response?: {
     status?: number;
@@ -239,7 +269,10 @@ const CopyButton = ({ text }: { text: string }) => {
       await navigator.clipboard.writeText(cleanCopilotContent(text));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch (error) {
+      console.error('No se pudo copiar la respuesta', error);
+      setCopied(false);
+    }
   };
   return (
     <button
@@ -315,46 +348,14 @@ export const AiCopilot = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const formatMessageTimestamp = (value: Date | string = new Date()) => {
-    const date = typeof value === 'string' ? new Date(value) : value;
-    if (Number.isNaN(date.getTime())) return '';
-    const pad = (number: number) => number.toString().padStart(2, '0');
-    return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}-${pad(date.getMonth() + 1)}-${date.getFullYear()}`;
-  };
-  const now = () => formatMessageTimestamp();
-
   const suggestions = capabilities?.inventario_disponible
     ? [...SALES_SUGGESTIONS, ...INVENTORY_SUGGESTIONS]
     : SALES_SUGGESTIONS;
-
-  const createGreetingMessage = (): Message => {
-    const intro = capabilities?.inventario_disponible
-      ? 'También tengo inventario disponible para analizar cobertura, roturas y capital inmovilizado.'
-      : 'Actualmente trabajaré con ventas, rentabilidad y ABC comercial. Las funciones de stock, cobertura y ABCXYZ se activarán cuando cargues inventario.';
-    return {
-    id: 'greeting',
-    role: 'ai',
-    content: `¡Hola! Soy tu **AI Copilot** de Supply Chain. Estoy conectado a tus datos en tiempo real.\n\n${intro}\n\n- [¿Cómo va la empresa este mes?](#prompt:${encodeURIComponent('¿Cómo va la empresa este mes?')})\n- [¿Qué familias y SKU explican las mayores caídas?](#prompt:${encodeURIComponent('Compara las ventas de este mes con el mes anterior y muestra qué familias y SKU explican las mayores caídas')})\n- [¿Qué productos clase A necesitan revisión comercial?](#prompt:${encodeURIComponent('Identifica los productos clase A que más han caído en los últimos 30 días')})`,
-    timestamp: now(),
-  };
-  };
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  useEffect(() => { loadChats(); }, []);
-  useEffect(() => {
-    getCopilotCapabilities().then(setCapabilities).catch(console.error);
-  }, []);
-  useEffect(() => {
-    if (!capabilities || currentChatId !== null) return;
-    setMessages(previous => (
-      previous.length === 1 && previous[0].id === 'greeting'
-        ? [createGreetingMessage()]
-        : previous
-    ));
-  }, [capabilities, currentChatId]);
   useEffect(() => { scrollToBottom(); }, [messages, isLoading, scrollToBottom]);
 
   // Cargar documentos LibrerIA disponibles
@@ -362,27 +363,44 @@ export const AiCopilot = () => {
     getLibreriaDocuments().then(setLibDocs).catch(console.error);
   }, []);
 
-  const loadChats = async () => {
-    try {
-      setIsLoadingChats(true);
-      setChatError(null);
-      const data = await getCopilotChats();
-      setChats(data);
-      if (data.length > 0 && currentChatId === null) {
-        selectChat(data[0].id);
-      } else if (data.length === 0) {
-          setMessages([createGreetingMessage()]);
-        setShowSuggestions(true);
-      }
-      const ctx = await getBusinessContext();
-      setBusinessContext(ctx);
-    } catch (error) {
-      console.error('Error cargando chats', error);
-      setChatError(getCopilotErrorMessage(error));
-    } finally {
-      setIsLoadingChats(false);
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getCopilotChats(), getBusinessContext(), getCopilotCapabilities()])
+      .then(async ([chatList, context, capabilityData]) => {
+        if (cancelled) return;
+        setChats(chatList);
+        setBusinessContext(context);
+        setCapabilities(capabilityData);
+        if (chatList.length === 0) {
+          setMessages([createGreetingMessage(capabilityData)]);
+          setShowSuggestions(true);
+          return;
+        }
+        const firstChat = chatList[0];
+        setCurrentChatId(firstChat.id);
+        const history = await getCopilotChatHistory(firstChat.id);
+        if (cancelled) return;
+        setMessages(history.length === 0
+          ? [createGreetingMessage(capabilityData)]
+          : history.map(item => ({
+              id: item.id.toString(),
+              role: item.role === 'assistant' ? 'ai' : 'user',
+              content: item.content,
+              timestamp: formatMessageTimestamp(item.creado_en),
+            })));
+        setShowSuggestions(history.length === 0);
+      })
+      .catch(error => {
+        if (!cancelled) {
+          console.error('Error cargando chats', error);
+          setChatError(getCopilotErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingChats(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const selectChat = async (chatId: number) => {
     if (isLoading || chatId === currentChatId) return;
@@ -394,7 +412,7 @@ export const AiCopilot = () => {
     try {
       const history = await getCopilotChatHistory(chatId);
       if (history.length === 0) {
-        setMessages([createGreetingMessage()]);
+        setMessages([createGreetingMessage(capabilities)]);
         setShowSuggestions(true);
       } else {
         const formatted: Message[] = history.map(h => ({
@@ -416,7 +434,7 @@ export const AiCopilot = () => {
   const startNewChat = () => {
     if (isLoading) return;
     setCurrentChatId(null);
-    setMessages([createGreetingMessage()]);
+    setMessages([createGreetingMessage(capabilities)]);
     setShowSuggestions(true);
     setSelectedLibDocIds([]);
     setChatError(null);
@@ -461,7 +479,7 @@ export const AiCopilot = () => {
     setChatError(null);
     setLastFailedQuestion(null);
 
-    const newUserMsg: Message = { id: Date.now().toString(), role: 'user', content: userText, timestamp: now() };
+    const newUserMsg: Message = { id: crypto.randomUUID(), role: 'user', content: userText, timestamp: now() };
     setMessages(prev => [...prev, newUserMsg]);
     setIsLoading(true);
 
@@ -475,7 +493,7 @@ export const AiCopilot = () => {
       });
 
       const aiMsg: Message = {
-        id: response.data.message_id ? response.data.message_id.toString() : (Date.now() + 1).toString(),
+        id: response.data.message_id ? response.data.message_id.toString() : crypto.randomUUID(),
         role: 'ai',
         content: response.data.reply,
         timestamp: now(),
@@ -485,7 +503,7 @@ export const AiCopilot = () => {
 
       if (!currentChatId && response.data.chat_id) {
         setCurrentChatId(response.data.chat_id);
-        loadChats().catch(console.error);
+        getCopilotChats().then(setChats).catch(console.error);
       } else {
         setChats(prev => {
           const chat = prev.find(c => c.id === currentChatId);
@@ -580,9 +598,9 @@ export const AiCopilot = () => {
         setBusinessContext(response.full_context);
         setUploadError(null);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error subiendo archivo:', error);
-      setUploadError(error.response?.data?.detail || 'Error subiendo el archivo.');
+      setUploadError(getCopilotErrorMessage(error));
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -634,7 +652,12 @@ export const AiCopilot = () => {
 
       {/* Backdrop para móvil */}
       {isSidebarOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-10 lg:hidden" onClick={() => setIsSidebarOpen(false)} />
+        <button
+          type="button"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-10 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-label="Cerrar historial"
+        />
       )}
 
       {/* Sidebar Historial */}
@@ -723,9 +746,11 @@ export const AiCopilot = () => {
               <div className="p-3 space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-2">Selecciona documentos que la IA usará como referencia</p>
                 {libDocs.map(doc => (
-                  <label key={doc.id} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <label htmlFor={`libreria-document-${doc.id}`} key={doc.id} className="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                     <input
+                      id={`libreria-document-${doc.id}`}
                       type="checkbox"
+                      aria-label={`Usar ${doc.filename} como referencia`}
                       checked={selectedLibDocIds.includes(doc.id)}
                       onChange={() => toggleLibDoc(doc.id)}
                       className="rounded text-brand-blue dark:text-brand-cyan accent-cyan-500"
@@ -819,7 +844,7 @@ export const AiCopilot = () => {
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeSanitize]}
                             components={{
-                              a({ className, children, href, ...props }) {
+                              a({ children, href, ...props }) {
                                 if (href?.startsWith('#prompt:')) {
                                   const promptText = decodeURIComponent(href.replace('#prompt:', ''));
                                   return (
@@ -832,7 +857,7 @@ export const AiCopilot = () => {
                                     </button>
                                   );
                                 }
-                                return <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-blue dark:text-brand-cyan hover:underline" {...props}>{children}</a>;
+                                return <a {...props} href={href} target="_blank" rel="noopener noreferrer" className="text-brand-blue dark:text-brand-cyan hover:underline">{children}</a>;
                               },
                               code(props) {
                                 const { children, className, ...rest } = props;
@@ -842,7 +867,9 @@ export const AiCopilot = () => {
                                   try {
                                     const parsed = JSON.parse(String(children));
                                     if (parsed?.chartConfig) return <CopilotChartRenderer config={parsed.chartConfig} />;
-                                  } catch {}
+                                  } catch (error) {
+                                    console.debug('Configuración de gráfico no válida', error);
+                                  }
                                 }
                                 return isInline
                                   ? <code className={className} {...rest}>{children}</code>

@@ -5,10 +5,40 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGri
 import { Filter, Info, TrendingUp, DollarSign, Package } from 'lucide-react';
 import { formatEUR } from '../utils/formatters';
 
+type ForecastGroup = 'PM' | 'Familia' | 'Codart';
+
+interface ForecastTooltipEntry {
+  color?: string;
+  name?: string;
+  value?: number | string;
+}
+
+const ForecastTooltip = ({ active, payload, label }: {
+  active?: boolean;
+  payload?: ForecastTooltipEntry[];
+  label?: string;
+}) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
+      <p className="font-bold text-white mb-2">{label}</p>
+      {payload.map((entry, index) => (
+        <div key={`${entry.name || 'serie'}-${index}`} className="flex items-center gap-2 text-sm mb-1">
+          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: entry.color }} />
+          <span className="text-slate-300">{entry.name}:</span>
+          <span className="font-medium text-white font-mono">
+            {entry.name?.includes('Ingreso') ? formatEUR(Number(entry.value)) : Number(entry.value).toLocaleString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const DemandForecasting = () => {
   const [loading, setLoading] = useState(true);
   const [inventory, setInventory] = useState<ProductMetrics[]>([]);
-  const [groupBy, setGroupBy] = useState<'PM' | 'Familia' | 'Codart'>('PM');
+  const [groupBy, setGroupBy] = useState<ForecastGroup>('PM');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,26 +101,6 @@ export const DemandForecasting = () => {
     );
   }
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
-          <p className="font-bold text-white mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 text-sm mb-1">
-              <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: entry.color }} />
-              <span className="text-slate-300">{entry.name}:</span>
-              <span className="font-medium text-white font-mono">
-                {entry.name.includes('Ingreso') ? formatEUR(entry.value) : entry.value.toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
   const totalProjected90 = aggregatedData.reduce((acc, curr) => acc + curr['Proyección 90 Días (Uds)'], 0);
   const totalRevenue90 = aggregatedData.reduce((acc, curr) => acc + curr['Ingreso 90 Días'], 0);
 
@@ -113,7 +123,7 @@ export const DemandForecasting = () => {
           <select 
             className="bg-transparent text-sm font-bold text-brand-blue dark:text-brand-cyan focus:outline-none cursor-pointer"
             value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value as any)}
+            onChange={(e) => setGroupBy(e.target.value as ForecastGroup)}
           >
             <option value="PM">Product Manager (PM)</option>
             <option value="Familia">Familia / Categoría</option>
@@ -170,7 +180,7 @@ export const DemandForecasting = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.3} />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickMargin={10} />
                 <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(val) => `${val}`} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<ForecastTooltip />} />
                 <Legend verticalAlign="top" height={36} iconType="circle" />
                 <Bar dataKey="Proyección 30 Días (Uds)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Proyección 60 Días (Uds)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
@@ -189,7 +199,7 @@ export const DemandForecasting = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.3} />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickMargin={10} />
                 <YAxis stroke="#94a3b8" fontSize={12} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<ForecastTooltip />} />
                 <Legend verticalAlign="top" height={36} iconType="circle" />
                 <Bar dataKey="Ingreso 30 Días" fill="#10b981" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Ingreso 60 Días" fill="#f59e0b" radius={[4, 4, 0, 0]} />

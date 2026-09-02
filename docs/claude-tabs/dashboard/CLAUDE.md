@@ -42,3 +42,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Las tarjetas de mayor facturación, crecimiento y caída proceden del resumen calculado por backend sobre todos los segmentos; las 100 filas visibles siguen priorizadas por variación absoluta.
 - No mostrar una caída como crecimiento ni un crecimiento como caída cuando no existe un segmento del signo solicitado.
 - En la dimensión Cliente, agrupar por `ClientePK` y mostrar el nombre como etiqueta complementaria para impedir que clientes homónimos se fusionen.
+
+## Actualización v1.43 — consultas acotadas y cobertura mensual
+
+- Las consultas comparativas de desglose e impulsores deben usar dos ventanas exactas unidas por `OR`; no leer fechas intermedias que después serán descartadas por agregación condicional.
+- Cachear por empresa las opciones de filtros durante 15 minutos e invalidarlas junto con la caché ejecutiva tras cualquier importación.
+- La serie mensual expone `cobertura_inicio`, `cobertura_fin` y `parcial`; representar todos los meses parciales con su rango real.

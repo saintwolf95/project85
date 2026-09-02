@@ -12,7 +12,7 @@ import * as XLSX from 'xlsx';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { ProductModal } from '../components/ProductModal';
 
-const EXPORT_COLUMNS = [
+const EXPORT_COLUMNS: ReadonlyArray<{ id: keyof ProductMetrics; label: string }> = [
   { id: 'cod_art', label: 'CodArt' },
   { id: 'nombre_art', label: 'Nombre' },
   { id: 'familia', label: 'Familia' },
@@ -39,7 +39,6 @@ export const Intelligence = () => {
   
   // Data
   const [inventoryData, setInventoryData] = useState<ProductMetrics[]>([]);
-  const [filteredData, setFilteredData] = useState<ProductMetrics[]>([]);
   const [kpiData, setKpiData] = useState<DashboardKPIsResponse | null>(null);
   
   // KPI Modal State
@@ -59,14 +58,6 @@ export const Intelligence = () => {
   // Pagination & Filters
   const [currentPage, setCurrentPage] = useState(1);
   const limit = 50;
-  const totalRecords = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
-  
-  // Data slicing for current page
-  const paginatedData = useMemo(() => {
-    const startIdx = (currentPage - 1) * limit;
-    return filteredData.slice(startIdx, startIdx + limit);
-  }, [filteredData, currentPage, limit]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -90,8 +81,8 @@ export const Intelligence = () => {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // Apply filters locally whenever search, abc class, or risks change
-  useEffect(() => {
+  // Apply filters locally without creating a second, synchronized copy of the inventory.
+  const filteredData = useMemo(() => {
     let result = inventoryData;
 
     if (debouncedSearch) {
@@ -134,17 +125,26 @@ export const Intelligence = () => {
       result = result.filter(item => item.dias_cobertura <= Number(maxDays));
     }
 
-    setFilteredData(result);
+    return result;
   }, [inventoryData, debouncedSearch, claseAbc, selectedPM, selectedSection, selectedRisk, activeTab, minDays, maxDays]);
 
-  const fetchKpis = async () => {
-    try {
-      const kpisRes = await getDashboardKpis();
-      setKpiData(kpisRes);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const totalRecords = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / limit));
+
+  const paginatedData = useMemo(() => {
+    const startIdx = (currentPage - 1) * limit;
+    return filteredData.slice(startIdx, startIdx + limit);
+  }, [filteredData, currentPage]);
+
+  const riskFamilyData = useMemo(() => {
+    const counts = inventoryData.reduce<Record<string, { name: string; value: number }>>((acc, product) => {
+      const family = product.familia || 'Sin familia';
+      const entry = acc[family] ?? { name: family, value: 0 };
+      acc[family] = { ...entry, value: entry.value + 1 };
+      return acc;
+    }, {});
+    return Object.values(counts).sort((a, b) => b.value - a.value);
+  }, [inventoryData]);
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -178,7 +178,7 @@ export const Intelligence = () => {
 
   const executeExport = () => {
     const dataToExport = inventoryData.map(p => {
-      const row: any = {};
+      const row: Record<string, string | number | boolean> = {};
       EXPORT_COLUMNS.forEach(col => {
         if (selectedColumns.includes(col.id)) {
           if (col.id === 'riesgos_categorizados') {
@@ -186,7 +186,8 @@ export const Intelligence = () => {
           } else if (col.id === 'dias_cobertura') {
             row[col.label] = Math.round(p.dias_cobertura);
           } else {
-            row[col.label] = (p as any)[col.id];
+            const value = p[col.id];
+            row[col.label] = Array.isArray(value) ? value.join(', ') : (value ?? '');
           }
         }
       });
@@ -201,7 +202,7 @@ export const Intelligence = () => {
   };
 
   useEffect(() => {
-    fetchKpis();
+    getDashboardKpis().then(setKpiData).catch(console.error);
   }, []);
 
   return (
@@ -457,11 +458,7 @@ export const Intelligence = () => {
                 <div className="flex-1 min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={Object.values(inventoryData.reduce((acc: any, curr) => {
-                        acc[curr.familia] = acc[curr.familia] || { name: curr.familia, value: 0 };
-                        acc[curr.familia].value += 1;
-                        return acc;
-                      }, {})).sort((a: any, b: any) => b.value - a.value)}
+                      data={riskFamilyData}
                       layout="vertical"
                       margin={{ top: 0, right: 30, left: 20, bottom: 0 }}
                     >
@@ -469,11 +466,7 @@ export const Intelligence = () => {
                       <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={100} tick={{ fill: '#64748b', fontSize: 12 }} />
                       <Tooltip cursor={{ fill: 'rgba(239, 68, 68, 0.05)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                       <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                        {Object.values(inventoryData.reduce((acc: any, curr) => {
-                          acc[curr.familia] = acc[curr.familia] || { name: curr.familia, value: 0 };
-                          acc[curr.familia].value += 1;
-                          return acc;
-                        }, {})).map((entry: any, index) => (
+                        {riskFamilyData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
                             fill={riskFamilyFilter === entry.name || riskFamilyFilter === 'all' ? '#ef4444' : '#fca5a5'} 

@@ -3,7 +3,16 @@ from datetime import date
 
 from sqlalchemy import create_engine, text
 
-from app.dashboard_service import _breakdown, _month_starts, _pct, _shift_year, comparison_window
+from app.dashboard_service import (
+    _breakdown,
+    _filter_options,
+    _month_starts,
+    _monthly_series,
+    _pct,
+    _shift_year,
+    comparison_window,
+    invalidate_dashboard_cache,
+)
 
 
 class FakeMappingsResult:
@@ -21,8 +30,10 @@ class FakeDashboardSession:
     def __init__(self, rows):
         self.rows = rows
         self.statement = ""
+        self.execute_count = 0
 
     def execute(self, statement, _params):
+        self.execute_count += 1
         self.statement = str(statement)
         return FakeMappingsResult(self.rows)
 
@@ -58,6 +69,22 @@ class DashboardPeriodTests(unittest.TestCase):
             [date(2026, 5, 1), date(2026, 6, 1), date(2026, 7, 1), date(2026, 8, 1)],
         )
 
+    def test_serie_mensual_identifica_primer_y_ultimo_mes_parcial(self):
+        session = FakeDashboardSession([])
+
+        result = _monthly_series(
+            session, 1, date(2026, 7, 26), date(2026, 8, 24),
+            {"familia": None, "marca": None, "familia_marca": None, "seccion": None},
+        )
+
+        self.assertEqual(
+            [(row["mes"], row["cobertura_inicio"], row["cobertura_fin"], row["parcial"]) for row in result],
+            [
+                ("2026-07-01", "2026-07-26", "2026-07-31", True),
+                ("2026-08-01", "2026-08-01", "2026-08-24", True),
+            ],
+        )
+
 
 class DashboardBreakdownTests(unittest.TestCase):
     @staticmethod
@@ -91,6 +118,9 @@ class DashboardBreakdownTests(unittest.TestCase):
         self.assertIsNone(result["resumen"]["mayor_caida"])
         self.assertEqual(len(result["filas"]), 100)
         self.assertNotIn("lider", {row["entidad_id"] for row in result["filas"]})
+        self.assertIn("v.fecha_venta BETWEEN :ps AND :pe", session.statement)
+        self.assertIn("v.fecha_venta BETWEEN :cs AND :ce", session.statement)
+        self.assertNotIn("v.fecha_venta BETWEEN :ps AND :ce", session.statement)
 
     def test_desglose_de_cliente_agrupa_por_cliente_pk(self):
         engine = create_engine("sqlite:///:memory:")
@@ -149,6 +179,20 @@ class DashboardBreakdownTests(unittest.TestCase):
 
         self.assertIsNone(_breakdown(positive, *args)["resumen"]["mayor_caida"])
         self.assertIsNone(_breakdown(negative, *args)["resumen"]["mayor_crecimiento"])
+
+    def test_opciones_de_filtro_se_cachean_por_empresa_y_se_invalidan_con_la_carga(self):
+        empresa_id = 987654
+        invalidate_dashboard_cache(empresa_id)
+        session = FakeDashboardSession([("Opción",)])
+
+        first = _filter_options(session, empresa_id)
+        second = _filter_options(session, empresa_id)
+
+        self.assertEqual(first, second)
+        self.assertEqual(session.execute_count, 4)
+        invalidate_dashboard_cache(empresa_id)
+        _filter_options(session, empresa_id)
+        self.assertEqual(session.execute_count, 8)
 
 
 if __name__ == "__main__":

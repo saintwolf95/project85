@@ -60,10 +60,12 @@ export const InsightModal: React.FC<InsightModalProps> = ({ insight, inventory, 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       {/* Backdrop */}
-      <div 
+      <button
+        type="button"
+        aria-label="Cerrar detalle"
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
         onClick={onClose}
-      ></div>
+      />
       
       {/* Modal */}
       <div className="relative bg-white dark:bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">

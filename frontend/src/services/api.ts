@@ -112,6 +112,9 @@ export interface DashboardExecutiveResponse {
   serie_mensual: {
     mes: string;
     mes_anterior: string;
+    cobertura_inicio: string;
+    cobertura_fin: string;
+    parcial: boolean;
     ventas_eur: number;
     ventas_anterior_eur: number;
     variacion_eur: number;

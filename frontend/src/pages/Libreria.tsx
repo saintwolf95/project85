@@ -42,7 +42,12 @@ export const Libreria = () => {
   };
 
   useEffect(() => {
-    fetchDocuments();
+    let active = true;
+    getLibreriaDocuments()
+      .then(docs => { if (active) setDocuments(docs); })
+      .catch(error => console.error('Error fetching documents', error))
+      .finally(() => { if (active) setLoadingDocs(false); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -136,7 +141,7 @@ export const Libreria = () => {
           <div className="p-4 border-b border-slate-100 dark:border-slate-800">
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Archivo (.pdf, .docx, .txt, .csv)</label>
+                <span className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Archivo (.pdf, .docx, .txt, .csv)</span>
                 <input 
                   type="file" 
                   id="file-upload"
@@ -149,8 +154,9 @@ export const Libreria = () => {
                 </label>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Departamento (Etiqueta)</label>
+                <label htmlFor="library-department" className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Departamento (Etiqueta)</label>
                 <select 
+                  id="library-department"
                   value={selectedDept} 
                   onChange={(e) => setSelectedDept(e.target.value)}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-cyan"

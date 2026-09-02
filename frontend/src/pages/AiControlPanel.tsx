@@ -4,6 +4,7 @@ import type { AgentSettings, AgentInsight, AgentChatMessage, AgentDataReadiness,
 import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader2, X, ChevronDown, ChevronUp, Send, MessageSquare, Clock, CheckCircle, AlertCircle, BookOpen, Save, Database, Users, PackageCheck, ShoppingCart, Calculator, Sparkles, PanelRight, Boxes, UserRoundSearch, BriefcaseBusiness, FlaskConical } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
+import axios from 'axios';
 
 interface AgentInfo {
   id: string;
@@ -95,17 +96,21 @@ export const AiControlPanel = () => {
   const [businessContext, setBusinessContext] = useState('');
   const [isSavingContext, setIsSavingContext] = useState(false);
 
+  const openAgent = (agentId: string) => {
+    setAgentChatHistory([]);
+    setChatSuggestions(AGENTS_INFO[agentId]?.prompts || []);
+    setStudyTab('report');
+    setAgentStudies(null);
+    setStudiesError(null);
+    setInvestigation(null);
+    setInvestigationError(null);
+    setIsChatLoading(true);
+    setIsStudiesLoading(true);
+    setSelectedAgent(agentId);
+  };
+
   useEffect(() => {
     if (selectedAgent) {
-      setAgentChatHistory([]);
-      setChatSuggestions(AGENTS_INFO[selectedAgent]?.prompts || []);
-      setStudyTab('report');
-      setAgentStudies(null);
-      setStudiesError(null);
-      setInvestigation(null);
-      setInvestigationError(null);
-      setIsChatLoading(true);
-      setIsStudiesLoading(true);
       getAgentChat(selectedAgent)
         .then(data => setAgentChatHistory(data))
         .catch(err => console.error(err))
@@ -147,8 +152,9 @@ export const AiControlPanel = () => {
     try {
       const question = `Investiga la señal prioritaria actual de ${AGENTS_INFO[selectedAgent].role} y explica sus impulsores.`;
       setInvestigation(await runAgentInvestigation(selectedAgent, question));
-    } catch (error: any) {
-      setInvestigationError(error.response?.data?.detail || 'No se pudo verificar la investigación.');
+    } catch (error: unknown) {
+      const detail = axios.isAxiosError(error) ? error.response?.data?.detail : null;
+      setInvestigationError(typeof detail === 'string' ? detail : 'No se pudo verificar la investigación.');
     } finally {
       setIsInvestigating(false);
     }
@@ -186,8 +192,28 @@ export const AiControlPanel = () => {
   };
 
   useEffect(() => {
-    refreshData();
-    prepareDailyReport();
+    let active = true;
+    Promise.all([getAgentSettings(), getAllAgentInsights(), getAgentDataReadiness()])
+      .then(([settingsData, insightsData, readinessData]) => {
+        if (!active) return;
+        setSettings(settingsData);
+        setInsightsHistory(insightsData);
+        setDataReadiness(readinessData);
+        if (insightsData.length > 0) setExpandedRowId(insightsData[0].id);
+      })
+      .catch(console.error)
+      .finally(() => { if (active) setIsLoading(false); });
+    ensureDailyAgentReport()
+      .then(insight => {
+        if (!active) return;
+        setDailyInsight(insight);
+        setInsightsHistory(previous => {
+          const withoutDuplicate = previous.filter(item => item.id !== insight.id);
+          return [insight, ...withoutDuplicate].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+        });
+      })
+      .catch(() => { if (active) setDailyError('No se pudo actualizar el informe diario. Puedes consultar el último disponible.'); });
+    return () => { active = false; };
   }, []);
 
   const handleToggle = async (key: keyof AgentSettings) => {
@@ -228,9 +254,12 @@ export const AiControlPanel = () => {
       setRunSuccess(true);
       setTimeout(() => setRunSuccess(false), 4000);
       await refreshData();
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearInterval(stageTimer);
-      const detail = error.response?.data?.detail || error.message || 'Error desconocido';
+      const responseDetail = axios.isAxiosError(error) ? error.response?.data?.detail : null;
+      const detail = typeof responseDetail === 'string'
+        ? responseDetail
+        : error instanceof Error ? error.message : 'Error desconocido';
       setRunError(`Error al ejecutar el análisis: ${detail.split('\n')[0]}`);
       setTimeout(() => setRunError(null), 6000);
     } finally {
@@ -334,6 +363,8 @@ export const AiControlPanel = () => {
     const lab = agentStudies?.tabs?.laboratory;
     const regression = lab?.regression || {};
     const distribution = lab?.distribution || {};
+    const methodology = lab?.methodology;
+    const methodologyItems = Array.isArray(methodology) ? methodology : methodology ? [methodology] : [];
     return (
       <div className="space-y-6">
         <p className="text-sm text-slate-600 dark:text-slate-300">{lab?.summary}</p>
@@ -367,7 +398,7 @@ export const AiControlPanel = () => {
           </div>
         </div>
         <div className="text-xs text-slate-500 space-y-1">
-          {(Array.isArray(lab?.methodology) ? lab?.methodology : [lab?.methodology]).filter(Boolean).map((item, index) => <p key={index}>{item}</p>)}
+          {methodologyItems.map((item, index) => <p key={index}>{item}</p>)}
           {regression.caution && <p className="font-medium text-amber-700 dark:text-amber-300">{String(regression.caution)}</p>}
         </div>
       </div>
@@ -511,10 +542,11 @@ export const AiControlPanel = () => {
               };
               const icons: Record<string, React.ReactNode> = { maria: <Bot size={18} />, lucia: <TrendingUp size={18} />, mattia: <DollarSign size={18} /> };
               return (
-                <div
+                <button
+                  type="button"
                   key={agentId}
-                  onClick={() => setSelectedAgent(agentId)}
-                  className={`cursor-pointer rounded-xl p-5 border-2 transition-all hover:shadow-md hover:scale-[1.02] ${settings.fase1_active ? colorMap[info.color] : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400'}`}
+                  onClick={() => openAgent(agentId)}
+                  className={`w-full text-left cursor-pointer rounded-xl p-5 border-2 transition-all hover:shadow-md hover:scale-[1.02] ${settings.fase1_active ? colorMap[info.color] : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400'}`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 font-bold text-sm">
@@ -551,7 +583,7 @@ export const AiControlPanel = () => {
                     </span>
                   </div>
                   <p className="text-[11px] mt-3 text-center opacity-60">Abrir expediente y chat</p>
-                </div>
+                </button>
               );
             })}
           </div>

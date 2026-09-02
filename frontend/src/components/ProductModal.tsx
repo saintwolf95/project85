@@ -18,10 +18,12 @@ export const ProductModal = ({ isOpen, onClose, title, description, products }: 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <button
+        type="button"
+        aria-label="Cerrar detalle de productos"
         className="absolute inset-0 bg-black/40 dark:bg-brand-dark/80 backdrop-blur-sm transition-opacity duration-300"
         onClick={onClose}
-      ></div>
+      />
 
       {/* Modal Window */}
       <div className="relative bg-white dark:bg-brand-surface border border-slate-200 dark:border-brand-cyan/30 rounded-xl shadow-2xl dark:shadow-[0_0_30px_rgba(0,245,255,0.15)] w-full max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">

@@ -36,3 +36,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Los filtros de familia, marca, Familia/Marca y sección son acumulativos y afectan KPIs, inventario, impulsores, serie mensual, matriz ABCXYZ y tabla de detalle.
 - El interruptor de comparación anual del gráfico muestra ventas del mismo intervalo un año antes y una tabla mensual con diferencia absoluta y porcentual.
 - La subvista Detalle de ventas permite alternar entre comercial de factura, cliente, familia, marca y sección. Mantener búsqueda, ordenación, formato condicional y un máximo de 100 segmentos devueltos por SQL.
+
+## Actualización v1.42 — líderes y clientes inequívocos
+
+- Las tarjetas de mayor facturación, crecimiento y caída proceden del resumen calculado por backend sobre todos los segmentos; las 100 filas visibles siguen priorizadas por variación absoluta.
+- No mostrar una caída como crecimiento ni un crecimiento como caída cuando no existe un segmento del signo solicitado.
+- En la dimensión Cliente, agrupar por `ClientePK` y mostrar el nombre como etiqueta complementaria para impedir que clientes homónimos se fusionen.

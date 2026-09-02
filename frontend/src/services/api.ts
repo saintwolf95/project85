@@ -130,21 +130,29 @@ export interface DashboardExecutiveResponse {
   desglose: {
     dimension: DashboardBreakdownDimension;
     etiqueta: string;
-    filas: {
-      entidad: string;
-      ventas_eur: number;
-      ventas_anterior_eur: number;
-      variacion_eur: number;
-      variacion_pct: number | null;
-      peso_pct: number;
-      unidades: number;
-      margen_eur: number;
-      margen_pct: number | null;
-      mgd_eur: number;
-      skus: number;
-    }[];
+    resumen: {
+      mayor_facturacion: DashboardBreakdownRow | null;
+      mayor_crecimiento: DashboardBreakdownRow | null;
+      mayor_caida: DashboardBreakdownRow | null;
+    };
+    filas: DashboardBreakdownRow[];
   };
   familias: string[];
+}
+
+export interface DashboardBreakdownRow {
+  entidad_id: string;
+  entidad: string;
+  ventas_eur: number;
+  ventas_anterior_eur: number;
+  variacion_eur: number;
+  variacion_pct: number | null;
+  peso_pct: number;
+  unidades: number;
+  margen_eur: number;
+  margen_pct: number | null;
+  mgd_eur: number;
+  skus: number;
 }
 
 export interface AIInsight {

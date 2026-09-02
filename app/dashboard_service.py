@@ -11,11 +11,32 @@ from sqlalchemy.orm import Session
 
 PERIOD_DAYS = {"30d": 30, "90d": 90}
 BREAKDOWN_DIMENSIONS = {
-    "comercial": ("COALESCE(NULLIF(TRIM(v.comercial_factura), ''), 'Sin comercial')", "Comercial de factura"),
-    "cliente": ("COALESCE(NULLIF(TRIM(c.nombre), ''), 'Sin nombre cliente')", "Cliente"),
-    "familia": ("COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia')", "Familia"),
-    "marca": ("COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca')", "Marca"),
-    "seccion": ("COALESCE(NULLIF(TRIM(p.seccion), ''), 'Sin sección')", "Sección"),
+    "comercial": (
+        "COALESCE(NULLIF(TRIM(v.comercial_factura), ''), 'Sin comercial')",
+        "COALESCE(NULLIF(TRIM(v.comercial_factura), ''), 'Sin comercial')",
+        "Comercial de factura",
+    ),
+    "cliente": (
+        "COALESCE(NULLIF(TRIM(c.cliente_pk), ''), 'SIN-CLIENTE')",
+        "COALESCE(NULLIF(TRIM(c.cliente_pk), '') || ' · ' || NULLIF(TRIM(c.nombre), ''), "
+        "NULLIF(TRIM(c.cliente_pk), ''), NULLIF(TRIM(c.nombre), ''), 'Sin nombre cliente')",
+        "Cliente",
+    ),
+    "familia": (
+        "COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia')",
+        "COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia')",
+        "Familia",
+    ),
+    "marca": (
+        "COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca')",
+        "COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca')",
+        "Marca",
+    ),
+    "seccion": (
+        "COALESCE(NULLIF(TRIM(p.seccion), ''), 'Sin sección')",
+        "COALESCE(NULLIF(TRIM(p.seccion), ''), 'Sin sección')",
+        "Sección",
+    ),
 }
 FILTER_SQL = """
  AND (:familia IS NULL OR LOWER(COALESCE(p.familia, '')) = LOWER(:familia))
@@ -137,11 +158,11 @@ def _monthly_series(db: Session, empresa_id: int, start: date, end: date, filter
 def _breakdown(db: Session, empresa_id: int, starts: tuple[date, date], ends: tuple[date, date],
                filters: dict, dimension: str, total_sales: float) -> dict:
     dimension = dimension if dimension in BREAKDOWN_DIMENSIONS else "comercial"
-    expression, label = BREAKDOWN_DIMENSIONS[dimension]
+    identifier_expression, display_expression, label = BREAKDOWN_DIMENSIONS[dimension]
     current_start, previous_start = starts
     current_end, previous_end = ends
     rows = db.execute(text(f"""
-        SELECT {expression} entidad,
+        SELECT {identifier_expression} entidad_id, {display_expression} entidad,
           COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END), 0) ventas_eur,
           COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END), 0) ventas_anterior_eur,
           COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.cantidad_vendida ELSE 0 END), 0) unidades,
@@ -151,13 +172,9 @@ def _breakdown(db: Session, empresa_id: int, starts: tuple[date, date], ends: tu
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
         LEFT JOIN clientes c ON c.id = v.cliente_id
         WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :ps AND :ce {FILTER_SQL}
-        GROUP BY {expression}
+        GROUP BY {identifier_expression}, {display_expression}
         HAVING SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN ABS(v.ingreso_total) ELSE 0 END) > 0
             OR SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN ABS(v.ingreso_total) ELSE 0 END) > 0
-        ORDER BY ABS(
-          SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END)
-          - SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END)
-        ) DESC LIMIT 100
     """), {"empresa_id": empresa_id, "cs": current_start, "ce": current_end,
              "ps": previous_start, "pe": previous_end, **filters}).mappings().all()
     items = []
@@ -165,14 +182,30 @@ def _breakdown(db: Session, empresa_id: int, starts: tuple[date, date], ends: tu
         sales, previous_sales = _number(row["ventas_eur"]), _number(row["ventas_anterior_eur"])
         margin = _number(row["margen_eur"])
         items.append({
-            "entidad": row["entidad"], "ventas_eur": sales, "ventas_anterior_eur": previous_sales,
+            "entidad_id": str(row["entidad_id"]), "entidad": row["entidad"],
+            "ventas_eur": sales, "ventas_anterior_eur": previous_sales,
             "variacion_eur": sales - previous_sales, "variacion_pct": _pct(sales, previous_sales),
             "peso_pct": round(sales / total_sales * 100, 2) if total_sales else 0,
             "unidades": int(row["unidades"] or 0), "margen_eur": margin,
             "margen_pct": round(margin / sales * 100, 2) if sales else None,
             "mgd_eur": _number(row["mgd_eur"]), "skus": int(row["skus"] or 0),
         })
-    return {"dimension": dimension, "etiqueta": label, "filas": items}
+    leader = max(items, key=lambda item: item["ventas_eur"], default=None)
+    growth = max((item for item in items if item["variacion_eur"] > 0),
+                 key=lambda item: item["variacion_eur"], default=None)
+    decline = min((item for item in items if item["variacion_eur"] < 0),
+                  key=lambda item: item["variacion_eur"], default=None)
+    rows = sorted(items, key=lambda item: abs(item["variacion_eur"]), reverse=True)[:100]
+    return {
+        "dimension": dimension,
+        "etiqueta": label,
+        "resumen": {
+            "mayor_facturacion": leader,
+            "mayor_crecimiento": growth,
+            "mayor_caida": decline,
+        },
+        "filas": rows,
+    }
 
 
 def _filter_options(db: Session, empresa_id: int) -> dict:

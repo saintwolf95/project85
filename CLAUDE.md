@@ -50,7 +50,7 @@ La ruta interna `/alerts` también está documentada porque sigue registrada en 
 **Todo cambio funcional, de interfaz, API, datos, documentación operativa o corrección debe quedar versionado y publicado en GitHub antes de considerarse terminado.**
 
 1. Incrementar versión en los cuatro puntos: `app/main.py`, `frontend/package.json`, `frontend/package-lock.json` y `frontend/src/config/version.ts`.
-2. Ejecutar verificaciones proporcionales: `python -m unittest ...`, `python -m compileall -q app`, `npm.cmd run build` y `git diff --check` cuando apliquen.
+2. Ejecutar verificaciones proporcionales: `python -m unittest discover -s tests -t .`, `python -m compileall -q app`, `npm.cmd run build` y `git diff --check` cuando apliquen.
 3. Crear commit en `main` con el formato acordado: `Tipo (v.1.XX) : Descripción breve en español`.
 4. Subir con `git push origin main` y verificar que el hash local coincide con `refs/heads/main`.
 5. Informar la versión publicada y que el redeploy puede requerir recarga forzada del navegador.
@@ -156,3 +156,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El Dashboard filtra en backend por familia, marca, Familia/Marca y sección. Todas las consultas de ventas, inventario, ABCXYZ y desgloses deben aplicar simultáneamente esos filtros y `empresa_id`.
 - La evolución mensual incluye comparación contra las mismas fechas del año anterior, con meses sin actividad a cero y variaciones calculadas en backend.
 - La vista Detalle de ventas agrupa mediante una lista blanca SQL por comercial de factura, cliente, familia, marca o sección. Entrega ventas actuales/anteriores, variación, peso, unidades, margen, MGD y SKU; no calcular estos agregados desde una muestra del frontend.
+
+## Actualización v1.42 — exactitud del detalle gerencial
+
+- Los líderes de facturación, crecimiento y caída se calculan en backend sobre el universo completo de segmentos antes de limitar la tabla a los 100 de mayor variación absoluta.
+- Un líder de crecimiento requiere variación positiva y uno de caída requiere variación negativa; si no existe el signo correspondiente, la interfaz debe indicarlo sin elegir un segmento contrario.
+- El desglose por cliente usa `ClientePK` como identidad estable y muestra `ClientePK · Nombre Cliente`; nunca agrupar clientes distintos únicamente porque compartan nombre.
+- Las pruebas que importan la aplicación deben aislar las variables de conexión locales para no depender de un `.env` de producción ni relajar la obligación de `DATABASE_RO_URL` en PostgreSQL real.

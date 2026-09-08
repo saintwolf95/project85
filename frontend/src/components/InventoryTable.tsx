@@ -24,29 +24,13 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
     if (risk === "Riesgo Comercial") colorClasses = "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/30";
 
     return (
-      <span key={i} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium border ${colorClasses} whitespace-nowrap`}>
+      <span key={i} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${colorClasses} whitespace-nowrap`}>
         {risk}
       </span>
     );
   };
 
-  const getRowClasses = (item: ProductMetrics) => {
-    const risks = item.riesgos_categorizados || [];
-    if (!item.inventario_disponible) {
-      return "bg-slate-50/60 hover:bg-slate-100 dark:bg-slate-900/20 dark:hover:bg-slate-800/40 border-l-4 border-l-slate-300 dark:border-l-slate-700";
-    }
-    if (risks.includes("Alerta Rotura")) {
-      return "bg-red-50/80 hover:bg-red-100 dark:bg-red-900/10 dark:hover:bg-red-900/20 border-l-4 border-l-red-500";
-    }
-    if (risks.includes("Riesgo Rotura") || risks.includes("Riesgo Financiero")) {
-      return "bg-orange-50/80 hover:bg-orange-100 dark:bg-orange-900/10 dark:hover:bg-orange-900/20 border-l-4 border-l-orange-500";
-    }
-    if (risks.includes("Riesgo Comercial")) {
-      return "bg-yellow-50/80 hover:bg-yellow-100 dark:bg-yellow-900/10 dark:hover:bg-yellow-900/20 border-l-4 border-l-yellow-500";
-    }
-    // Sano
-    return "bg-emerald-50/80 hover:bg-emerald-100 dark:bg-emerald-900/10 dark:hover:bg-emerald-900/20 border-l-4 border-l-emerald-500";
-  };
+  const getRowClasses = () => "transition-colors hover:bg-black/[0.025] dark:hover:bg-slate-800/30";
 
   const handleSort = (key: keyof ProductMetrics) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -77,40 +61,40 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
   return (
     <div className="flex flex-col h-full">
       {/* Título de la sección */}
-      <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-        <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Inventario Inteligente</h3>
+      <div className="shrink-0 border-b border-black/[0.08] px-5 py-4 dark:border-slate-800">
+        <h3 className="text-[20px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-white">Catálogo de inventario</h3>
       </div>
       {/* Scroll area que ocupa todo el espacio restante */}
       <div className="flex-1 min-h-0 overflow-auto">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
+          <thead className="sticky top-0 z-10 border-b border-black/[0.08] bg-[#fbfbfd] dark:border-slate-800 dark:bg-slate-900">
             <tr>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('cod_art')}>CodArt {sortIcon('cod_art')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('nombre_art')}>NombreArt {sortIcon('nombre_art')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('familia')}>Familia {sortIcon('familia')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('seccion')}>Sección {sortIcon('seccion')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('marca')}>Marca {sortIcon('marca')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('product_manager')}>PM {sortIcon('product_manager')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('precio_unit')}>PrecioUnit {sortIcon('precio_unit')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades')}>Unidades {sortIcon('unidades')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('valor_inv')}>ValorInv {sortIcon('valor_inv')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('unidades_venta_90d')}>U. Venta (90D) {sortIcon('unidades_venta_90d')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ventas_90d')}>Ventas (90D) {sortIcon('ventas_90d')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('ads')}>ADS {sortIcon('ads')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-right cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('dias_cobertura')}>Días Cob. {sortIcon('dias_cobertura')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-brand-blue dark:text-brand-cyan uppercase tracking-wider whitespace-nowrap text-center cursor-pointer hover:text-brand-cyan" onClick={() => handleSort('matriz_abc')}>Matriz ABCXYZ {sortIcon('matriz_abc')}</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Estado / Riesgos</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Acciones</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('cod_art')}>SKU {sortIcon('cod_art')}</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('nombre_art')}>Artículo {sortIcon('nombre_art')}</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('familia')}>Familia {sortIcon('familia')}</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('seccion')}>Sección {sortIcon('seccion')}</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('marca')}>Marca {sortIcon('marca')}</th>
+              <th className="px-4 py-3 text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('product_manager')}>PM {sortIcon('product_manager')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('precio_unit')}>Precio unit. {sortIcon('precio_unit')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('unidades')}>Unidades {sortIcon('unidades')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('valor_inv')}>Valor inventario {sortIcon('valor_inv')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('unidades_venta_90d')}>U. venta 90D {sortIcon('unidades_venta_90d')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('ventas_90d')}>Ventas 90D {sortIcon('ventas_90d')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('ads')}>ADS {sortIcon('ads')}</th>
+              <th className="px-4 py-3 text-right text-[11px] font-medium text-[#6e6e73] whitespace-nowrap cursor-pointer hover:text-[#0071e3]" onClick={() => handleSort('dias_cobertura')}>Cobertura {sortIcon('dias_cobertura')}</th>
+              <th className="px-4 py-3 text-center text-[11px] font-medium text-[#0071e3] whitespace-nowrap cursor-pointer hover:text-[#0077ed]" onClick={() => handleSort('matriz_abc')}>Matriz {sortIcon('matriz_abc')}</th>
+              <th className="px-4 py-3 text-center text-[11px] font-medium text-[#6e6e73] whitespace-nowrap">Estado</th>
+              <th className="px-4 py-3 text-center text-[11px] font-medium text-[#6e6e73] whitespace-nowrap">Acciones</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-transparent">
+          <tbody className="divide-y divide-black/[0.06] bg-white dark:divide-slate-800/50 dark:bg-transparent">
             {sortedData.map((item) => (
               <tr 
                 key={item.cod_art} 
-                className={`transition-colors ${getRowClasses(item)}`}
+                className={getRowClasses()}
               >
-                <td className="px-4 py-4 text-sm font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{item.cod_art}</td>
-                <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[200px] truncate" title={item.nombre_art}>{item.nombre_art}</td>
+                <td className="px-4 py-3.5 text-[13px] font-medium text-[#1d1d1f] dark:text-slate-200 whitespace-nowrap">{item.cod_art}</td>
+                <td className="max-w-[200px] truncate px-4 py-3.5 text-[13px] text-[#424245] dark:text-slate-400 whitespace-nowrap" title={item.nombre_art}>{item.nombre_art}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.familia}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.seccion || '-'}</td>
                 <td className="px-4 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{item.marca}</td>
@@ -162,11 +146,11 @@ export const InventoryTable: React.FC<Props> = ({ data }) => {
               </tr>
             ))}
           </tbody>
-          <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 sticky bottom-0 z-10 font-bold">
+          <tfoot className="sticky bottom-0 z-10 border-t border-black/[0.08] bg-[#fbfbfd] font-semibold dark:border-slate-800 dark:bg-slate-900">
             <tr>
-              <td colSpan={8} className="px-4 py-4 text-right text-slate-700 dark:text-white">TOTALES (Página)</td>
-              <td className="px-4 py-4 text-right text-slate-900 dark:text-white">{totalStock}</td>
-              <td className="px-4 py-4 text-right text-slate-900 dark:text-white">{formatEUR(totalValue)}</td>
+              <td colSpan={8} className="px-4 py-4 text-right text-[13px] text-[#424245] dark:text-white">Totales de la página</td>
+              <td className="intelligence-tnum px-4 py-4 text-right text-[13px] text-[#1d1d1f] dark:text-white">{totalStock}</td>
+              <td className="intelligence-tnum px-4 py-4 text-right text-[13px] text-[#1d1d1f] dark:text-white">{formatEUR(totalValue)}</td>
               <td colSpan={6}></td>
             </tr>
           </tfoot>

@@ -48,3 +48,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Las consultas comparativas de desglose e impulsores deben usar dos ventanas exactas unidas por `OR`; no leer fechas intermedias que después serán descartadas por agregación condicional.
 - Cachear por empresa las opciones de filtros durante 15 minutos e invalidarlas junto con la caché ejecutiva tras cualquier importación.
 - La serie mensual expone `cobertura_inicio`, `cobertura_fin` y `parcial`; representar todos los meses parciales con su rango real.
+
+## Actualización v1.45 — estilo visual del modo claro
+
+- La página conserva su arquitectura (`Home.tsx`, `DashboardMetrics.tsx`, `DashboardCharts.tsx`, `DashboardBreakdown.tsx`), datos e interacciones. El cambio es exclusivamente de UI del Dashboard en tema claro.
+- Aplicar tipografía de sistema, superficies blancas, fondo secundario `#F5F5F7`, azul `#0071E3` para acciones y separadores de baja opacidad. Evitar gradientes decorativos, exceso de bordes y tarjetas coloreadas por decoración.
+- Las tablas usan encabezados en frase, números con `tabular-nums`, separadores horizontales y variaciones con flecha + color. Los gráficos no usan líneas verticales y reservan colores semánticos para resultados positivos/negativos.
+- No rediseñar el modo oscuro hasta una petición específica; mantener sus clases y contraste actuales.

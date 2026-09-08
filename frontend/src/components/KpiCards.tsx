@@ -12,17 +12,17 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
   if (!kpis) return null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
       {/* Valor Total del Inventario */}
-      <div className="bg-white dark:bg-brand-surface rounded-xl p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm dark:shadow-none">
+      <div className="bg-white dark:bg-brand-surface rounded-[20px] p-6 border border-black/[0.08] dark:border-slate-800 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:shadow-none">
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Valor Total del Inventario</p>
-          <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+          <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 mb-2">Valor total del inventario</p>
+          <h3 className="intelligence-tnum text-[30px] font-semibold leading-none tracking-[-0.02em] text-[#1d1d1f] dark:text-white">
             {formatEUR(kpis.valor_total_inventario)}
           </h3>
         </div>
-        <div className="h-12 w-12 bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan rounded-full flex items-center justify-center border border-brand-blue/20 dark:border-brand-cyan/20">
-          <DollarSign size={24} />
+        <div className="h-11 w-11 bg-[#0071E3]/10 dark:bg-brand-cyan/10 text-[#0071E3] dark:text-brand-cyan rounded-xl flex items-center justify-center">
+          <DollarSign size={20} strokeWidth={1.75} />
         </div>
       </div>
 
@@ -31,16 +31,16 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
         type="button"
         disabled={!onCardClick}
         onClick={() => onCardClick?.('criticas')}
-        className={`bg-white dark:bg-brand-surface rounded-xl p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-red-500/50 transition-colors' : ''}`}
+        className={`bg-white dark:bg-brand-surface rounded-[20px] p-6 border border-black/[0.08] dark:border-slate-800 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-red-500/40 transition-colors duration-150' : ''}`}
       >
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Alertas Críticas</p>
-          <h3 className={`text-2xl font-bold ${kpis.total_alertas_criticas > 0 ? 'text-red-600 dark:text-red-500' : 'text-slate-900 dark:text-white'}`}>
+          <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 mb-2">Alertas críticas</p>
+          <h3 className={`intelligence-tnum text-[30px] font-semibold leading-none tracking-[-0.02em] ${kpis.total_alertas_criticas > 0 ? 'text-red-600 dark:text-red-500' : 'text-[#1d1d1f] dark:text-white'}`}>
             {kpis.total_alertas_criticas}
           </h3>
         </div>
-        <div className="h-12 w-12 bg-red-500/10 text-red-600 dark:text-red-500 rounded-full flex items-center justify-center border border-red-500/20">
-          <AlertTriangle size={24} />
+        <div className="h-11 w-11 bg-red-500/10 text-red-600 dark:text-red-500 rounded-xl flex items-center justify-center">
+          <AlertTriangle size={20} strokeWidth={1.75} />
         </div>
       </button>
 
@@ -49,16 +49,16 @@ export const KpiCards: React.FC<Props> = ({ kpis, onCardClick }) => {
         type="button"
         disabled={!onCardClick}
         onClick={() => onCardClick?.('claseA')}
-        className={`bg-white dark:bg-brand-surface rounded-xl p-6 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-sm dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-amber-500/50 transition-colors' : ''}`}
+        className={`bg-white dark:bg-brand-surface rounded-[20px] p-6 border border-black/[0.08] dark:border-slate-800 flex items-center justify-between shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:shadow-none ${onCardClick ? 'cursor-pointer hover:border-amber-500/40 transition-colors duration-150' : ''}`}
       >
         <div>
-          <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">Alertas Clase A</p>
-          <h3 className={`text-2xl font-bold ${kpis.salud_stock_clase_a > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-slate-900 dark:text-white'}`}>
+          <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400 mb-2">Alertas de clase A</p>
+          <h3 className={`intelligence-tnum text-[30px] font-semibold leading-none tracking-[-0.02em] ${kpis.salud_stock_clase_a > 0 ? 'text-amber-600 dark:text-amber-500' : 'text-[#1d1d1f] dark:text-white'}`}>
             {kpis.salud_stock_clase_a}
           </h3>
         </div>
-        <div className={`h-12 w-12 rounded-full flex items-center justify-center border ${kpis.salud_stock_clase_a === 0 ? 'bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan border-brand-blue/20 dark:border-brand-cyan/20' : 'bg-amber-500/10 text-amber-600 dark:text-amber-500 border-amber-500/20'}`}>
-          <ShieldCheck size={24} />
+        <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${kpis.salud_stock_clase_a === 0 ? 'bg-[#0071E3]/10 dark:bg-brand-cyan/10 text-[#0071E3] dark:text-brand-cyan' : 'bg-amber-500/10 text-amber-600 dark:text-amber-500'}`}>
+          <ShieldCheck size={20} strokeWidth={1.75} />
         </div>
       </button>
     </div>

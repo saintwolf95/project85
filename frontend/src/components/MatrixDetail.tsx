@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ProductMetrics } from '../services/api';
 import { formatEUR } from '../utils/formatters';
-import { Download } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface MatrixDetailProps {
@@ -14,8 +14,10 @@ const SortIcon = ({ columnKey, activeKey, direction }: {
   activeKey: keyof ProductMetrics | null;
   direction: 'asc' | 'desc';
 }) => {
-  if (activeKey !== columnKey) return <span className="ml-1 opacity-20">↕</span>;
-  return direction === 'asc' ? <span className="ml-1">↑</span> : <span className="ml-1">↓</span>;
+  if (activeKey !== columnKey) return <ChevronsUpDown className="ml-1 inline-block h-3 w-3 opacity-30" />;
+  return direction === 'asc'
+    ? <ArrowUp className="ml-1 inline-block h-3 w-3" />
+    : <ArrowDown className="ml-1 inline-block h-3 w-3" />;
 };
 
 export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) => {
@@ -62,24 +64,24 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
 
   if (!cellId) {
     return (
-      <div className="bg-white dark:bg-brand-surface rounded-xl border border-slate-200 dark:border-slate-800 p-8 h-full flex flex-col items-center justify-center text-center">
-        <h3 className="title-corporate mb-2">Detalle de Cuadrante</h3>
-        <p className="text-slate-500 dark:text-slate-400">Haz clic en cualquier cuadrante de la matriz para ver sus productos correspondientes.</p>
+      <div className="flex h-full flex-col items-center justify-center rounded-[20px] border border-black/[0.08] bg-white p-8 text-center shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-brand-surface">
+        <h3 className="title-corporate mb-2 text-[20px] font-semibold tracking-[-0.02em]">Detalle de cuadrante</h3>
+        <p className="max-w-sm text-[14px] text-[#6e6e73] dark:text-slate-400">Selecciona un cuadrante de la matriz para ver los artículos que lo componen.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-brand-surface rounded-xl border border-slate-200 dark:border-slate-800 h-full flex flex-col shadow-sm">
-      <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+    <div className="flex h-full flex-col rounded-[20px] border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-brand-surface">
+      <div className="flex items-center justify-between border-b border-black/[0.08] p-5 dark:border-slate-800">
         <div>
-          <h3 className="title-corporate text-lg">Cuadrante {cellId}</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{products.length} productos listados</p>
+          <h3 className="title-corporate text-[20px] font-semibold tracking-[-0.02em]">Cuadrante {cellId}</h3>
+          <p className="mt-1 text-[13px] text-[#6e6e73] dark:text-slate-400">{products.length.toLocaleString('es-ES')} artículos</p>
         </div>
         <button 
           onClick={exportToExcel}
           disabled={products.length === 0}
-          className="flex items-center gap-2 px-3 py-1.5 bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan rounded-lg hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 transition-colors text-sm font-medium disabled:opacity-50"
+          className="flex min-h-9 items-center gap-2 rounded-[9px] border border-black/[0.1] px-3 py-1.5 text-[12px] font-medium text-[#0071e3] transition-colors hover:border-[#0071e3]/40 hover:bg-[#0071e3]/[0.06] disabled:opacity-40 dark:border-slate-700 dark:text-brand-cyan"
         >
           <Download size={16} />
           Exportar Excel
@@ -87,22 +89,22 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar p-0">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800">
+          <thead className="sticky top-0 z-10 border-b border-black/[0.08] bg-[#fbfbfd] dark:border-slate-800 dark:bg-slate-900">
             <tr>
-              <th className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider w-10">#</th>
+              <th className="w-10 px-4 py-3 text-[11px] font-medium text-[#6e6e73]">#</th>
               {([
                 ['cod_art', 'CodArt', false], ['nombre_art', 'Nombre', false], ['familia', 'Categoría', false],
                 ['ventas_90d', 'Ventas 90D', true], ['valor_inv', 'Inv. (€)', true], ['unidades', 'Unidades', true],
               ] as [keyof ProductMetrics, string, boolean][]).map(([key, label, right]) => (
-                <th key={key} className={`px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider ${right ? 'text-right ' : ''}cursor-pointer hover:text-brand-cyan`} onClick={() => handleSort(key)}>
+                <th key={key} className={`px-4 py-3 text-[11px] font-medium text-[#6e6e73] ${right ? 'text-right ' : ''}cursor-pointer hover:text-[#0071e3]`} onClick={() => handleSort(key)}>
                   {label} <SortIcon columnKey={key} activeKey={sortConfig.key} direction={sortConfig.direction} />
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+          <tbody className="divide-y divide-black/[0.06] dark:divide-slate-800/50">
             {sortedProducts.map((p, index) => (
-              <tr key={p.cod_art} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+              <tr key={p.cod_art} className="transition-colors hover:bg-black/[0.025] dark:hover:bg-slate-800/30">
                 <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400 font-medium">{index + 1}</td>
                 <td className="px-4 py-3 text-sm text-slate-800 dark:text-slate-300 font-medium">{p.cod_art}</td>
                 <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 max-w-[150px] truncate" title={p.nombre_art}>{p.nombre_art}</td>
@@ -120,12 +122,12 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
           </tbody>
         </table>
       </div>
-      <div className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4 rounded-b-xl flex justify-between items-center font-bold">
-        <span className="text-slate-700 dark:text-white">TOTALES</span>
-        <div className="flex gap-8">
-          <span className="text-brand-blue dark:text-brand-cyan">Ventas: {formatEUR(totalVentas)}</span>
-          <span className="text-emerald-600 dark:text-emerald-500">Inv: {formatEUR(totalInventario)}</span>
-          <span className="text-slate-900 dark:text-white">Unidades: {totalUnidades.toLocaleString('es-ES')}</span>
+      <div className="flex items-center justify-between rounded-b-[20px] border-t border-black/[0.08] bg-[#fbfbfd] p-4 text-[13px] font-semibold dark:border-slate-800 dark:bg-slate-900">
+        <span className="text-[#424245] dark:text-white">Totales</span>
+        <div className="intelligence-tnum flex gap-5">
+          <span className="text-[#0071e3] dark:text-brand-cyan">Ventas: {formatEUR(totalVentas)}</span>
+          <span className="text-[#1d1d1f] dark:text-white">Inventario: {formatEUR(totalInventario)}</span>
+          <span className="text-[#1d1d1f] dark:text-white">Unidades: {totalUnidades.toLocaleString('es-ES')}</span>
         </div>
       </div>
     </div>

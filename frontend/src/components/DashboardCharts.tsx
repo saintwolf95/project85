@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DashboardExecutiveResponse } from '../services/api';
 import { formatEUR } from '../utils/formatters';
@@ -37,13 +38,16 @@ interface TooltipBoxProps {
 const TooltipBox = ({ active, payload, label }: TooltipBoxProps) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 text-xs shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-950/95">
-      <p className="mb-2 font-semibold text-slate-900 dark:text-white">{label}</p>
-      {payload.map(item => (
-        <p key={String(item.dataKey)} className="mt-1" style={{ color: item.color }}>
-          {item.name}: {formatEUR(Number(item.value))}
-        </p>
-      ))}
+    <div className="min-w-40 rounded-xl border border-black/[0.08] bg-white px-3 py-2.5 text-[13px] shadow-[0_8px_24px_rgba(0,0,0,.08)] dark:border-slate-700 dark:bg-slate-950">
+      <p className="mb-2 text-[12px] font-medium text-slate-500 dark:text-slate-400">{label}</p>
+      <div className="space-y-1.5">
+        {payload.map(item => (
+          <div key={String(item.dataKey)} className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.name}</span>
+            <span className="dashboard-tnum font-medium text-[#1d1d1f] dark:text-white">{formatEUR(Number(item.value))}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
@@ -69,68 +73,68 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
   };
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-7">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+      <section className="min-w-0 rounded-[20px] border border-black/[0.08] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:border-slate-800 dark:bg-brand-surface xl:col-span-7">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-slate-950 dark:text-white">Evolución comercial mensual</h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">Evolución comercial mensual</h2>
+            <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400">
               Ventas netas y MGD.
               {partialMonths.length > 0 && ` Meses parciales: ${partialMonths.map(item => `${item.label} (${dayMonthLabel(item.cobertura_inicio)}–${dayMonthLabel(item.cobertura_fin)})`).join(', ')}.`}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-3 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" />Ventas</span>
-            {compareYoY && <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-300 dark:bg-slate-600" />Año anterior</span>}
-            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-emerald-400" />MGD</span>
-            <button onClick={() => setCompareYoY(value => !value)} className={`rounded-lg border px-2.5 py-1.5 font-semibold transition ${compareYoY ? 'border-blue-200 bg-blue-50 text-blue-600 dark:border-cyan-800 dark:bg-cyan-950/40 dark:text-cyan-400' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>Comparar año anterior: {compareYoY ? 'Sí' : 'No'}</button>
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2 text-[12px] text-slate-500">
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#0071E3]" />Ventas</span>
+            {compareYoY && <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#d2d2d7] dark:bg-slate-600" />Año anterior</span>}
+            <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 bg-emerald-500" />MGD</span>
+            <button onClick={() => setCompareYoY(value => !value)} className={`min-h-9 rounded-[10px] px-3 text-[13px] font-medium transition-all duration-150 active:scale-[.97] ${compareYoY ? 'bg-[#0071E3]/10 text-[#0071E3] dark:bg-cyan-950/40 dark:text-cyan-400' : 'bg-[#f5f5f7] text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>Comparar año anterior: {compareYoY ? 'Sí' : 'No'}</button>
           </div>
         </div>
         <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 1, height: 320 }}>
             <ComposedChart data={monthly} margin={{ top: 10, right: 8, left: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.18} />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={11} stroke="#94a3b8" />
-              <YAxis tickFormatter={compactEUR} tickLine={false} axisLine={false} width={70} fontSize={11} stroke="#94a3b8" />
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#1d1d1f" opacity={0.1} />
+              <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} stroke="#86868b" dy={8} />
+              <YAxis tickFormatter={compactEUR} tickLine={false} axisLine={false} width={70} fontSize={12} stroke="#86868b" />
               <Tooltip content={<TooltipBox />} />
-              {compareYoY && <Bar name="Ventas año anterior" dataKey="ventas_anterior_eur" fill="#94A3B8" radius={[5, 5, 0, 0]} maxBarSize={30} opacity={0.55} />}
-              <Bar name="Ventas netas" dataKey="ventas_eur" fill="#2563EB" radius={[5, 5, 0, 0]} maxBarSize={42} />
-              <Line name="MGD" dataKey="mgd_eur" stroke="#34D399" strokeWidth={2.5} dot={{ r: 3, fill: '#34D399' }} />
+              {compareYoY && <Bar name="Ventas año anterior" dataKey="ventas_anterior_eur" fill="#D2D2D7" radius={[6, 6, 0, 0]} maxBarSize={30} />}
+              <Bar name="Ventas netas" dataKey="ventas_eur" fill="#0071E3" radius={[6, 6, 0, 0]} maxBarSize={42} />
+              <Line name="MGD" dataKey="mgd_eur" stroke="#34C759" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#ffffff' }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        {compareYoY && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800"><table className="w-full min-w-[540px] text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500 dark:bg-slate-900"><tr><th className="px-3 py-2 text-left">Mes</th><th className="px-3 py-2 text-right">Ventas actuales</th><th className="px-3 py-2 text-right">Año anterior</th><th className="px-3 py-2 text-right">Variación</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{monthly.map(item => <tr key={item.mes}><td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{item.label}{item.parcial && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Parcial {dayMonthLabel(item.cobertura_inicio)}–{dayMonthLabel(item.cobertura_fin)}</span>}</td><td className="px-3 py-2 text-right">{formatEUR(item.ventas_eur)}</td><td className="px-3 py-2 text-right text-slate-500">{formatEUR(item.ventas_anterior_eur)}</td><td className={`px-3 py-2 text-right font-bold ${item.variacion_eur >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{item.variacion_eur >= 0 ? '+' : '−'}{formatEUR(Math.abs(item.variacion_eur))}<span className="ml-1 text-[10px] font-medium">({item.variacion_pct == null ? 'sin base' : `${item.variacion_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`})</span></td></tr>)}</tbody></table></div>}
+        {compareYoY && <div className="mt-5 overflow-x-auto rounded-[16px] border border-black/[0.08] dark:border-slate-800"><table className="w-full min-w-[540px] border-collapse text-[13px]"><thead className="border-b border-black/[0.08] text-[12px] font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900"><tr><th className="px-4 py-3 text-left font-medium">Mes</th><th className="px-4 py-3 text-right font-medium">Ventas actuales</th><th className="px-4 py-3 text-right font-medium">Año anterior</th><th className="px-4 py-3 text-right font-medium">Variación</th></tr></thead><tbody className="divide-y divide-black/[0.08] dark:divide-slate-800">{monthly.map(item => { const positive = item.variacion_eur >= 0; const DeltaIcon = positive ? ArrowUpRight : ArrowDownRight; return <tr key={item.mes} className="transition-colors duration-150 hover:bg-black/[0.025] dark:hover:bg-slate-800/40"><td className="px-4 py-3.5 font-medium text-[#1d1d1f] dark:text-slate-200">{item.label}{item.parcial && <span className="ml-2 inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Parcial {dayMonthLabel(item.cobertura_inicio)}–{dayMonthLabel(item.cobertura_fin)}</span>}</td><td className="dashboard-tnum px-4 py-3.5 text-right text-[#1d1d1f] dark:text-white">{formatEUR(item.ventas_eur)}</td><td className="dashboard-tnum px-4 py-3.5 text-right text-slate-500">{formatEUR(item.ventas_anterior_eur)}</td><td className={`dashboard-tnum px-4 py-3.5 text-right font-medium ${positive ? 'text-emerald-600' : 'text-red-600'}`}><span className="inline-flex items-center gap-1"><DeltaIcon size={14} strokeWidth={2} />{positive ? '+' : '−'}{formatEUR(Math.abs(item.variacion_eur))}</span><span className="ml-1 text-[11px] font-normal">({item.variacion_pct == null ? 'sin base' : `${item.variacion_pct.toLocaleString('es-ES', { maximumFractionDigits: 1 })}%`})</span></td></tr>; })}</tbody></table></div>}
       </section>
 
-      <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">
-        <div className="mb-5">
-          <h2 className="text-base font-bold text-slate-950 dark:text-white">Familias que explican el cambio</h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Variación absoluta frente al período comparable. Haz clic para filtrar.</p>
+      <section className="min-w-0 rounded-[20px] border border-black/[0.08] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:border-slate-800 dark:bg-brand-surface xl:col-span-5">
+        <div className="mb-6">
+          <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">Familias que explican el cambio</h2>
+          <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400">Variación absoluta frente al período comparable. Haz clic para filtrar.</p>
         </div>
         <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 1, height: 320 }}>
             <BarChart data={drivers} layout="vertical" margin={{ top: 5, right: 18, left: 4, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#334155" opacity={0.18} />
-              <XAxis type="number" tickFormatter={compactEUR} tickLine={false} axisLine={false} fontSize={10} stroke="#94a3b8" />
-              <YAxis type="category" dataKey="familia" width={105} tickLine={false} axisLine={false} fontSize={11} stroke="#94a3b8" />
+              <CartesianGrid strokeDasharray="4 4" horizontal={false} stroke="#1d1d1f" opacity={0.1} />
+              <XAxis type="number" tickFormatter={compactEUR} tickLine={false} axisLine={false} fontSize={12} stroke="#86868b" />
+              <YAxis type="category" dataKey="familia" width={105} tickLine={false} axisLine={false} fontSize={12} stroke="#86868b" />
               <Tooltip content={<TooltipBox />} />
               <Bar name="Variación" dataKey="variacion_eur" radius={[0, 5, 5, 0]} onClick={selectFamily} className="cursor-pointer">
-                {drivers.map(item => <Cell key={item.familia} fill={item.variacion_eur >= 0 ? '#10B981' : '#F43F5E'} />)}
+                {drivers.map(item => <Cell key={item.familia} fill={item.variacion_eur >= 0 ? '#34C759' : '#FF3B30'} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-brand-surface xl:col-span-12">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+      <section className="rounded-[20px] border border-black/[0.08] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,.04),0_2px_8px_rgba(0,0,0,.04)] dark:border-slate-800 dark:bg-brand-surface xl:col-span-12">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-slate-950 dark:text-white">Mapa ABCXYZ del negocio</h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A/B/C = contribución a ventas 90D · X/Y/Z = concentración de inventario actual.</p>
+            <h2 className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">Mapa ABCXYZ del negocio</h2>
+            <p className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400">A/B/C = contribución a ventas 90D · X/Y/Z = concentración de inventario actual.</p>
           </div>
-          <div className="flex rounded-lg bg-slate-100 p-1 dark:bg-slate-900">
+          <div className="flex rounded-xl bg-[#f5f5f7] p-1 dark:bg-slate-900">
             {([['inventario_eur', 'Inventario €'], ['ventas_90d_eur', 'Ventas 90D'], ['skus', 'SKU']] as const).map(([key, label]) => (
-              <button key={key} onClick={() => setMatrixMetric(key)} className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${matrixMetric === key ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-800 dark:text-cyan-400' : 'text-slate-500'}`}>
+              <button key={key} onClick={() => setMatrixMetric(key)} className={`min-h-8 rounded-[9px] px-3 text-[12px] font-medium transition-all duration-150 active:scale-[.97] ${matrixMetric === key ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(0,0,0,.08)] dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}>
                 {label}
               </button>
             ))}
@@ -138,17 +142,16 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
         </div>
         <div className="grid grid-cols-3 gap-2 md:gap-3">
           {matrix.map(item => {
-            const intensity = Math.max(0.08, Number(item[matrixMetric]) / maxMatrix * 0.72);
+            const intensity = Math.max(0.06, Number(item[matrixMetric]) / maxMatrix * 0.3);
             const value = matrixMetric === 'skus' ? `${item.skus.toLocaleString('es-ES')} SKU` : compactEUR(Number(item[matrixMetric]));
             return (
-              <div key={item.cuadrante} className="relative overflow-hidden rounded-xl border border-slate-200 p-3 dark:border-slate-700 md:p-4">
-                <div className="absolute inset-0 bg-blue-500" style={{ opacity: intensity }} />
+              <div key={item.cuadrante} className="relative overflow-hidden rounded-[16px] border border-black/[0.08] p-4 dark:border-slate-700 md:p-5" style={{ background: `color-mix(in srgb, var(--dashboard-accent) ${Math.round(intensity * 100)}%, var(--dashboard-surface))` }}>
                 <div className="relative">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-lg font-black text-slate-950 dark:text-white">{item.cuadrante}</span>
-                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-300">{item.skus.toLocaleString('es-ES')} SKU</span>
+                    <span className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">{item.cuadrante}</span>
+                    <span className="dashboard-tnum text-[12px] text-slate-500 dark:text-slate-300">{item.skus.toLocaleString('es-ES')} SKU</span>
                   </div>
-                  <p className="mt-3 text-xs font-bold text-slate-800 dark:text-white md:text-sm">{value}</p>
+                  <p className="dashboard-tnum mt-5 text-[15px] font-medium text-[#1d1d1f] dark:text-white">{value}</p>
                 </div>
               </div>
             );

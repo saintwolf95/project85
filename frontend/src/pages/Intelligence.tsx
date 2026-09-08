@@ -206,46 +206,47 @@ export const Intelligence = () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-500 gap-4">
+    <div className="intelligence-apple mx-auto flex h-full w-full max-w-[1560px] flex-col gap-5 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-center shrink-0">
+      <div className="flex items-center justify-between rounded-[24px] border border-black/[0.08] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900">
         <div>
-          <h1 className="title-corporate text-3xl mb-1">Inteligencia ABCXYZ</h1>
-          <p className="text-slate-500 dark:text-slate-400">Análisis predictivo de inventario.</p>
+          <p className="mb-2 text-[12px] font-medium tracking-[0.08em] text-[#86868b] uppercase">Inventario y cobertura</p>
+          <h1 className="title-corporate text-[32px] font-semibold tracking-[-0.035em] text-[#1d1d1f] dark:text-white">Inteligencia ABCXYZ</h1>
+          <p className="mt-1 text-[15px] text-[#6e6e73] dark:text-slate-400">Prioriza el inventario según su impacto comercial y su estabilidad.</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-xl w-full md:w-fit border border-slate-200 dark:border-slate-800 shrink-0 overflow-x-auto custom-scrollbar">
+      <div className="flex w-full gap-1 overflow-x-auto rounded-[12px] border border-black/[0.06] bg-[#f5f5f7] p-1 md:w-fit dark:border-slate-800 dark:bg-slate-900/50 shrink-0 custom-scrollbar">
         <button
           onClick={() => { setActiveTab('general'); setCurrentPage(1); }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'general' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+          className={`min-h-9 whitespace-nowrap rounded-[9px] px-4 py-2 text-[13px] font-medium transition-all ${activeTab === 'general' ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:bg-brand-blue dark:text-white' : 'text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400 dark:hover:text-white'}`}
         >
           Vista General
         </button>
         <button
           onClick={() => { setActiveTab('catalog'); setCurrentPage(1); }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'catalog' ? 'bg-brand-blue text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+          className={`min-h-9 whitespace-nowrap rounded-[9px] px-4 py-2 text-[13px] font-medium transition-all ${activeTab === 'catalog' ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:bg-brand-blue dark:text-white' : 'text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400 dark:hover:text-white'}`}
         >
           Catálogo Interactivo
         </button>
         <button
           onClick={() => { setActiveTab('risks'); setCurrentPage(1); }}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'risks' ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+          className={`min-h-9 whitespace-nowrap rounded-[9px] px-4 py-2 text-[13px] font-medium transition-all ${activeTab === 'risks' ? 'bg-white text-[#1d1d1f] shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:bg-brand-blue dark:text-white' : 'text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400 dark:hover:text-white'}`}
         >
           Alertas de Riesgo
         </button>
       </div>
 
       {error && (
-        <div className="bg-red-500/10 border border-red-500 text-red-500 px-6 py-4 rounded-lg shrink-0">
+        <div className="rounded-[16px] border border-red-200 bg-red-50 px-5 py-4 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 shrink-0">
           <p className="font-medium">{error}</p>
         </div>
       )}
 
       {/* TAB 1: General */}
       {activeTab === 'general' && (
-        <div className="flex flex-col gap-3 flex-1 min-h-0 animate-in fade-in">
+        <div className="flex flex-1 min-h-0 flex-col gap-5 animate-in fade-in">
           {/* KPI Cards — compactas arriba */}
           <div className="shrink-0">
             <KpiCards 
@@ -258,10 +259,10 @@ export const Intelligence = () => {
           </div>
 
           {/* Grid 2 columnas: Izq (Matriz + Mini Dashboard) / Der (Tabla cuadrante) */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 flex-1 min-h-0">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 xl:grid-cols-2">
             
             {/* Columna izquierda — scroll interno para matriz + mini dashboard */}
-            <div className="flex flex-col gap-3 min-h-0 overflow-y-auto custom-scrollbar pb-1">
+            <div className="flex min-h-0 flex-col gap-5 overflow-y-auto pb-1 custom-scrollbar">
               <div className="shrink-0">
                 <Matrix3x3 data={inventoryData} onCellClick={handleCellClick} activeCell={activeCell} />
                 <MatrixBarChart data={inventoryData} />
@@ -290,8 +291,8 @@ export const Intelligence = () => {
       {activeTab === 'catalog' && (
         <div className="flex flex-col flex-1 min-h-0 gap-4 animate-in fade-in">
           {/* Barra de filtros */}
-          <div className="flex flex-col gap-4 justify-between items-start md:items-center bg-slate-100 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shrink-0">
-            <div className="flex flex-row flex-wrap gap-4 w-full">
+          <div className="flex flex-col items-start justify-between gap-5 rounded-[20px] border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900 md:items-center shrink-0">
+            <div className="flex w-full flex-row flex-wrap gap-3">
               <div className="relative w-full md:w-96">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-slate-400 dark:text-slate-500" />
@@ -301,7 +302,7 @@ export const Intelligence = () => {
                   placeholder="Buscar por Nombre, SKU..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan focus:border-brand-blue dark:focus:border-brand-cyan outline-none"
+                  className="min-h-11 w-full rounded-[10px] border border-black/[0.12] bg-white py-2 pl-10 pr-4 text-[13px] text-[#1d1d1f] placeholder:text-[#86868b] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 />
               </div>
               <div className="relative w-full md:w-48">
@@ -311,7 +312,7 @@ export const Intelligence = () => {
                 <select
                   value={claseAbc}
                   onChange={(e) => { setClaseAbc(e.target.value); setCurrentPage(1); }}
-                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white appearance-none focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                  className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todas las clases</option>
                   <option value="A">Clase A (Alta)</option>
@@ -326,7 +327,7 @@ export const Intelligence = () => {
                 <select
                   value={selectedPM}
                   onChange={(e) => { setSelectedPM(e.target.value); setCurrentPage(1); }}
-                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white appearance-none focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                  className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todos los PMs</option>
                   <option value="JAC">JAC</option>
@@ -343,7 +344,7 @@ export const Intelligence = () => {
                 <select
                   value={selectedSection}
                   onChange={(e) => { setSelectedSection(e.target.value); setCurrentPage(1); }}
-                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white appearance-none focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                  className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todas las Secciones</option>
                   <option value="Informática">Informática</option>
@@ -361,7 +362,7 @@ export const Intelligence = () => {
                 <select
                   value={selectedRisk}
                   onChange={(e) => { setSelectedRisk(e.target.value); setCurrentPage(1); }}
-                  className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white appearance-none focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                  className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todos los Riesgos</option>
                   <option value="Sano">Sano</option>
@@ -376,7 +377,7 @@ export const Intelligence = () => {
                   placeholder="Mín. Días"
                   value={minDays}
                   onChange={(e) => { setMinDays(e.target.value === '' ? '' : Number(e.target.value)); setCurrentPage(1); }}
-                  className="w-24 px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none text-sm"
+                  className="min-h-11 w-24 rounded-[10px] border border-black/[0.12] bg-white px-3 py-2 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 />
                 <span className="text-slate-400">-</span>
                 <input
@@ -384,15 +385,15 @@ export const Intelligence = () => {
                   placeholder="Máx. Días"
                   value={maxDays}
                   onChange={(e) => { setMaxDays(e.target.value === '' ? '' : Number(e.target.value)); setCurrentPage(1); }}
-                  className="w-24 px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none text-sm"
+                  className="min-h-11 w-24 rounded-[10px] border border-black/[0.12] bg-white px-3 py-2 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 />
               </div>
             </div>
-            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Total Artículos: {totalRecords}</span>
+            <div className="flex w-full items-center justify-between gap-4 md:w-auto md:justify-end">
+              <span className="text-[13px] font-medium text-[#6e6e73] dark:text-slate-400">{totalRecords.toLocaleString('es-ES')} artículos</span>
               <button
                 onClick={() => setExportModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 rounded-lg text-sm font-medium hover:bg-emerald-200 dark:hover:bg-emerald-500/30 transition-colors"
+                className="flex min-h-11 items-center gap-2 rounded-[10px] bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed]"
               >
                 <Download size={16} />
                 Exportar Excel
@@ -401,7 +402,7 @@ export const Intelligence = () => {
           </div>
 
           {/* Tabla — flex-1 para que ocupe el espacio restante */}
-          <div className="flex-1 min-h-0 bg-white dark:bg-brand-surface rounded-xl border border-slate-200 dark:border-slate-800 flex flex-col shadow-sm">
+          <div className="flex min-h-0 flex-1 flex-col rounded-[20px] border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-brand-surface">
             {loading ? (
               <div className="flex justify-center items-center flex-1">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue dark:border-brand-cyan"></div>
@@ -412,22 +413,22 @@ export const Intelligence = () => {
               </div>
             )}
             {/* Paginación fija abajo */}
-            <div className="shrink-0 flex items-center justify-between p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 rounded-b-xl">
-              <div className="text-slate-500 dark:text-slate-400 text-sm">
+            <div className="flex shrink-0 items-center justify-between rounded-b-[20px] border-t border-black/[0.08] bg-[#fbfbfd] p-4 dark:border-slate-800 dark:bg-slate-950/50">
+              <div className="text-[13px] text-[#6e6e73] dark:text-slate-400">
                 Página <span className="font-medium text-slate-900 dark:text-white">{currentPage}</span> de <span className="font-medium text-slate-900 dark:text-white">{totalPages}</span> ({totalRecords} registros)
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1 || loading}
-                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-brand-blue dark:hover:text-brand-cyan disabled:opacity-50 transition-colors"
+                  className="rounded-[9px] border border-black/[0.08] bg-white p-2 text-[#6e6e73] transition-colors hover:border-black/[0.16] hover:text-[#0071e3] disabled:opacity-40 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage >= totalPages || loading}
-                  className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-brand-blue dark:hover:text-brand-cyan disabled:opacity-50 transition-colors"
+                  className="rounded-[9px] border border-black/[0.08] bg-white p-2 text-[#6e6e73] transition-colors hover:border-black/[0.16] hover:text-[#0071e3] disabled:opacity-40 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -439,7 +440,7 @@ export const Intelligence = () => {
 
       {/* TAB 3: Risks */}
       {activeTab === 'risks' && (
-        <div className="space-y-6 animate-in fade-in">
+        <div className="space-y-5 animate-in fade-in">
           {loading ? (
             <div className="flex justify-center items-center h-64">
                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
@@ -449,12 +450,12 @@ export const Intelligence = () => {
               <p className="text-lg font-medium">¡Todo en orden! No hay productos en riesgo de ruptura de stock.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
               
               {/* Triage Center Chart */}
-              <div className="xl:col-span-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-sm flex flex-col">
-                <h3 className="title-corporate text-lg mb-1">Triaje por Categoría</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Volumen de artículos en riesgo inminente.</p>
+              <div className="flex flex-col rounded-[20px] border border-black/[0.08] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900 xl:col-span-1">
+                <h3 className="title-corporate mb-1 text-[20px] font-semibold tracking-[-0.02em]">Riesgo por familia</h3>
+                <p className="mb-6 text-[13px] text-[#6e6e73] dark:text-slate-400">Artículos que requieren atención prioritaria.</p>
                 <div className="flex-1 min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -463,13 +464,13 @@ export const Intelligence = () => {
                       margin={{ top: 0, right: 30, left: 20, bottom: 0 }}
                     >
                       <XAxis type="number" hide />
-                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={100} tick={{ fill: '#64748b', fontSize: 12 }} />
-                      <Tooltip cursor={{ fill: 'rgba(239, 68, 68, 0.05)' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={100} tick={{ fill: '#6e6e73', fontSize: 12 }} />
+                      <Tooltip cursor={{ fill: 'rgba(0, 113, 227, 0.05)' }} contentStyle={{ borderRadius: '12px', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 12px 32px rgba(0,0,0,0.10)' }} />
+                      <Bar dataKey="value" radius={[0, 6, 6, 0]}>
                         {riskFamilyData.map((entry, index) => (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={riskFamilyFilter === entry.name || riskFamilyFilter === 'all' ? '#ef4444' : '#fca5a5'} 
+                            fill={riskFamilyFilter === entry.name || riskFamilyFilter === 'all' ? '#0071e3' : '#a7c7ed'}
                             className="cursor-pointer transition-colors"
                             onClick={() => setRiskFamilyFilter(riskFamilyFilter === entry.name ? 'all' : entry.name)}
                           />
@@ -479,7 +480,7 @@ export const Intelligence = () => {
                   </ResponsiveContainer>
                 </div>
                 {riskFamilyFilter !== 'all' && (
-                  <button onClick={() => setRiskFamilyFilter('all')} className="mt-4 text-xs text-brand-blue dark:text-brand-cyan hover:underline self-end">
+                  <button onClick={() => setRiskFamilyFilter('all')} className="mt-4 self-end text-[12px] font-medium text-[#0071e3] hover:underline dark:text-brand-cyan">
                     Limpiar filtro
                   </button>
                 )}
@@ -487,42 +488,42 @@ export const Intelligence = () => {
 
               {/* Risks Grid */}
               <div className="xl:col-span-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {paginatedData
                     .filter(item => riskFamilyFilter === 'all' || item.familia === riskFamilyFilter)
                     .map((item) => (
-                    <div key={item.cod_art} className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-500/30 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow group flex flex-col justify-between">
+                    <div key={item.cod_art} className="group flex flex-col justify-between rounded-[18px] border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] transition-shadow hover:shadow-[0_8px_24px_rgba(0,0,0,0.08)] dark:border-slate-800 dark:bg-slate-900">
                       <div>
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex items-center gap-2">
-                            <div className="bg-red-500/10 p-1.5 rounded-md">
-                              <AlertTriangle className="w-5 h-5 text-red-500" />
+                            <div className="rounded-[9px] bg-red-500/10 p-1.5">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
                             </div>
-                            <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded text-xs font-mono">
+                            <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 font-mono text-[11px] text-[#424245] dark:bg-slate-800 dark:text-slate-300">
                               {item.cod_art}
                             </span>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.abc === 'A' ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30' : 'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400 border border-orange-200 dark:border-orange-500/30'}`}>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${item.abc === 'A' ? 'bg-red-50 text-red-700 dark:bg-red-500/20 dark:text-red-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'}`}>
                             Prioridad {item.abc === 'A' ? 'Alta' : item.abc === 'B' ? 'Media' : 'Baja'}
                           </span>
                         </div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1 line-clamp-1">{item.nombre_art}</h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">{item.marca} • {item.familia}</p>
+                        <h3 className="mb-1 line-clamp-1 text-[15px] font-semibold text-[#1d1d1f] dark:text-white">{item.nombre_art}</h3>
+                        <p className="mb-4 text-[12px] text-[#6e6e73] dark:text-slate-400">{item.marca} · {item.familia}</p>
                         
-                        <div className="flex items-center justify-between mb-4 bg-slate-50 dark:bg-slate-950/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                        <div className="mb-4 flex items-center justify-between rounded-[12px] border border-black/[0.06] bg-[#fbfbfd] p-3 dark:border-slate-800 dark:bg-slate-950/50">
                           <div>
-                            <div className="text-[10px] text-slate-500 uppercase font-medium">Stock</div>
-                            <div className="text-lg font-bold text-red-600 dark:text-red-400">{item.unidades} u.</div>
+                            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#86868b]">Stock</div>
+                            <div className="intelligence-tnum text-[18px] font-semibold text-red-600 dark:text-red-400">{item.unidades} u.</div>
                           </div>
                           <ArrowRight className="w-4 h-4 text-slate-300 dark:text-slate-600" />
                           <div className="text-right">
-                            <div className="text-[10px] text-slate-500 uppercase font-medium">Cobertura</div>
-                            <div className="text-lg font-bold text-slate-900 dark:text-white">{item.dias_cobertura.toFixed(1)} d.</div>
+                            <div className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#86868b]">Cobertura</div>
+                            <div className="intelligence-tnum text-[18px] font-semibold text-[#1d1d1f] dark:text-white">{item.dias_cobertura.toFixed(1)} d.</div>
                           </div>
                         </div>
                       </div>
                       
-                      <button className="w-full bg-red-50 dark:bg-red-500/10 hover:bg-red-500 text-red-600 hover:text-white dark:text-red-400 dark:hover:text-white border border-red-200 dark:border-red-500/20 font-medium py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2">
+                      <button className="flex min-h-10 w-full items-center justify-center gap-2 rounded-[10px] border border-black/[0.1] py-2 text-[13px] font-medium text-[#0071e3] transition-colors hover:border-[#0071e3]/40 hover:bg-[#0071e3]/[0.06] dark:border-slate-700 dark:text-brand-cyan">
                         Gestionar Reabastecimiento
                       </button>
                     </div>
@@ -538,14 +539,14 @@ export const Intelligence = () => {
               <button 
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1 || loading}
-                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                className="rounded-[9px] border border-black/[0.08] bg-white p-2 text-[#6e6e73] transition-colors hover:border-black/[0.16] hover:text-[#0071e3] disabled:opacity-40 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button 
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages || loading}
-                className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 disabled:opacity-50 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                className="rounded-[9px] border border-black/[0.08] bg-white p-2 text-[#6e6e73] transition-colors hover:border-black/[0.16] hover:text-[#0071e3] disabled:opacity-40 dark:border-slate-800 dark:bg-slate-800 dark:text-slate-300"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>

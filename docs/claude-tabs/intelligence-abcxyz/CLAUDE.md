@@ -15,3 +15,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Los filtros del catálogo son datos derivados de `inventoryData` mediante `useMemo`; no conservar una segunda copia sincronizada en estado.
 - Agregar una sola vez por familia los datos del gráfico de riesgos y reutilizar el resultado para barras y colores.
 - Las exportaciones XLSX deben usar claves tipadas de `ProductMetrics`, sin accesos dinámicos mediante `any`.
+
+## Actualización v1.45 — estilo visual del modo claro
+
+- La actualización es exclusivamente visual: conserva la matriz, las consultas, filtros, reglas ABCXYZ, detalle por cuadrante, alertas y exportación XLSX existentes.
+- Aplicar tipografía de sistema, superficies blancas, fondo secundario `#F5F5F7`, azul `#0071E3` para navegación y acciones, y bordes de baja opacidad. El modo oscuro actual se mantiene sin rediseñarlo.
+- Los KPIs, matriz, distribución, catálogo y alertas se leen como una herramienta de decisión: tarjetas con profundidad mínima, pestañas segmentadas, tablas de encabezado en frase y cifras con `tabular-nums`.
+- No teñir las filas de catálogo por estado. Los riesgos permanecen diferenciados mediante badges y valores semánticos, por lo que las comparativas de datos conservan su legibilidad.

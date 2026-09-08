@@ -170,3 +170,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Cada mes de la serie comercial declara su cobertura real y si es parcial. La interfaz debe señalar todos los meses incompletos, no solo el último punto de la serie.
 - El frontend debe conservar `npm run lint` sin errores ni advertencias: tipar tooltips y exportaciones, usar controles accesibles y no mantener estado que pueda derivarse con `useMemo`.
 - Los contextos React separan el objeto de contexto, el proveedor y el hook consumidor para permitir Fast Refresh sin exportaciones incompatibles.
+
+## Actualización v1.45 — interfaz clara de decisión
+
+- El rediseño visual de Dashboard e Inteligencia ABCXYZ se limita a la interfaz: no altera APIs, filtros, períodos, métricas, exportaciones ni cálculos de backend.
+- En modo claro, las dos vistas usan tipografía de sistema, superficies blancas, separadores sutiles, azul único para interacción, controles segmentados, tarjetas con profundidad mínima y tablas sin líneas verticales ni encabezados en mayúsculas.
+- Mantener la semántica visual de los valores: las variaciones incluyen icono de dirección además de color; la matriz ABCXYZ usa intensidad azul contenida, mientras que las alertas conservan sus badges semánticos sin teñir toda la tabla.
+- El modo oscuro existente se conserva como está hasta que se solicite su adaptación visual específica.

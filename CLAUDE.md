@@ -177,3 +177,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - En modo claro, las dos vistas usan tipografía de sistema, superficies blancas, separadores sutiles, azul único para interacción, controles segmentados, tarjetas con profundidad mínima y tablas sin líneas verticales ni encabezados en mayúsculas.
 - Mantener la semántica visual de los valores: las variaciones incluyen icono de dirección además de color; la matriz ABCXYZ usa intensidad azul contenida, mientras que las alertas conservan sus badges semánticos sin teñir toda la tabla.
 - El modo oscuro existente se conserva como está hasta que se solicite su adaptación visual específica.
+
+## Actualización v1.46 — cargas incrementales por periodo
+
+- Data Engineering expone un flujo explícito para incorporar intervalos personalizados de ventas o inventario, sin requerir la recarga completa del histórico.
+- La fecha real procede siempre de la columna `Fecha` del archivo. La validación debe mostrar el intervalo detectado antes de confirmar y el resultado debe confirmar el intervalo incorporado.
+- Por defecto, la carga conserva los datos ajenos al archivo: ventas hace upsert por fecha, artículo, cliente, KD y comercial; inventario por fecha y artículo, actualizando el snapshot solo con la fecha más reciente.
+- La sustitución de ventas del periodo sigue siendo una acción separada y controlada: solo se usa para recalcular todo el intervalo cubierto por el fichero.

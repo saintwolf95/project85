@@ -210,7 +210,7 @@ export const DataEngineering = () => {
         <div>
           <h1 className="title-corporate text-3xl mb-1">Carga de datos reales</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Carga los dos archivos reales: ventas desde el 01/05/2026 e inventario diario desde el 06/08/2026.
+            Incorpora cargas iniciales o actualizaciones incrementales de ventas e inventario con las fechas reales de cada archivo.
           </p>
         </div>
         <button
@@ -349,6 +349,41 @@ export const DataEngineering = () => {
                   Carga el archivo del FY anterior con sus fechas reales. Se añadirá al histórico sin eliminar el ejercicio actual; no actives la sustitución de datos.
                 </p>
               )}
+            </section>
+          )}
+
+          {(dataset === 'sales' || dataset === 'inventory') && (
+            <section className="mb-5 rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 dark:border-brand-cyan/25 dark:bg-brand-cyan/5" aria-label="Actualización incremental por periodo">
+              <div className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-sm font-semibold text-white dark:bg-brand-cyan dark:text-brand-dark">+</div>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Actualización incremental por periodo</h3>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    Puedes cargar un día, una semana, un mes o cualquier intervalo personalizado. No necesitas volver a subir todo el histórico.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 text-xs text-slate-700 dark:text-slate-300 md:grid-cols-3">
+                <div className="rounded-lg border border-brand-blue/10 bg-white/70 p-3 dark:border-brand-cyan/15 dark:bg-slate-900/40">
+                  <span className="font-semibold text-slate-900 dark:text-white">1. Exporta el periodo</span>
+                  <p className="mt-1">Filtra en Power BI las fechas que deseas añadir y conserva la columna <code>Fecha</code>.</p>
+                </div>
+                <div className="rounded-lg border border-brand-blue/10 bg-white/70 p-3 dark:border-brand-cyan/15 dark:bg-slate-900/40">
+                  <span className="font-semibold text-slate-900 dark:text-white">2. Valida el archivo</span>
+                  <p className="mt-1">La plataforma detectará y mostrará el inicio y fin reales antes de que confirmes la carga.</p>
+                </div>
+                <div className="rounded-lg border border-brand-blue/10 bg-white/70 p-3 dark:border-brand-cyan/15 dark:bg-slate-900/40">
+                  <span className="font-semibold text-slate-900 dark:text-white">3. Incorpora sin borrar</span>
+                  <p className="mt-1">
+                    {dataset === 'sales'
+                      ? 'Solo crea o actualiza la misma combinación de fecha, artículo, cliente, KD y comercial.'
+                      : 'Solo crea o actualiza la misma combinación de fecha y artículo; el stock actual toma la última fecha.'}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-3 border-l-2 border-emerald-500 pl-3 text-xs text-emerald-800 dark:text-emerald-300">
+                Por defecto se conservan todos los registros fuera del archivo. Usa la opción de sustitución solo si quieres recalcular por completo el periodo indicado en el fichero.
+              </p>
             </section>
           )}
 
@@ -529,6 +564,11 @@ export const DataEngineering = () => {
               {(dataset === 'sales' || dataset === 'inventory') && (
                 <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
                   Catálogo: {formatNumber(result.products_created)} SKU creados · {formatNumber(result.products_updated)} actualizados.
+                </p>
+              )}
+              {(dataset === 'sales' || dataset === 'inventory') && validation?.date_min && validation?.date_max && (
+                <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">
+                  Periodo incorporado: {validation.date_min} a {validation.date_max}. Los registros fuera de este intervalo se han conservado.
                 </p>
               )}
               {dataset === 'sales' && (

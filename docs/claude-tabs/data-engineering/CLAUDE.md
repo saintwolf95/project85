@@ -26,3 +26,9 @@ Las ventas con celdas de cliente vacías son válidas: sin `ClientePK` se asigna
 ## Actualización v1.35
 
 La sustitución de ventas se limita al intervalo entre la primera y la última fecha del archivo. Debe conservar ventas de otros ejercicios y no borrar clientes; la interfaz tiene que explicar este alcance antes de cargar.
+
+## Actualización v1.46 — actualización incremental por periodo
+
+- La interfaz debe ofrecer una sección explícita de actualización incremental para ventas e inventario. Admite desde un día hasta cualquier periodo personalizado; las fechas se infieren de `Fecha`, no de un selector manual separado.
+- Antes de cargar se muestran las fechas detectadas; tras una carga correcta, se confirma ese intervalo y que los registros externos se han conservado.
+- Ventas incrementales actualizan la misma clave diaria (fecha, artículo, cliente, KD y comercial). Inventario actualiza fecha y artículo, conserva snapshots históricos previos y usa la fecha más reciente como stock actual.

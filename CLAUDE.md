@@ -184,3 +184,13 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La fecha real procede siempre de la columna `Fecha` del archivo. La validación debe mostrar el intervalo detectado antes de confirmar y el resultado debe confirmar el intervalo incorporado.
 - Por defecto, la carga conserva los datos ajenos al archivo: ventas hace upsert por fecha, artículo, cliente, KD y comercial; inventario por fecha y artículo, actualizando el snapshot solo con la fecha más reciente.
 - La sustitución de ventas del periodo sigue siendo una acción separada y controlada: solo se usa para recalcular todo el intervalo cubierto por el fichero.
+
+## Actualización v1.47 — carga centrada en ventas e inventario
+
+- Data Engineering solo muestra los flujos `fivemin_ventas` y `fivemin_inventario`. El catálogo independiente no forma parte de la experiencia de carga: ventas e inventario crean y actualizan el catálogo automáticamente.
+
+## Actualización v1.48 — Apple UI para inteligencia asistida
+
+- AI Copilot y Control IA usan tipografía de sistema, superficies neutras, separadores finos y azul único para acciones e interacción; conservar los colores semánticos exclusivamente para estados, variaciones y alertas.
+- No cambiar APIs, modelos, historial, estudios, señales, chats ni cálculos por un ajuste visual. Las tablas de informes y respuestas deben conservar su accesibilidad, desplazamiento horizontal y cifras tabulares.
+- Mantener la misma jerarquía en claro y oscuro: modal con fondo atenuado, tarjetas sin adornos cromáticos, controles segmentados y foco visible para teclado.

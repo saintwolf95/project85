@@ -3,7 +3,7 @@
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/integrations`; componente: `frontend/src/pages/DataEngineering.tsx`; backend: `app/routers/data_import.py`.
-- Es la entrada de datos reales. Orden recomendado: `fivemin_ventas`, `fivemin_inventario` y catálogo independiente opcional.
+- Es la entrada de datos reales. Los únicos flujos visibles son `fivemin_ventas` y `fivemin_inventario`; el catálogo se crea y actualiza automáticamente desde esas cargas.
 - Ventas crea/actualiza catálogo, clientes y `ventas_historicas`. Inventario crea/actualiza catálogo, guarda `inventario_historico` y actualiza el snapshot actual con la fecha más reciente.
 - La carga incluye validación previa, plantilla descargable, progreso, ámbito de ventas operativas/FY anterior y opción controlada de reemplazo.
 - Las filas de totales/filtros de Power BI se ignoran y se informa cuántas. No convertirlas en errores de campos obligatorios.

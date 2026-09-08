@@ -68,6 +68,37 @@
     font-feature-settings: "tnum";
   }
 
+  .copilot-apple,
+  .control-apple {
+    --ai-surface: #ffffff;
+    --ai-secondary: #f5f5f7;
+    --ai-text: #1d1d1f;
+    --ai-text-secondary: #6e6e73;
+    --ai-text-tertiary: #86868b;
+    --ai-separator: rgb(0 0 0 / 8%);
+    --ai-accent: #0071e3;
+    --ai-accent-soft: rgb(0 113 227 / 10%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+
+  .dark .copilot-apple,
+  .dark .control-apple {
+    --ai-surface: #1c1c1e;
+    --ai-secondary: #2c2c2e;
+    --ai-text: #f5f5f7;
+    --ai-text-secondary: #a1a1a6;
+    --ai-text-tertiary: #6e6e73;
+    --ai-separator: rgb(255 255 255 / 10%);
+    --ai-accent: #0a84ff;
+    --ai-accent-soft: rgb(10 132 255 / 16%);
+  }
+
+  .copilot-apple .ai-tnum,
+  .control-apple .ai-tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
   .dashboard-apple button:focus-visible,
   .dashboard-apple select:focus-visible,
   .dashboard-apple input:focus-visible {
@@ -82,89 +113,141 @@
     box-shadow: 0 0 0 4px rgb(0 113 227 / 14%);
   }
 
-  .copilot-markdown {
-    @apply text-sm leading-6 text-slate-700 dark:text-slate-200;
+  .copilot-apple button:focus-visible,
+  .copilot-apple input:focus-visible,
+  .copilot-apple textarea:focus-visible,
+  .control-apple button:focus-visible,
+  .control-apple input:focus-visible,
+  .control-apple textarea:focus-visible {
+    outline: 0;
+    box-shadow: 0 0 0 4px var(--ai-accent-soft);
   }
 
-  .copilot-markdown h2 {
-    @apply mt-6 mb-3 flex items-center gap-2 border-b border-slate-200 pb-2 text-base font-bold text-slate-950 dark:border-slate-700 dark:text-white;
+  .copilot-apple .copilot-markdown {
+    @apply text-[15px] leading-6 text-slate-700 dark:text-slate-200;
   }
 
-  .copilot-markdown h2:first-child {
+  .copilot-apple .copilot-markdown h2 {
+    @apply mt-7 mb-3 border-b border-slate-200 pb-2 text-[20px] font-semibold tracking-[-0.01em] text-slate-950 dark:border-slate-700 dark:text-white;
+  }
+
+  .copilot-apple .copilot-markdown h2:first-child {
     @apply mt-0;
   }
 
-  .copilot-markdown h3 {
-    @apply mt-5 mb-2 text-sm font-bold text-slate-900 dark:text-white;
+  .copilot-apple .copilot-markdown h3 {
+    @apply mt-6 mb-2 text-[16px] font-semibold text-slate-900 dark:text-white;
   }
 
-  .copilot-markdown p {
+  .copilot-apple .copilot-markdown p {
     @apply my-2;
   }
 
-  .copilot-markdown strong {
+  .copilot-apple .copilot-markdown strong {
     @apply font-semibold text-slate-950 dark:text-white;
   }
 
-  .copilot-markdown ul,
-  .copilot-markdown ol {
+  .copilot-apple .copilot-markdown ul,
+  .copilot-apple .copilot-markdown ol {
     @apply my-3 space-y-2 pl-5;
   }
 
-  .copilot-markdown ul {
+  .copilot-apple .copilot-markdown ul {
     @apply list-disc;
   }
 
-  .copilot-markdown ol {
+  .copilot-apple .copilot-markdown ol {
     @apply list-decimal;
   }
 
-  .copilot-markdown li {
+  .copilot-apple .copilot-markdown li {
     @apply pl-1 marker:text-brand-blue dark:marker:text-brand-cyan;
   }
 
-  .copilot-markdown table {
-    @apply my-4 block w-full overflow-x-auto rounded-xl border border-slate-200 bg-white text-left text-xs shadow-sm dark:border-slate-700 dark:bg-slate-900/60;
+  .copilot-apple .copilot-markdown table {
+    @apply my-5 block w-full overflow-x-auto rounded-[16px] border border-slate-200 bg-white text-left text-[13px] dark:border-slate-700 dark:bg-slate-900/60;
     border-collapse: separate;
     border-spacing: 0;
   }
 
-  .copilot-markdown thead {
-    @apply bg-slate-200/80 text-slate-700 dark:bg-slate-700/80 dark:text-slate-100;
+  .copilot-apple .copilot-markdown thead {
+    @apply bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-200;
   }
 
-  .copilot-markdown th,
-  .copilot-markdown td {
-    @apply min-w-24 whitespace-nowrap border-b border-r border-slate-200 px-3 py-2 align-top last:border-r-0 dark:border-slate-700;
+  .copilot-apple .copilot-markdown th,
+  .copilot-apple .copilot-markdown td {
+    @apply min-w-24 whitespace-nowrap border-b border-slate-200 px-3 py-2.5 align-top dark:border-slate-700;
   }
 
-  .copilot-markdown th {
+  .copilot-apple .copilot-markdown th {
     @apply font-semibold;
   }
 
-  .copilot-markdown td:nth-child(2) {
+  .copilot-apple .copilot-markdown td:nth-child(2) {
     @apply min-w-64 max-w-96 whitespace-normal;
   }
 
-  .copilot-markdown tbody tr:last-child td {
+  .copilot-apple .copilot-markdown tbody tr:last-child td {
     @apply border-b-0;
   }
 
-  .copilot-markdown tbody tr:hover {
+  .copilot-apple .copilot-markdown tbody tr:hover {
     @apply bg-brand-blue/5 dark:bg-brand-cyan/5;
   }
 
-  .copilot-markdown blockquote {
+  .copilot-apple .copilot-markdown blockquote {
     @apply my-4 rounded-r-lg border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-amber-900 dark:bg-amber-500/10 dark:text-amber-100;
   }
 
-  .copilot-markdown code {
+  .copilot-apple .copilot-markdown code {
     @apply rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-900;
   }
 
-  .copilot-markdown pre {
+  .copilot-apple .copilot-markdown pre {
     @apply my-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-slate-100 dark:border-slate-700;
   }
+
+  .control-apple .control-markdown {
+    @apply leading-6;
+  }
+
+  .control-apple .control-markdown h1,
+  .control-apple .control-markdown h2 {
+    @apply mt-6 mb-3 border-b border-slate-200 pb-2 text-[18px] font-semibold tracking-[-0.01em] text-slate-950 dark:border-slate-700 dark:text-white;
+  }
+
+  .control-apple .control-markdown h3 {
+    @apply mt-5 mb-2 text-[15px] font-semibold text-slate-900 dark:text-white;
+  }
+
+  .control-apple .control-markdown p {
+    @apply my-2;
+  }
+
+  .control-apple .control-markdown ul,
+  .control-apple .control-markdown ol {
+    @apply my-3 space-y-2 pl-5;
+  }
+
+  .control-apple .control-markdown ul { @apply list-disc; }
+  .control-apple .control-markdown ol { @apply list-decimal; }
+
+  .control-apple .control-markdown li { @apply pl-1 marker:text-[#0071e3]; }
+
+  .control-apple .control-markdown table {
+    @apply my-4 block w-full overflow-x-auto rounded-[12px] border border-slate-200 text-left text-[12px] dark:border-slate-700;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .control-apple .control-markdown th,
+  .control-apple .control-markdown td {
+    @apply whitespace-nowrap border-b border-slate-200 px-3 py-2.5 align-top dark:border-slate-700;
+  }
+
+  .control-apple .control-markdown th { @apply bg-slate-50 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-200; }
+  .control-apple .control-markdown tbody tr:last-child td { @apply border-b-0; }
+  .control-apple .control-markdown tbody tr:hover { @apply bg-[#0071e3]/5 dark:bg-[#0a84ff]/10; }
 }
 
 @keyframes typing-bop {

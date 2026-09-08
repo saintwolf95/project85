@@ -43,3 +43,9 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - La carga inicial recupera historial, contexto de negocio y capacidades en un único flujo; evita carreras entre el saludo y la disponibilidad de inventario.
 - Los gráficos embebidos, errores de carga y componentes Markdown deben permanecer tipados y accesibles. No introducir `any`, bloques `catch` vacíos ni fondos clicables sin semántica de botón.
 - Mantener identificadores locales estables con `crypto.randomUUID()` cuando la API todavía no haya devuelto un identificador persistente.
+
+## Actualización v1.48 — interfaz Apple UI
+
+- La presentación de AI Copilot usa superficies blancas/neutras, azul único para acciones y tipografía de sistema. No volver a introducir degradados, brillos decorativos ni colores por modelo.
+- Los mensajes, gráficos, tablas Markdown, selector de modelo, exportaciones y modal Cerebro del negocio conservan su funcionalidad y accesibilidad; las variaciones y errores mantienen colores semánticos.
+- El modo oscuro usa las mismas jerarquías visuales con superficies oscuras y foco visible, sin alterar la semántica de las respuestas.

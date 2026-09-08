@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, Legend } from 'recharts';
 
-const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const COLORS = ['#0071e3', '#5ac8fa', '#a7c7ed', '#c7ddf4', '#86868b'];
 const MAX_SELECTED_LIB_DOCS = 10;
 
 const THINKING_MESSAGES = [
@@ -107,14 +107,14 @@ const CopilotMetricCards = ({ content }: { content: string }) => {
   const entries = Object.entries(payload.data).filter(([, value]) => typeof value === 'number').slice(0, 6);
   if (!entries.length) return null;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+    <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
       {entries.map(([key, value]) => {
         const isVariation = key.startsWith('variacion');
         const positive = value >= 0;
         return (
-          <div key={key} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/50 px-3 py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
-            <p className={`mt-1 text-sm font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-slate-900 dark:text-white'}`}>
+          <div key={key} className="rounded-[12px] border border-black/[0.08] bg-white px-3.5 py-3 dark:border-slate-700 dark:bg-slate-900/50">
+            <p className="text-[11px] font-medium text-[#6e6e73] dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
+            <p className={`ai-tnum mt-1 text-[15px] font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-[#1d1d1f] dark:text-white'}`}>
               {formatMetricValue(key, value, payload.formato)}
             </p>
           </div>
@@ -149,7 +149,7 @@ const CopilotFollowups = ({ content, onSelect, disabled }: { content: string; on
           key={action.label}
           onClick={() => onSelect(action.prompt)}
           disabled={disabled}
-          className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 dark:border-brand-cyan/25 bg-brand-blue/5 dark:bg-brand-cyan/5 px-3 py-1.5 text-xs font-medium text-brand-blue dark:text-brand-cyan transition-colors hover:bg-brand-blue/10 dark:hover:bg-brand-cyan/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] bg-[#0071e3]/10 px-3 py-1.5 text-[12px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/15 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-cyan/10 dark:text-brand-cyan"
         >
           {action.label}
           <ArrowRight size={12} />
@@ -168,9 +168,9 @@ const getCopilotErrorMessage = (error: unknown) => {
 };
 
 const MODEL_OPTIONS = [
-  { value: 'fast' as const, label: 'Fast', sublabel: 'GPT-4o', icon: <Zap size={14} />, color: 'text-brand-blue dark:text-brand-cyan', badge: '🟢', desc: 'Rápido y eficiente' },
-  { value: 'thinking' as const, label: 'Thinking', sublabel: 'o3-mini', icon: <Brain size={14} />, color: 'text-purple-600 dark:text-purple-400', badge: '🟣', desc: 'Razonamiento avanzado' },
-  { value: 'ultra_thinking' as const, label: 'Ultra', sublabel: 'o1', icon: <Brain size={14} />, color: 'text-rose-500 dark:text-rose-400', badge: '💎', desc: 'Máxima profundidad' },
+  { value: 'fast' as const, label: 'Fast', sublabel: 'GPT-4o', icon: <Zap size={14} />, desc: 'Rápido y eficiente' },
+  { value: 'thinking' as const, label: 'Thinking', sublabel: 'o3-mini', icon: <Brain size={14} />, desc: 'Razonamiento avanzado' },
+  { value: 'ultra_thinking' as const, label: 'Ultra', sublabel: 'o1', icon: <Brain size={14} />, desc: 'Máxima profundidad' },
 ];
 
 interface CopilotChartConfig {
@@ -188,29 +188,29 @@ const CopilotChartRenderer = ({ config }: { config: CopilotChartConfig }) => {
   const baseColor = color || COLORS[0];
 
   return (
-    <div className="my-6 p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-sm w-full">
-      {title && <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-4 text-center">{title}</h4>}
+    <div className="my-6 w-full rounded-[16px] border border-black/[0.08] bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
+      {title && <h4 className="mb-4 text-[16px] font-semibold text-[#1d1d1f] dark:text-white">{title}</h4>}
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
           {type === 'bar' ? (
             <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
-              <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
-              <YAxis stroke="#64748b" fontSize={12} />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
-              <Bar dataKey={yKey} fill={baseColor} radius={[4, 4, 0, 0]} isAnimationActive={false} />
+              <CartesianGrid vertical={false} stroke="#d2d2d7" strokeDasharray="4 4" />
+              <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
+              <Tooltip contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+              <Bar dataKey={yKey} fill={baseColor} radius={[6, 6, 0, 0]} maxBarSize={40} isAnimationActive={false} />
             </BarChart>
           ) : type === 'line' ? (
             <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
-              <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} angle={-45} textAnchor="end" height={60} />
-              <YAxis stroke="#64748b" fontSize={12} />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
-              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+              <CartesianGrid vertical={false} stroke="#d2d2d7" strokeDasharray="4 4" />
+              <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
+              <Tooltip contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#ffffff' }} isAnimationActive={false} />
             </LineChart>
           ) : type === 'pie' ? (
             <PieChart>
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#fff' }} />
+              <Tooltip contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
               <Legend />
               <Pie data={data} dataKey={yKey} nameKey={xKey} cx="50%" cy="50%" outerRadius={80} fill={baseColor} label isAnimationActive={false}>
                 {data.map((_, index) => (
@@ -277,7 +277,7 @@ const CopyButton = ({ text }: { text: string }) => {
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1.5 rounded-md bg-slate-200/80 dark:bg-slate-700/80 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-500 dark:text-slate-400"
+      className="absolute right-2 top-2 rounded-[8px] bg-[#f5f5f7] p-1.5 text-[#6e6e73] opacity-100 transition-opacity hover:text-[#0071e3] md:opacity-0 md:group-hover:opacity-100 dark:bg-slate-700 dark:text-slate-400"
       title="Copiar respuesta"
     >
       {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
@@ -296,11 +296,11 @@ const ThinkingIndicator = ({ modelPreference }: { modelPreference: string }) => 
     <div className="flex justify-start">
       <div className="flex gap-4 max-w-[80%]">
         <div className="flex-shrink-0 mt-1 hidden md:block">
-          <div className="bg-brand-cyan/20 p-2 rounded-lg border border-brand-cyan/50 text-brand-cyan shadow-[0_0_10px_var(--color-brand-cyan)]">
+          <div className="rounded-[10px] bg-[#0071e3]/10 p-2 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">
             <Bot size={20} />
           </div>
         </div>
-        <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-brand-cyan/30 rounded-tl-sm flex flex-col gap-2 min-w-[200px]">
+        <div className="flex min-w-[200px] flex-col gap-2 rounded-[16px] rounded-tl-sm border border-black/[0.08] bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-brand-blue dark:bg-brand-cyan rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
             <div className="w-2 h-2 bg-brand-blue dark:bg-brand-cyan rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -623,17 +623,17 @@ export const AiCopilot = () => {
   const activeModel = MODEL_OPTIONS.find(m => m.value === modelPreference)!;
 
   return (
-    <div className="animate-in fade-in duration-500 h-[calc(100vh-6rem)] flex flex-col md:flex-row relative gap-4">
+    <div className="copilot-apple relative mx-auto flex h-[calc(100vh-6rem)] w-full max-w-[1600px] flex-col gap-5 md:flex-row animate-in fade-in duration-500">
 
       {/* Botón Móvil Sidebar */}
       <div className="lg:hidden mb-2 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <h1 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
           <Bot className="text-brand-blue dark:text-brand-cyan" size={24} /> AI Copilot
         </h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { setContextSaveError(null); setIsContextModalOpen(true); }}
-            className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 text-brand-blue dark:text-brand-cyan"
+            className="rounded-[10px] border border-black/[0.08] bg-white p-2 text-[#0071e3] dark:border-slate-700 dark:bg-slate-800 dark:text-brand-cyan"
             title="Abrir Cerebro del Negocio"
             aria-label="Abrir Cerebro del Negocio"
           >
@@ -641,7 +641,7 @@ export const AiCopilot = () => {
           </button>
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700"
+            className="rounded-[10px] border border-black/[0.08] bg-white p-2 dark:border-slate-700 dark:bg-slate-800"
             title="Abrir historial"
             aria-label="Abrir historial"
           >
@@ -661,9 +661,9 @@ export const AiCopilot = () => {
       )}
 
       {/* Sidebar Historial */}
-      <div className={`absolute lg:relative z-20 h-full w-72 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-2xl lg:shadow-lg transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`} aria-label="Historial de chats">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-          <button onClick={startNewChat} disabled={isLoading} className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors font-medium text-sm disabled:cursor-not-allowed disabled:opacity-50">
+      <div className={`absolute z-20 flex h-full w-72 flex-col rounded-[20px] border border-black/[0.08] bg-white transition-transform duration-300 dark:border-slate-800 dark:bg-brand-surface lg:relative ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[110%] lg:translate-x-0'}`} aria-label="Historial de chats">
+        <div className="flex items-center justify-between border-b border-black/[0.08] p-4 dark:border-slate-800">
+          <button onClick={startNewChat} disabled={isLoading} className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[12px] bg-[#0071e3] py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-cyan dark:text-brand-dark">
             <Plus size={16} /> Nuevo Chat
           </button>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden ml-2 p-2 text-slate-500 hover:text-slate-800 dark:hover:text-white">
@@ -672,8 +672,8 @@ export const AiCopilot = () => {
         </div>
 
         {currentChatId && (
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Exportar conversación</p>
+          <div className="border-b border-black/[0.08] px-4 py-3 dark:border-slate-800">
+            <p className="mb-2 text-[11px] font-medium text-[#6e6e73] dark:text-slate-400">Exportar conversación</p>
             <div className="grid grid-cols-3 gap-1.5">
               {(['pdf', 'xlsx', 'csv'] as const).map(format => (
                 <button
@@ -681,7 +681,7 @@ export const AiCopilot = () => {
                   type="button"
                   onClick={() => downloadChatExport(format)}
                   disabled={Boolean(exportingChat) || isLoading}
-                  className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1.5 text-[10px] font-medium text-slate-600 dark:text-slate-300 hover:border-brand-blue/40 hover:text-brand-blue dark:hover:border-brand-cyan/40 dark:hover:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-9 items-center justify-center gap-1 rounded-[9px] bg-[#f5f5f7] px-2 py-1.5 text-[11px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-800 dark:text-slate-300 dark:hover:text-brand-cyan"
                 >
                   {exportingChat === format ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
                   {format.toUpperCase()}
@@ -705,7 +705,7 @@ export const AiCopilot = () => {
                 role="button"
                 tabIndex={isLoading ? -1 : 0}
                 aria-current={currentChatId === chat.id ? 'page' : undefined}
-                className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors ${currentChatId === chat.id ? 'bg-brand-blue/10 dark:bg-brand-cyan/10 border border-brand-blue/20 dark:border-brand-cyan/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'} ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
+                className={`group flex min-h-11 items-center justify-between rounded-[10px] p-3 cursor-pointer transition-colors ${currentChatId === chat.id ? 'bg-[#0071e3]/10 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan' : 'text-[#424245] hover:bg-black/[0.03] dark:text-slate-300 dark:hover:bg-slate-800/50'} ${isLoading ? 'cursor-not-allowed opacity-60' : ''}`}
               >
                 <div className="flex items-center gap-3 overflow-hidden">
                   <MessageSquare size={16} className={currentChatId === chat.id ? 'text-brand-blue dark:text-brand-cyan' : 'text-slate-400 dark:text-slate-500'} />
@@ -731,7 +731,7 @@ export const AiCopilot = () => {
           <div className="border-t border-slate-200 dark:border-slate-800">
             <button
               onClick={() => setShowLibPanel(!showLibPanel)}
-              className="w-full flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+              className="flex min-h-11 w-full items-center justify-between px-4 py-3 text-[12px] font-medium text-[#6e6e73] transition-colors hover:bg-black/[0.03] dark:text-slate-400 dark:hover:bg-slate-800/50"
             >
               <span className="flex items-center gap-2">
                 <Library size={14} />
@@ -768,20 +768,16 @@ export const AiCopilot = () => {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 bg-white dark:bg-brand-surface border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-lg dark:shadow-[0_0_20px_rgba(0,245,255,0.02)]">
+      <div className="flex flex-1 flex-col overflow-hidden rounded-[20px] border border-black/[0.08] bg-white dark:border-slate-800 dark:bg-brand-surface">
 
         {/* Cabecera Desktop */}
-        <div className="hidden lg:flex p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/30 justify-between items-center">
+        <div className="hidden items-center justify-between border-b border-black/[0.08] bg-[#fbfbfd] p-5 dark:border-slate-800 dark:bg-brand-dark/30 lg:flex">
           <div>
-            <h1 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+            <h1 className="flex items-center gap-3 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
               <Bot className="text-brand-blue dark:text-brand-cyan" size={24} />
               AI Copilot
-              <span className={`flex items-center gap-1 text-xs font-normal px-2 py-0.5 rounded-full border ${
-                activeModel.value === 'fast' ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400' :
-                activeModel.value === 'thinking' ? 'bg-purple-50 dark:bg-purple-500/10 border-purple-200 dark:border-purple-500/30 text-purple-600 dark:text-purple-400' :
-                'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400'
-              }`}>
-                {activeModel.badge} {activeModel.label} ({activeModel.sublabel})
+              <span className="flex items-center gap-1 rounded-full bg-[#0071e3]/10 px-2.5 py-1 text-[11px] font-medium text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">
+                {activeModel.icon} {activeModel.label} ({activeModel.sublabel})
               </span>
               {selectedLibDocIds.length > 0 && (
                 <span className="flex items-center gap-1 text-xs font-normal px-2 py-0.5 rounded-full border bg-cyan-50 dark:bg-cyan-500/10 border-cyan-200 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400">
@@ -789,18 +785,18 @@ export const AiCopilot = () => {
                 </span>
               )}
             </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Historial persistente · 30 días de retención</p>
+            <p className="mt-1 text-[12px] text-[#6e6e73] dark:text-slate-400">Historial persistente de los últimos 30 días</p>
           </div>
           <button
             onClick={() => { setContextSaveError(null); setIsContextModalOpen(true); }}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-brand-blue dark:text-brand-cyan bg-brand-blue/10 dark:bg-brand-cyan/10 hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-lg transition-colors border border-brand-blue/20 dark:border-brand-cyan/20 shadow-sm"
+            className="flex min-h-9 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-3 py-2 text-[12px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/10 dark:bg-slate-800 dark:text-brand-cyan"
           >
             <BookOpen size={16} /> Cerebro del Negocio
           </button>
         </div>
 
         {/* Feed de mensajes */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
+        <div className="flex-1 space-y-6 overflow-y-auto p-5 md:p-7 custom-scrollbar">
           {isLoadingChats || isLoadingMessages ? (
             <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
               <div className="flex items-center gap-3 text-sm">
@@ -816,11 +812,11 @@ export const AiCopilot = () => {
                 {/* Avatar */}
                 <div className="flex-shrink-0 mt-1 hidden md:block">
                   {msg.role === 'user' ? (
-                    <div className="bg-brand-blue/10 dark:bg-brand-blue/20 p-2 rounded-lg border border-brand-blue/30 dark:border-brand-blue/50 text-brand-blue">
+                    <div className="rounded-[10px] bg-[#0071e3]/10 p-2 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">
                       <User size={20} />
                     </div>
                   ) : (
-                    <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/50 text-brand-blue dark:text-brand-cyan dark:shadow-[0_0_10px_var(--color-brand-cyan)]">
+                    <div className="rounded-[10px] bg-[#0071e3]/10 p-2 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">
                       <Bot size={20} />
                     </div>
                   )}
@@ -828,10 +824,10 @@ export const AiCopilot = () => {
 
                 {/* Burbuja */}
                 <div className="flex flex-col gap-1">
-                  <div className={`relative group p-4 rounded-2xl leading-relaxed text-sm ${
+                  <div className={`relative group rounded-[16px] p-5 leading-relaxed text-[15px] ${
                     msg.role === 'user'
-                      ? 'whitespace-pre-wrap bg-brand-blue text-white rounded-tr-sm shadow-sm'
-                      : 'whitespace-normal bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-brand-cyan/30 rounded-tl-sm shadow-sm'
+                      ? 'whitespace-pre-wrap rounded-tr-sm bg-[#0071e3] text-white'
+                      : 'whitespace-normal rounded-tl-sm border border-black/[0.08] bg-white text-[#424245] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200'
                   }`}>
                     {msg.role === 'user' ? (
                       msg.content
@@ -851,7 +847,7 @@ export const AiCopilot = () => {
                                     <button
                                       onClick={(e) => { e.preventDefault(); handleSend(promptText); }}
                                       disabled={isLoading}
-                                      className="inline-flex items-center mt-2 mr-2 px-4 py-2 bg-brand-blue/10 dark:bg-brand-cyan/10 text-brand-blue dark:text-brand-cyan hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-full text-sm font-medium transition-colors text-left border border-brand-blue/20 dark:border-brand-cyan/20 cursor-pointer disabled:opacity-50"
+                                      className="mr-2 mt-2 inline-flex min-h-9 items-center rounded-[10px] bg-[#0071e3]/10 px-3 py-2 text-left text-[13px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/15 disabled:opacity-50 dark:bg-brand-cyan/10 dark:text-brand-cyan"
                                     >
                                       {children}
                                     </button>
@@ -881,11 +877,11 @@ export const AiCopilot = () => {
                           </ReactMarkdown>
                           <CopilotFollowups content={msg.content} onSelect={handleSend} disabled={isLoading} />
                           {hasCopilotExport(msg.content) && (
-                            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex flex-wrap gap-3">
-                              <button onClick={() => downloadExport(msg.id, 'csv')} disabled={Boolean(exportingMessage)} className="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors border border-slate-300 dark:border-slate-600 shadow-sm disabled:opacity-50">
+                            <div className="mt-4 flex flex-wrap gap-3 border-t border-black/[0.08] pt-4 dark:border-slate-700/50">
+                              <button onClick={() => downloadExport(msg.id, 'csv')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-4 py-2 text-[13px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:opacity-50 dark:bg-slate-700 dark:text-slate-300">
                                 {exportingMessage === `${msg.id}-csv` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar CSV
                               </button>
-                              <button onClick={() => downloadExport(msg.id, 'xlsx')} disabled={Boolean(exportingMessage)} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 dark:bg-emerald-500/20 hover:bg-emerald-200 dark:hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-400 rounded-lg text-sm font-medium transition-colors border border-emerald-200 dark:border-emerald-500/30 shadow-sm disabled:opacity-50">
+                              <button onClick={() => downloadExport(msg.id, 'xlsx')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:opacity-50">
                                 {exportingMessage === `${msg.id}-xlsx` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar Excel (.xlsx)
                               </button>
                             </div>
@@ -913,7 +909,7 @@ export const AiCopilot = () => {
                 <button
                   key={s.label}
                   onClick={() => handleSend(s.prompt)}
-                  className="px-3 py-1.5 text-xs bg-slate-100 dark:bg-slate-800/60 hover:bg-brand-blue/10 dark:hover:bg-brand-cyan/10 text-slate-600 dark:text-slate-300 hover:text-brand-blue dark:hover:text-brand-cyan border border-slate-200 dark:border-slate-700 hover:border-brand-blue/30 dark:hover:border-brand-cyan/30 rounded-full transition-all font-medium"
+                  className="min-h-9 rounded-[10px] bg-[#f5f5f7] px-3 py-1.5 text-[12px] font-medium text-[#424245] transition-colors hover:bg-[#0071e3]/10 hover:text-[#0071e3] dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-brand-cyan/10 dark:hover:text-brand-cyan"
                 >
                   {s.label}
                 </button>
@@ -925,7 +921,7 @@ export const AiCopilot = () => {
         </div>
 
         {/* Controles y Caja de Input */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50">
+        <div className="border-t border-black/[0.08] bg-[#fbfbfd] p-5 dark:border-slate-800 dark:bg-brand-dark/50">
 
           {chatError && (
             <div className="mb-3 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300" role="alert">
@@ -945,19 +941,19 @@ export const AiCopilot = () => {
           )}
 
           {/* Selector de modelo */}
-          <div className="flex flex-wrap items-center gap-3 mb-3 px-1">
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">Motor AI:</span>
-            <div className="flex max-w-full overflow-x-auto bg-slate-200 dark:bg-slate-800 p-1 rounded-lg gap-1">
+          <div className="mb-3 flex flex-wrap items-center gap-3 px-1">
+            <span className="shrink-0 text-[12px] font-medium text-[#6e6e73] dark:text-slate-400">Motor IA</span>
+            <div className="flex max-w-full gap-1 overflow-x-auto rounded-[10px] bg-[#e8e8ed] p-1 dark:bg-slate-800">
               {MODEL_OPTIONS.map(opt => (
                 <button
                   key={opt.value}
                   onClick={() => setModelPreference(opt.value)}
                   aria-pressed={modelPreference === opt.value}
                   title={opt.desc}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                  className={`flex min-h-8 items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-all ${
                     modelPreference === opt.value
-                      ? `bg-white dark:bg-slate-700 ${opt.color} shadow-sm`
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                      ? 'bg-white text-[#0071e3] shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:bg-slate-700 dark:text-brand-cyan'
+                      : 'text-[#6e6e73] hover:text-[#1d1d1f] dark:text-slate-400 dark:hover:text-slate-300'
                   }`}
                 >
                   {opt.icon} {opt.label}
@@ -978,14 +974,14 @@ export const AiCopilot = () => {
               aria-label="Pregunta al AI Copilot"
               maxLength={2000}
               rows={2}
-              className="w-full min-h-[76px] max-h-40 resize-none overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl pl-4 pr-14 py-3 focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan transition-colors"
+              className="min-h-[76px] w-full max-h-40 resize-none overflow-y-auto rounded-[12px] border border-black/[0.12] bg-white py-3 pl-4 pr-14 text-[15px] text-[#1d1d1f] placeholder:text-[#86868b] transition-colors focus:border-[#0071e3] dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-brand-cyan"
             />
             <button
               onClick={() => handleSend()}
               disabled={isLoading || !input.trim()}
               title="Enviar pregunta"
               aria-label="Enviar pregunta"
-              className="absolute right-3 bottom-3 p-2 bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md dark:shadow-[0_0_10px_var(--color-brand-cyan)]"
+              className="absolute bottom-3 right-3 rounded-[10px] bg-[#0071e3] p-2.5 text-white transition-colors hover:bg-[#0077ed] disabled:cursor-not-allowed disabled:opacity-50 dark:bg-brand-cyan dark:text-brand-dark"
             >
               {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
             </button>
@@ -998,28 +994,28 @@ export const AiCopilot = () => {
 
       {/* Modal de Cerebro del Negocio */}
       {isContextModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-brand-surface w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-brand-cyan/20">
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-brand-dark/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e]">
+            <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#fbfbfd] p-6 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
               <div className="flex items-center gap-3">
-                <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg text-brand-blue dark:text-brand-cyan">
+                <div className="rounded-[10px] bg-[#0071e3]/10 p-2 text-[#0071e3] dark:bg-[#0a84ff]/15 dark:text-[#64d2ff]">
                   <BookOpen size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Cerebro del Negocio</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Contexto e instrucciones globales para la IA</p>
+                  <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-white">Cerebro del negocio</h2>
+                  <p className="text-[13px] text-[#6e6e73] dark:text-slate-400">Contexto e instrucciones globales para la IA</p>
                 </div>
               </div>
-              <button onClick={() => setIsContextModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">
+              <button onClick={() => setIsContextModalOpen(false)} aria-label="Cerrar contexto" className="rounded-full bg-[#e8e8ed] p-2 text-[#6e6e73] transition-colors hover:text-[#1d1d1f] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-white">
                 <X size={20} />
               </button>
             </div>
 
-            <div className="p-5 flex-1">
+            <div className="flex-1 p-6">
               <div className="flex justify-between items-end mb-4">
                 <div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">Redacta aquí las reglas de tu empresa, o adjunta un documento.</p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-[15px] text-[#424245] dark:text-slate-200">Redacta las reglas de tu empresa o adjunta un documento.</p>
+                  <p className="mt-1 text-[12px] text-[#86868b]">
                     {businessContext.length} caracteres · El Copilot leerá este texto en cada consulta
                   </p>
                 </div>
@@ -1028,7 +1024,7 @@ export const AiCopilot = () => {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading || isSavingContext}
-                    className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm disabled:opacity-50"
+                    className="flex min-h-9 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-3 py-1.5 text-[13px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:opacity-50 dark:bg-slate-700 dark:text-slate-200"
                   >
                     {isUploading ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
                     {isUploading ? 'Procesando...' : 'Adjuntar Documento'}
@@ -1036,8 +1032,8 @@ export const AiCopilot = () => {
                 </div>
               </div>
               {uploadError && (
-                <div className="mb-3 px-3 py-2 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-600 dark:text-red-400 text-xs rounded-lg flex items-center gap-2">
-                  <span>⚠️</span> {uploadError}
+                <div className="mb-3 flex items-center gap-2 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+                  <AlertCircle size={14} /> {uploadError}
                 </div>
               )}
               {contextSaveError && (
@@ -1049,18 +1045,18 @@ export const AiCopilot = () => {
                 value={businessContext}
                 onChange={(e) => setBusinessContext(e.target.value)}
                 placeholder="Ejemplo: Nuestro objetivo es no tener más de 15 días de cobertura global. Los productos de la familia 'Portátiles' son estratégicos..."
-                className="w-full h-64 p-4 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan focus:ring-1 focus:ring-brand-blue dark:focus:ring-brand-cyan text-slate-800 dark:text-slate-200 resize-none custom-scrollbar"
+                className="h-64 w-full resize-none rounded-[12px] border border-black/[0.12] bg-[#fbfbfd] p-4 text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               />
             </div>
 
-            <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50 flex justify-end gap-3">
-              <button onClick={() => setIsContextModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors" disabled={isSavingContext}>
+            <div className="flex justify-end gap-3 border-t border-black/[0.08] bg-[#fbfbfd] p-5 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
+              <button onClick={() => setIsContextModalOpen(false)} className="min-h-10 rounded-[10px] px-4 text-[14px] font-medium text-[#424245] transition-colors hover:bg-[#e8e8ed] dark:text-slate-300 dark:hover:bg-slate-700" disabled={isSavingContext}>
                 Cancelar
               </button>
               <button
                 onClick={handleSaveContext}
                 disabled={isSavingContext}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 dark:hover:bg-white transition-colors disabled:opacity-70 shadow-md dark:shadow-[0_0_10px_var(--color-brand-cyan)]"
+                className="flex min-h-10 items-center gap-2 rounded-[10px] bg-[#0071e3] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:opacity-70 dark:bg-[#0a84ff]"
               >
                 {isSavingContext ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {isSavingContext ? 'Guardando...' : 'Guardar Contexto'}

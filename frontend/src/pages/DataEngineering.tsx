@@ -44,14 +44,6 @@ const DATASETS: Array<{
     optional: [],
   },
   {
-    id: 'products',
-    step: 3,
-    title: 'Catálogo independiente',
-    description: 'Opcional. No es necesario cuando utilizas fivemin_ventas.',
-    required: ['sku', 'nombre', 'costo_unitario', 'precio_venta'],
-    optional: ['lead_time_dias', 'part_number', 'ean', 'peso', 'familia', 'marca', 'product_manager', 'seccion'],
-  },
-  {
     id: 'inventory',
     step: 2,
     title: 'fivemin_inventario',
@@ -190,7 +182,7 @@ export const DataEngineering = () => {
       const importResult = await loadDataImport(
         dataset,
         file,
-        (dataset === 'products' || dataset === 'sales') && replaceExisting,
+        dataset === 'sales' && replaceExisting,
         setUploadProgress,
       );
       setResult(importResult);
@@ -428,7 +420,7 @@ export const DataEngineering = () => {
             )}
           </div>
 
-          {(dataset === 'products' || (dataset === 'sales' && salesImportScope === 'operativa')) && (
+          {dataset === 'sales' && salesImportScope === 'operativa' && (
             <div className="mt-4 flex items-start gap-3 border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-3">
               <input
                 id="replace-existing-catalog"
@@ -443,12 +435,10 @@ export const DataEngineering = () => {
                   htmlFor="replace-existing-catalog"
                   className="block cursor-pointer text-sm font-medium text-amber-900 dark:text-amber-300"
                 >
-                  {dataset === 'sales' ? 'Sustituir las ventas del periodo del archivo' : 'Sustituir los datos actuales'}
+                  Sustituir las ventas del periodo del archivo
                 </label>
                 <span id="replace-existing-description" className="block text-xs text-amber-700 dark:text-amber-400">
-                  {dataset === 'sales'
-                    ? 'Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva FY anteriores, clientes, catálogo e inventario.'
-                    : 'Elimina productos, stock, ventas y métricas de esta empresa. Actívalo solo para una sustitución completa.'}
+                  Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva FY anteriores, clientes, catálogo e inventario.
                 </span>
               </span>
             </div>

@@ -48,3 +48,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - La interfaz de Control IA debe tipar errores de API como `unknown`, validar la forma de las metodologías recibidas y usar botones nativos para abrir expedientes de agentes.
 - La carga inicial se resuelve desde la promesa de la API, sin invocar desde un efecto funciones que cambien estado de forma síncrona.
+
+## Actualización v1.48 — interfaz Apple UI
+
+- Control IA presenta configuración, readiness, informes, estudios, expedientes y chats con superficies neutras, tipografía de sistema y azul único para interacción.
+- Los colores verde, ámbar y rojo solo comunican estados reales: disponibilidad, calidad, éxito, aviso o error. No usarlos como decoración de agentes o fases.
+- Mantener los informes Markdown, tablas, laboratorio y chat de cada agente con controles nativos, foco visible y desplazamiento seguro en contenido extenso.

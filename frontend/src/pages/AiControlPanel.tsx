@@ -11,7 +11,6 @@ interface AgentInfo {
   name: string;
   role: string;
   model: string;
-  color: string;
   purpose: string;
   calculations: string[];
   prompts: string[];
@@ -25,7 +24,6 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     name: 'María',
     role: 'Inventario',
     model: 'GPT-4o',
-    color: 'emerald',
     purpose: 'Protege la disponibilidad y detecta riesgo de rotura, exceso y capital inmovilizado.',
     calculations: ['Stock y valor de inventario', 'Cobertura y roturas por clase ABC', 'Demanda de 30 y 90 días'],
     prompts: ['¿Qué productos requieren atención de inventario?', 'Relaciona la demanda de 30 días con el stock disponible.']
@@ -35,7 +33,6 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     name: 'Lucía',
     role: 'Ventas',
     model: 'GPT-4o',
-    color: 'blue',
     purpose: 'Explica el rendimiento comercial y encuentra oportunidades por producto, cliente y equipo.',
     calculations: ['Ventas 30 y 90 días y variación', 'Clientes activos y concentración Top 10', 'Familias, KD y comerciales'],
     prompts: ['Compara las ventas de los últimos 30 días con el periodo anterior.', '¿Qué clientes y familias explican mejor las ventas recientes?']
@@ -45,7 +42,6 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
     name: 'Mattia',
     role: 'Finanzas',
     model: 'GPT-4o',
-    color: 'violet',
     purpose: 'Vigila rentabilidad, calidad del margen y exposición económica del negocio.',
     calculations: ['MG y MGD ponderados', 'Margen negativo o estrecho', 'Concentración y capital inmovilizado'],
     prompts: ['Resume MG y MGD de los últimos 30 días.', 'Detecta productos o clientes con rentabilidad débil.']
@@ -293,15 +289,15 @@ export const AiControlPanel = () => {
     const key = `${rowId}-${agentId}`;
     const isOpen = expandedAgentMap[key] !== undefined ? expandedAgentMap[key] : defaultOpen;
     return (
-      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mb-3">
-        <button onClick={() => toggleAgentView(rowId, agentId)} className="w-full flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-800 text-left transition-colors hover:bg-slate-200 dark:hover:bg-slate-700">
-          <span className="font-semibold text-slate-800 dark:text-white">{title}</span>
-          {isOpen ? <ChevronUp size={18} className="text-slate-500" /> : <ChevronDown size={18} className="text-slate-500" />}
+      <div className="mb-3 overflow-hidden rounded-[12px] border border-black/[0.08] dark:border-slate-700">
+        <button onClick={() => toggleAgentView(rowId, agentId)} className="flex w-full items-center justify-between bg-[#f5f5f7] p-4 text-left transition-colors hover:bg-[#e8e8ed] dark:bg-slate-800 dark:hover:bg-slate-700">
+          <span className="text-[14px] font-medium text-[#1d1d1f] dark:text-white">{title}</span>
+          {isOpen ? <ChevronUp size={18} className="text-[#6e6e73]" /> : <ChevronDown size={18} className="text-[#6e6e73]" />}
         </button>
         {isOpen && (
-          <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+          <div className="border-t border-black/[0.08] bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
             {content ? (
-              <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
+              <div className="control-markdown text-[14px] text-[#424245] dark:text-slate-300">
                 <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{content}</ReactMarkdown>
               </div>
             ) : (
@@ -337,24 +333,24 @@ export const AiControlPanel = () => {
     const columns = columnsByTab[tabId] || [];
     return (
       <div>
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">{section?.summary}</p>
+        <p className="mb-4 text-[14px] text-[#424245] dark:text-slate-300">{section?.summary}</p>
         {rows.length ? (
-          <div className="overflow-x-auto border-y border-slate-200 dark:border-slate-700">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
-                <tr>{columns.map(([key, label]) => <th key={key} className="px-3 py-3 font-semibold whitespace-nowrap">{label}</th>)}</tr>
+          <div className="overflow-x-auto rounded-[12px] border border-black/[0.08] dark:border-slate-700">
+            <table className="w-full text-left text-[12px]">
+              <thead className="bg-[#f5f5f7] text-[#6e6e73] dark:bg-slate-800 dark:text-slate-400">
+                <tr>{columns.map(([key, label]) => <th key={key} className="whitespace-nowrap px-3 py-3 font-medium">{label}</th>)}</tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <tbody className="divide-y divide-black/[0.06] dark:divide-slate-800">
                 {rows.map((row, index) => (
-                  <tr key={`${tabId}-${index}`} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    {columns.map(([key]) => <td key={key} className="px-3 py-3 whitespace-nowrap text-slate-700 dark:text-slate-300">{formatStudyValue(key, row[key])}</td>)}
+                  <tr key={`${tabId}-${index}`} className="transition-colors hover:bg-[#f5f5f7] dark:hover:bg-slate-800/50">
+                    {columns.map(([key]) => <td key={key} className="ai-tnum whitespace-nowrap px-3 py-3 text-[#424245] dark:text-slate-300">{formatStudyValue(key, row[key])}</td>)}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : <p className="py-10 text-center text-sm text-slate-400">No hay datos suficientes para este estudio.</p>}
-        {section?.methodology && <p className="mt-4 text-xs text-slate-500"><strong>Método:</strong> {String(section.methodology)}</p>}
+        {section?.methodology && <p className="mt-4 text-[12px] text-[#6e6e73]"><strong>Método:</strong> {String(section.methodology)}</p>}
       </div>
     );
   };
@@ -367,32 +363,32 @@ export const AiControlPanel = () => {
     const methodologyItems = Array.isArray(methodology) ? methodology : methodology ? [methodology] : [];
     return (
       <div className="space-y-6">
-        <p className="text-sm text-slate-600 dark:text-slate-300">{lab?.summary}</p>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <p className="text-[14px] text-[#424245] dark:text-slate-300">{lab?.summary}</p>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           {[
             ['slope_eur_per_day', 'Pendiente diaria', regression.slope_eur_per_day],
             ['r_squared', 'R² de tendencia', regression.r_squared],
             ['mean', 'Media diaria', distribution.mean],
             ['coefficient_variation_pct', 'Variabilidad', distribution.coefficient_variation_pct],
           ].map(([key, label, value]) => (
-            <div key={String(key)} className="border-l-2 border-brand-blue dark:border-brand-cyan pl-3 py-1">
-              <p className="text-xs text-slate-500">{label}</p>
-              <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">{formatStudyValue(String(key), value as number | null)}</p>
+            <div key={String(key)} className="rounded-[12px] bg-[#f5f5f7] p-4 dark:bg-slate-800">
+              <p className="text-[12px] text-[#6e6e73]">{label}</p>
+              <p className="ai-tnum mt-1 text-[16px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">{formatStudyValue(String(key), value as number | null)}</p>
             </div>
           ))}
         </div>
-        <div className="border-y border-slate-200 dark:border-slate-700 py-4 text-sm text-slate-600 dark:text-slate-300 space-y-2">
+        <div className="space-y-2 border-y border-black/[0.08] py-4 text-[13px] text-[#424245] dark:border-slate-700 dark:text-slate-300">
           <p><strong>Intervalo 95% de la pendiente:</strong> {formatStudyValue('slope_eur', regression.slope_ci95_low as number)} a {formatStudyValue('slope_eur', regression.slope_ci95_high as number)}</p>
           <p><strong>Intervalo 95% de la media:</strong> {formatStudyValue('mean_eur', distribution.mean_ci95_low)} a {formatStudyValue('mean_eur', distribution.mean_ci95_high)}</p>
           <p><strong>Muestra:</strong> {formatStudyValue('n', regression.n as number)} días.</p>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-3">Índice de estacionalidad semanal</h4>
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-2">
+          <h4 className="mb-3 text-[14px] font-medium text-[#1d1d1f] dark:text-white">Índice de estacionalidad semanal</h4>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
             {(lab?.weekday_seasonality || []).map((day, index) => (
-              <div key={index} className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg text-center">
-                <p className="text-xs text-slate-500">{day.weekday}</p>
-                <p className="text-sm font-semibold text-slate-800 dark:text-white mt-1">{formatStudyValue('index', day.seasonality_index as number)}</p>
+              <div key={index} className="rounded-[10px] bg-[#f5f5f7] p-3 text-center dark:bg-slate-800">
+                <p className="text-[12px] text-[#6e6e73]">{day.weekday}</p>
+                <p className="ai-tnum mt-1 text-[14px] font-semibold text-[#1d1d1f] dark:text-white">{formatStudyValue('index', day.seasonality_index as number)}</p>
               </div>
             ))}
           </div>
@@ -420,47 +416,47 @@ export const AiControlPanel = () => {
   }
 
   return (
-    <div className="flex-1 overflow-auto bg-slate-50 dark:bg-brand-dark min-h-screen relative p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="control-apple relative min-h-screen flex-1 overflow-auto bg-[#f5f5f7] p-4 dark:bg-brand-dark md:p-8">
+      <div className="mx-auto max-w-[1440px]">
 
         {/* Cabecera */}
-        <div className="mb-6">
+        <div className="mb-6 rounded-[24px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-3">
-                <Bot className="w-8 h-8 text-brand-blue dark:text-brand-cyan" />
+              <h1 className="mb-2 flex items-center gap-3 text-[32px] font-semibold tracking-[-0.03em] text-[#1d1d1f] dark:text-white">
+                <Bot className="h-7 w-7 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
                 Gabinete de Analistas IA
               </h1>
-              <p className="text-slate-500 dark:text-slate-400">
-                Los agentes razonan mediante <b>OpenAI (o1 y GPT-4o)</b> realizando consultas SQL dinámicas para analizar el negocio.
+              <p className="max-w-2xl text-[15px] text-[#6e6e73] dark:text-slate-400">
+                Agentes especializados que trabajan sobre evidencia verificada para analizar el negocio.
               </p>
             </div>
             <button
               onClick={() => setIsContextModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-brand-blue dark:text-brand-cyan bg-brand-blue/10 dark:bg-brand-cyan/10 hover:bg-brand-blue/20 dark:hover:bg-brand-cyan/20 rounded-xl transition-colors border border-brand-blue/20 dark:border-brand-cyan/20 shadow-sm shrink-0"
+              className="flex min-h-11 shrink-0 items-center gap-2 rounded-[12px] bg-[#f5f5f7] px-4 py-2.5 text-[13px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/10 dark:bg-slate-800 dark:text-brand-cyan"
             >
               <BookOpen size={16} /> Cerebro del Negocio
             </button>
           </div>
 
           {dataReadiness && (
-            <div className="mt-4 border-y border-slate-200 dark:border-slate-800 py-4">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="mt-5 border-y border-black/[0.08] py-5 dark:border-slate-800">
+              <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
                 <div className="flex items-center gap-3">
-                  <Database size={18} className="text-blue-500 shrink-0" />
-                  <div><p className="text-xs text-slate-500">Ventas</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.registros_ventas.toLocaleString('es-ES')} registros</p></div>
+                  <Database size={18} className="shrink-0 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
+                  <div><p className="text-[12px] text-[#6e6e73] dark:text-slate-400">Ventas</p><p className="ai-tnum text-[14px] font-semibold text-[#1d1d1f] dark:text-white">{dataReadiness.registros_ventas.toLocaleString('es-ES')} registros</p></div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Users size={18} className="text-emerald-500 shrink-0" />
-                  <div><p className="text-xs text-slate-500">Clientes</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.clientes_con_ventas.toLocaleString('es-ES')} con ventas</p></div>
+                  <Users size={18} className="shrink-0 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
+                  <div><p className="text-[12px] text-[#6e6e73] dark:text-slate-400">Clientes</p><p className="ai-tnum text-[14px] font-semibold text-[#1d1d1f] dark:text-white">{dataReadiness.clientes_con_ventas.toLocaleString('es-ES')} con ventas</p></div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <PackageCheck size={18} className={dataReadiness.inventario_disponible ? 'text-emerald-500 shrink-0' : 'text-amber-500 shrink-0'} />
-                  <div><p className="text-xs text-slate-500">Inventario</p><p className="text-sm font-semibold text-slate-800 dark:text-white">{dataReadiness.inventario_disponible ? `${dataReadiness.productos_con_inventario.toLocaleString('es-ES')} productos` : 'Pendiente de carga'}</p></div>
+                  <PackageCheck size={18} className={dataReadiness.inventario_disponible ? 'shrink-0 text-[#0071e3] dark:text-brand-cyan' : 'shrink-0 text-amber-500'} strokeWidth={1.75} />
+                  <div><p className="text-[12px] text-[#6e6e73] dark:text-slate-400">Inventario</p><p className="ai-tnum text-[14px] font-semibold text-[#1d1d1f] dark:text-white">{dataReadiness.inventario_disponible ? `${dataReadiness.productos_con_inventario.toLocaleString('es-ES')} productos` : 'Pendiente de carga'}</p></div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <ShoppingCart size={18} className="text-amber-500 shrink-0" />
-                  <div><p className="text-xs text-slate-500">Compras</p><p className="text-sm font-semibold text-slate-800 dark:text-white">Pendiente de conexión</p></div>
+                  <ShoppingCart size={18} className="shrink-0 text-amber-500" strokeWidth={1.75} />
+                  <div><p className="text-[12px] text-[#6e6e73] dark:text-slate-400">Compras</p><p className="text-[14px] font-semibold text-[#1d1d1f] dark:text-white">Pendiente de conexión</p></div>
                 </div>
               </div>
               {dataReadiness.fecha_minima && dataReadiness.fecha_maxima && (
@@ -477,7 +473,7 @@ export const AiControlPanel = () => {
           )}
 
           {/* Barra de estado global */}
-          <div className={`mt-4 flex items-center gap-4 px-4 py-3 rounded-xl border text-sm ${
+          <div className={`mt-5 flex items-center gap-4 rounded-[14px] border px-4 py-3 text-[13px] ${
             latestInsight
               ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
               : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
@@ -516,17 +512,17 @@ export const AiControlPanel = () => {
         </div>
 
         {/* Fase 1 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 mb-6">
+        <div className="mb-6 rounded-[20px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                Fase 1: Agentes de Área <span className="text-sm font-normal text-slate-400">(GPT-4o)</span>
+              <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
+                Fase 1: Agentes de área <span className="text-[13px] font-normal text-[#86868b]">GPT-4o</span>
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">María, Lucía y Mattia extraen alertas y redactan informes cognitivos.</p>
             </div>
             <button
               onClick={() => handleToggle('fase1_active')}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${settings.fase1_active ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${settings.fase1_active ? 'bg-[#0071e3] dark:bg-brand-cyan' : 'bg-slate-300 dark:bg-slate-700'}`}
             >
               <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${settings.fase1_active ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
@@ -535,21 +531,16 @@ export const AiControlPanel = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {(['maria', 'lucia', 'mattia'] as const).map(agentId => {
               const info = AGENTS_INFO[agentId];
-              const colorMap: Record<string, string> = {
-                emerald: 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                blue: 'border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                violet: 'border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400',
-              };
               const icons: Record<string, React.ReactNode> = { maria: <Bot size={18} />, lucia: <TrendingUp size={18} />, mattia: <DollarSign size={18} /> };
               return (
                 <button
                   type="button"
                   key={agentId}
                   onClick={() => openAgent(agentId)}
-                  className={`w-full text-left cursor-pointer rounded-xl p-5 border-2 transition-all hover:shadow-md hover:scale-[1.02] ${settings.fase1_active ? colorMap[info.color] : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-400'}`}
+                  className={`w-full cursor-pointer rounded-[16px] border p-5 text-left transition-all hover:border-[#0071e3]/40 hover:bg-[#0071e3]/[0.025] ${settings.fase1_active ? 'border-black/[0.08] bg-white text-[#1d1d1f] dark:border-slate-700 dark:bg-slate-800 dark:text-white' : 'border-black/[0.06] bg-[#fbfbfd] text-[#86868b] dark:border-slate-700 dark:bg-slate-800/50'}`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 font-bold text-sm">
+                    <div className="flex items-center gap-2 text-[15px] font-semibold">
                       {icons[agentId]} {info.name}
                     </div>
                     <div className="flex items-center gap-2">
@@ -563,26 +554,26 @@ export const AiControlPanel = () => {
                       )}
                     </div>
                   </div>
-                  <p className="text-xs opacity-70 mb-3">Área: {info.role} · {info.model}</p>
-                  <p className="text-sm leading-5 min-h-[60px] text-slate-700 dark:text-slate-300">{info.purpose}</p>
-                  <div className="relative mt-3 h-32 flex justify-center items-center">
+                  <p className="mb-3 text-[12px] opacity-70">Área: {info.role} · {info.model}</p>
+                  <p className="min-h-[60px] text-[13px] leading-5 text-[#424245] dark:text-slate-300">{info.purpose}</p>
+                  <div className="relative mt-3 flex h-28 items-center justify-center">
                     <img
                       src={settings.fase1_active ? `/assets/agents/${agentId}_work.png` : `/assets/agents/${agentId}_sleep.png`}
                       alt={info.name}
-                      className={`max-h-full max-w-full object-contain drop-shadow-lg transition-all duration-500 ${settings.fase1_active ? 'opacity-100' : 'opacity-60'}`}
+                      className={`max-h-full max-w-full object-contain transition-all duration-300 ${settings.fase1_active ? 'opacity-100' : 'opacity-60'}`}
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                     {!settings.fase1_active && (
-                      <span className="absolute top-0 right-1/3 text-slate-400 font-bold text-sm animate-bounce">Zzz</span>
+                      <span className="absolute right-1/3 top-0 text-[12px] font-medium text-slate-400">En espera</span>
                     )}
                   </div>
                   <div className="mt-3 text-center">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${settings.fase1_active ? 'bg-white/60 dark:bg-black/20' : 'bg-white/40 dark:bg-black/10'}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${settings.fase1_active ? 'bg-[#0071e3]/10 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
                       <Power size={11} />
                       {settings.fase1_active ? 'ACTIVO' : 'EN ESPERA'}
                     </span>
                   </div>
-                  <p className="text-[11px] mt-3 text-center opacity-60">Abrir expediente y chat</p>
+                  <p className="mt-3 text-center text-[11px] opacity-60">Abrir expediente y chat</p>
                 </button>
               );
             })}
@@ -590,30 +581,30 @@ export const AiControlPanel = () => {
         </div>
 
         {/* Fase 2 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 mb-6">
+        <div className="mb-6 rounded-[20px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <Brain className="w-5 h-5 text-purple-500" />
-                Fase 2: CEO Consolidador <span className="text-sm font-normal text-slate-400">(o1)</span>
+              <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
+                <Brain className="h-5 w-5 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
+                Fase 2: CEO consolidador <span className="text-[13px] font-normal text-[#86868b]">o1</span>
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">El CEO toma los 3 informes y razona para emitir un Executive Summary.</p>
             </div>
             <button
               onClick={() => handleToggle('fase2_active')}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${settings.fase2_active ? 'bg-purple-500' : 'bg-slate-300 dark:bg-slate-700'}`}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${settings.fase2_active ? 'bg-[#0071e3] dark:bg-brand-cyan' : 'bg-slate-300 dark:bg-slate-700'}`}
             >
               <span className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${settings.fase2_active ? 'translate-x-7' : 'translate-x-1'}`} />
             </button>
           </div>
           <div className="flex justify-center">
-            <div className={`w-full max-w-md rounded-xl p-5 border-2 transition-all ${settings.fase2_active ? 'border-purple-200 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/10' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50'}`}>
+            <div className={`w-full max-w-md rounded-[16px] border p-5 transition-all ${settings.fase2_active ? 'border-black/[0.08] bg-white dark:border-slate-700 dark:bg-slate-800' : 'border-black/[0.06] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-800/50'}`}>
               <div className="flex items-center justify-between mb-3">
-                <span className="font-bold text-sm text-slate-800 dark:text-white flex items-center gap-2">
-                  <Brain size={18} className="text-purple-500" /> Director de Operaciones (o1)
+                <span className="flex items-center gap-2 text-[15px] font-semibold text-[#1d1d1f] dark:text-white">
+                  <Brain size={18} className="text-[#0071e3] dark:text-brand-cyan" /> Director de Operaciones (o1)
                 </span>
                 {settings.fase2_active ? (
-                  <span className="flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-purple-400 opacity-75" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-500" /></span>
+                  <span className="flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-[#0071e3] opacity-50" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#0071e3]" /></span>
                 ) : (
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-400" />
                 )}
@@ -622,12 +613,12 @@ export const AiControlPanel = () => {
                 <img
                   src={settings.fase2_active ? '/assets/agents/ceo_work.png' : '/assets/agents/ceo_sleep.png'}
                   alt="CEO"
-                  className={`max-h-full max-w-full object-contain drop-shadow-lg transition-all duration-500 ${settings.fase2_active ? 'opacity-100' : 'opacity-60'}`}
+                  className={`max-h-full max-w-full object-contain transition-all duration-300 ${settings.fase2_active ? 'opacity-100' : 'opacity-60'}`}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
               <div className="mt-3 text-center">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${settings.fase2_active ? 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium ${settings.fase2_active ? 'bg-[#0071e3]/10 text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400'}`}>
                   <Power size={11} />{settings.fase2_active ? 'ACTIVO' : 'EN ESPERA'}
                 </span>
               </div>
@@ -636,11 +627,11 @@ export const AiControlPanel = () => {
         </div>
 
         {/* Historial de Informes + Botón de ejecución */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
+        <div className="rounded-[20px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div>
-              <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-500" />
+              <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
+                <FileText className="h-5 w-5 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
                 Historial de Informes Ejecutivos
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400">Consulta los reportes generados por los agentes departamentales y el CEO.</p>
@@ -649,7 +640,7 @@ export const AiControlPanel = () => {
               <button
                 onClick={handleRunAnalysis}
                 disabled={isRunning || (!settings.fase1_active && !settings.fase2_active)}
-                className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors shadow-sm min-w-[180px] justify-center"
+                className="flex min-h-11 min-w-[180px] items-center justify-center gap-2 rounded-[12px] bg-[#0071e3] px-6 py-3 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isRunning ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
                 {isRunning ? 'Ejecutando...' : 'Nueva Ejecución'}
@@ -665,37 +656,37 @@ export const AiControlPanel = () => {
           <div className="space-y-4">
             {insightsHistory.length > 0 ? (
               insightsHistory.map((insight, idx) => (
-                <div key={insight.id} className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                <div key={insight.id} className="overflow-hidden rounded-[16px] border border-black/[0.08] dark:border-slate-700">
                   <button
                     onClick={() => toggleRow(insight.id)}
-                    className="w-full flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                    className="flex min-h-14 w-full items-center justify-between bg-[#fbfbfd] p-4 transition-colors hover:bg-black/[0.025] dark:bg-slate-800 dark:hover:bg-slate-700"
                   >
                     <div className="flex items-center gap-3">
                       {idx === 0 && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-full">Nuevo</span>
+                        <span className="rounded-full bg-[#0071e3]/10 px-2 py-0.5 text-[11px] font-medium text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">Nuevo</span>
                       )}
-                      <span className="font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="flex items-center gap-2 text-[14px] font-semibold text-[#1d1d1f] dark:text-white">
+                        <span className="h-2 w-2 rounded-full bg-[#0071e3] dark:bg-brand-cyan" />
                         Reporte del {new Date(insight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-                      {insight.fase1_maria_md && <span className="hidden md:block">📦 María</span>}
-                      {insight.fase1_lucia_md && <span className="hidden md:block">📈 Lucía</span>}
-                      {insight.fase1_mattia_md && <span className="hidden md:block">💰 Mattia</span>}
-                      {insight.fase2_ceo_markdown && <span className="hidden md:block">🧠 CEO</span>}
+                      {insight.fase1_maria_md && <span className="hidden md:block">María</span>}
+                      {insight.fase1_lucia_md && <span className="hidden md:block">Lucía</span>}
+                      {insight.fase1_mattia_md && <span className="hidden md:block">Mattia</span>}
+                      {insight.fase2_ceo_markdown && <span className="hidden md:block">CEO</span>}
                       {expandedRowId === insight.id ? <ChevronUp className="text-slate-500" size={18} /> : <ChevronDown className="text-slate-500" size={18} />}
                     </div>
                   </button>
 
                   {expandedRowId === insight.id && (
-                    <div className="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                      {renderAgentAccordion(insight.id, 'ceo', '💼 Executive Summary (CEO)', insight.fase2_ceo_markdown, true)}
+                    <div className="border-t border-black/[0.08] bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
+                      {renderAgentAccordion(insight.id, 'ceo', 'Resumen ejecutivo (CEO)', insight.fase2_ceo_markdown, true)}
                       <div className="mt-6">
-                        <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Informes Departamentales</h4>
-                        {renderAgentAccordion(insight.id, 'maria', '📦 Reporte de Inventario (María)', insight.fase1_maria_md, false)}
-                        {renderAgentAccordion(insight.id, 'lucia', '📈 Reporte de Ventas (Lucía)', insight.fase1_lucia_md, false)}
-                        {renderAgentAccordion(insight.id, 'mattia', '💰 Reporte de Finanzas (Mattia)', insight.fase1_mattia_md, false)}
+                        <h4 className="mb-3 text-[13px] font-medium text-[#6e6e73]">Informes departamentales</h4>
+                        {renderAgentAccordion(insight.id, 'maria', 'Informe de inventario (María)', insight.fase1_maria_md, false)}
+                        {renderAgentAccordion(insight.id, 'lucia', 'Informe de ventas (Lucía)', insight.fase1_lucia_md, false)}
+                        {renderAgentAccordion(insight.id, 'mattia', 'Informe de finanzas (Mattia)', insight.fase1_mattia_md, false)}
                       </div>
                     </div>
                   )}
@@ -714,38 +705,38 @@ export const AiControlPanel = () => {
 
       {/* Modal de Chat con Agente */}
       {selectedAgent && AGENTS_INFO[selectedAgent] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 md:p-5 bg-slate-900/55 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-[1500px] h-[94vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 backdrop-blur-sm md:p-5 animate-in fade-in">
+          <div className="flex h-[94vh] w-full max-w-[1500px] flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e]">
+            <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#fbfbfd] px-6 py-5 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
               <div>
-                <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <h2 className="flex items-center gap-2 text-[22px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-white">
                   Expediente: {AGENTS_INFO[selectedAgent].name}
                 </h2>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="mt-1 text-[12px] text-[#6e6e73]">
                   Área: {AGENTS_INFO[selectedAgent].role} · Informe diario · Memoria analítica: 7 días
                 </p>
               </div>
-              <button title="Cerrar expediente" aria-label="Cerrar expediente" onClick={() => setSelectedAgent(null)} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+              <button title="Cerrar expediente" aria-label="Cerrar expediente" onClick={() => setSelectedAgent(null)} className="rounded-full bg-[#e8e8ed] p-2 text-[#6e6e73] transition-colors hover:text-[#1d1d1f] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-white">
                 <X size={24} />
               </button>
             </div>
 
             <div className="p-3 md:p-5 overflow-y-auto lg:overflow-hidden flex-1 grid grid-cols-1 lg:grid-cols-[minmax(360px,0.85fr)_minmax(560px,1.15fr)] lg:grid-rows-[auto_minmax(0,1fr)] gap-4 min-h-0">
               {/* Vista previa del informe diario */}
-              <section className="order-1 lg:col-start-2 lg:row-start-1 lg:row-span-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 min-h-[420px] overflow-hidden flex flex-col">
-                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between gap-3">
+              <section className="order-1 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white dark:border-slate-700 dark:bg-slate-900 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                <div className="flex items-center justify-between gap-3 border-b border-black/[0.08] bg-[#fbfbfd] px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
                   <div className="flex items-center gap-2">
                     <PanelRight size={17} className="text-brand-blue dark:text-brand-cyan" />
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-white">Centro de estudios de {AGENTS_INFO[selectedAgent].name}</h3>
-                      <p className="text-xs text-slate-500">Informe, conocimiento y laboratorio analítico</p>
+                      <h3 className="text-[14px] font-medium text-[#1d1d1f] dark:text-white">Centro de estudios de {AGENTS_INFO[selectedAgent].name}</h3>
+                      <p className="text-[12px] text-[#6e6e73]">Informe, conocimiento y laboratorio analítico</p>
                     </div>
                   </div>
                   {reportInsight && (
-                    <span className="text-xs text-slate-500 shrink-0">{new Date(reportInsight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    <span className="ai-tnum shrink-0 text-[12px] text-[#6e6e73]">{new Date(reportInsight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>
                   )}
                 </div>
-                <div className="px-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
+                <div className="overflow-x-auto border-b border-black/[0.08] bg-white px-3 dark:border-slate-700 dark:bg-slate-900">
                   <div className="flex min-w-max">
                     {([
                       ['report', 'Informe', <FileText size={14} />],
@@ -754,7 +745,7 @@ export const AiControlPanel = () => {
                       ['product_managers', 'Product Managers', <BriefcaseBusiness size={14} />],
                       ['laboratory', 'Laboratorio', <FlaskConical size={14} />],
                     ] as Array<[StudyTab, string, React.ReactNode]>).map(([id, label, icon]) => (
-                      <button key={id} type="button" onClick={() => setStudyTab(id)} className={`flex items-center gap-1.5 px-3 py-3 text-xs font-medium border-b-2 transition-colors ${studyTab === id ? 'border-brand-blue dark:border-brand-cyan text-brand-blue dark:text-brand-cyan' : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+                      <button key={id} type="button" onClick={() => setStudyTab(id)} className={`flex items-center gap-1.5 border-b-2 px-3 py-3 text-[12px] font-medium transition-colors ${studyTab === id ? 'border-[#0071e3] text-[#0071e3] dark:border-[#0a84ff] dark:text-[#64d2ff]' : 'border-transparent text-[#6e6e73] hover:text-[#1d1d1f] dark:hover:text-slate-200'}`}>
                         {icon}{label}
                       </button>
                     ))}
@@ -768,26 +759,26 @@ export const AiControlPanel = () => {
                   )}
                   {studyTab === 'report' && dailyError && <div className="mb-5 text-sm text-amber-700 dark:text-amber-300">{dailyError}</div>}
                   {studyTab === 'report' && (
-                    <div className="mb-5 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 bg-brand-blue/5 dark:bg-brand-cyan/5 p-3">
+                    <div className="mb-5 rounded-[12px] bg-[#0071e3]/[0.08] p-4 dark:bg-[#0a84ff]/15">
                       <div className="flex items-center justify-between gap-3">
-                        <div><p className="text-sm font-semibold text-slate-800 dark:text-white">Investigación verificable</p><p className="text-xs text-slate-500">Cada cifra se valida contra su bloque de evidencia antes de mostrarse.</p></div>
-                        <button type="button" onClick={handleInvestigation} disabled={isInvestigating} className="px-3 py-2 text-xs rounded-lg bg-brand-blue text-white hover:bg-blue-700 disabled:opacity-50">
+                        <div><p className="text-[14px] font-medium text-[#1d1d1f] dark:text-white">Investigación verificable</p><p className="text-[12px] text-[#6e6e73]">Cada cifra se valida contra su bloque de evidencia antes de mostrarse.</p></div>
+                        <button type="button" onClick={handleInvestigation} disabled={isInvestigating} className="min-h-9 rounded-[10px] bg-[#0071e3] px-3 text-[12px] font-medium text-white hover:bg-[#0077ed] disabled:opacity-50">
                           {isInvestigating ? 'Verificando...' : 'Investigar señal'}
                         </button>
                       </div>
                       {investigationError && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">{investigationError}</p>}
-                      {investigation?.report && <div className="mt-3 prose dark:prose-invert max-w-none text-sm"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{investigation.report}</ReactMarkdown></div>}
+                      {investigation?.report && <div className="control-markdown mt-3 text-[14px]"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{investigation.report}</ReactMarkdown></div>}
                     </div>
                   )}
                   {studyTab === 'report' && reportInsight && reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight] ? (
-                    <div className="prose dark:prose-invert max-w-none text-sm text-slate-700 dark:text-slate-300">
+                    <div className="control-markdown text-[14px] text-[#424245] dark:text-slate-300">
                       <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{String(reportInsight[`fase1_${selectedAgent}_md` as keyof AgentInsight])}</ReactMarkdown>
                     </div>
                   ) : studyTab === 'report' && !isDailyPreparing ? (
                     <div className="h-full flex flex-col items-center justify-center text-center text-slate-400">
                       <FileText size={38} className="mb-3 opacity-40" />
                       <p className="font-medium">Todavía no hay un informe disponible.</p>
-                      <button type="button" onClick={prepareDailyReport} className="mt-4 px-4 py-2 text-sm rounded-lg bg-brand-blue text-white hover:bg-blue-700">Preparar informe</button>
+                      <button type="button" onClick={prepareDailyReport} className="mt-4 min-h-10 rounded-[10px] bg-[#0071e3] px-4 text-[14px] font-medium text-white hover:bg-[#0077ed]">Preparar informe</button>
                     </div>
                   ) : null}
                   {studyTab !== 'report' && isStudiesLoading && (
@@ -811,31 +802,31 @@ export const AiControlPanel = () => {
               </section>
 
               {/* Capacidades verificadas */}
-              <div className="order-2 lg:col-start-1 lg:row-start-1 bg-slate-100 dark:bg-slate-800/80 rounded-lg p-4 border border-slate-200 dark:border-slate-700 shrink-0">
-                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Calculator size={14} className="text-brand-blue dark:text-brand-cyan" /> Qué analiza y calcula
+              <div className="order-2 shrink-0 rounded-[16px] bg-[#f5f5f7] p-5 dark:bg-slate-800/80 lg:col-start-1 lg:row-start-1">
+                <h3 className="mb-2 flex items-center gap-2 text-[12px] font-medium text-[#6e6e73] dark:text-slate-300">
+                  <Calculator size={14} className="text-[#0071e3] dark:text-brand-cyan" /> Qué analiza y calcula
                 </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{AGENTS_INFO[selectedAgent].purpose}</p>
+                <p className="mb-3 text-[14px] text-[#424245] dark:text-slate-300">{AGENTS_INFO[selectedAgent].purpose}</p>
                 <div className="grid sm:grid-cols-3 gap-2">
                   {AGENTS_INFO[selectedAgent].calculations.map(calculation => (
-                    <div key={calculation} className="text-xs text-slate-600 dark:text-slate-300 flex items-start gap-2"><CheckCircle size={13} className="text-emerald-500 mt-0.5 shrink-0" />{calculation}</div>
+                    <div key={calculation} className="flex items-start gap-2 text-[12px] text-[#424245] dark:text-slate-300"><CheckCircle size={13} className="mt-0.5 shrink-0 text-[#0071e3] dark:text-brand-cyan" />{calculation}</div>
                   ))}
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 flex items-center gap-2"><Sparkles size={13} /> Preguntas recomendadas</p>
+                <div className="mt-4 border-t border-black/[0.08] pt-3 dark:border-slate-700">
+                  <p className="mb-2 flex items-center gap-2 text-[12px] font-medium text-[#6e6e73] dark:text-slate-300"><Sparkles size={13} /> Preguntas recomendadas</p>
                   <div className="flex flex-wrap gap-2">
                     {AGENTS_INFO[selectedAgent].prompts.map(prompt => (
-                      <button key={prompt} type="button" onClick={() => setChatInput(prompt)} className="text-left text-xs px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-brand-blue dark:hover:border-brand-cyan transition-colors">{prompt}</button>
+                      <button key={prompt} type="button" onClick={() => setChatInput(prompt)} className="min-h-9 rounded-[10px] bg-white px-3 py-2 text-left text-[12px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-brand-cyan">{prompt}</button>
                     ))}
                   </div>
                 </div>
               </div>
 
               {/* Chat */}
-              <div className="order-3 lg:col-start-1 lg:row-start-2 flex flex-col min-h-[420px] lg:min-h-0 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900 shadow-inner">
-                <div className="bg-white dark:bg-slate-800 p-3 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 shrink-0">
-                  <MessageSquare size={16} className="text-brand-blue dark:text-brand-cyan" />
-                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>
+              <div className="order-3 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-900 lg:col-start-1 lg:row-start-2 lg:min-h-0">
+                <div className="flex shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+                  <MessageSquare size={16} className="text-[#0071e3] dark:text-brand-cyan" />
+                  <span className="text-[14px] font-medium text-[#1d1d1f] dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>
                 </div>
 
                 <div className="flex-1 p-4 overflow-y-auto space-y-4">
@@ -848,24 +839,24 @@ export const AiControlPanel = () => {
                   )}
                   {agentChatHistory.map((msg, idx) => (
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[85%] p-3 rounded-2xl text-sm ${msg.role === 'user' ? 'bg-brand-blue text-white rounded-tr-sm' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-tl-sm shadow-sm'}`}>
-                        {msg.role === 'user' ? msg.content : <div className="prose dark:prose-invert max-w-none text-sm"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown></div>}
+                      <div className={`max-w-[85%] rounded-[14px] p-3 text-[14px] ${msg.role === 'user' ? 'rounded-tr-sm bg-[#0071e3] text-white' : 'rounded-tl-sm border border-black/[0.08] bg-white text-[#424245] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                        {msg.role === 'user' ? msg.content : <div className="control-markdown"><ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown></div>}
                       </div>
                     </div>
                   ))}
                   {isChatLoading && (
                     <div className="flex justify-start">
-                      <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl rounded-tl-sm flex gap-2 items-center shadow-sm">
-                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                        <div className="w-2 h-2 bg-brand-cyan/50 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                      <div className="flex items-center gap-2 rounded-[14px] rounded-tl-sm border border-black/[0.08] bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-[#0071e3]/50" />
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-[#0071e3]/50" style={{ animationDelay: '0.2s' }} />
+                        <div className="h-2 w-2 animate-bounce rounded-full bg-[#0071e3]/50" style={{ animationDelay: '0.4s' }} />
                       </div>
                     </div>
                   )}
                   {!isChatLoading && chatSuggestions.length > 0 && agentChatHistory.length > 0 && (
                     <div className="flex flex-wrap gap-2 pt-1">
                       {chatSuggestions.map(suggestion => (
-                        <button key={suggestion} type="button" onClick={() => setChatInput(suggestion)} className="text-left text-xs px-3 py-2 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 text-brand-blue dark:text-brand-cyan hover:bg-brand-blue/5 dark:hover:bg-brand-cyan/10 transition-colors">
+                        <button key={suggestion} type="button" onClick={() => setChatInput(suggestion)} className="min-h-9 rounded-[10px] bg-[#0071e3]/10 px-3 py-2 text-left text-[12px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/15 dark:bg-[#0a84ff]/15 dark:text-[#64d2ff]">
                           {suggestion}
                         </button>
                       ))}
@@ -874,7 +865,7 @@ export const AiControlPanel = () => {
                   <div ref={chatEndRef} />
                 </div>
 
-                <form onSubmit={handleSendAgentMessage} className="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex gap-2 shrink-0">
+                <form onSubmit={handleSendAgentMessage} className="flex shrink-0 gap-2 border-t border-black/[0.08] bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
                   <textarea
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
@@ -887,10 +878,10 @@ export const AiControlPanel = () => {
                     placeholder={`Pregúntale a ${AGENTS_INFO[selectedAgent].name} sobre ${AGENTS_INFO[selectedAgent].role.toLowerCase()}...`}
                     maxLength={2000}
                     rows={2}
-                    className="flex-1 min-h-[44px] max-h-28 resize-y bg-slate-100 dark:bg-slate-900 border-none rounded-lg px-4 py-2 text-sm text-slate-800 dark:text-white focus:ring-2 focus:ring-brand-blue dark:focus:ring-brand-cyan outline-none"
+                    className="min-h-[44px] max-h-28 flex-1 resize-y rounded-[10px] border border-black/[0.12] bg-[#fbfbfd] px-4 py-2 text-[14px] text-[#1d1d1f] outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     disabled={isChatLoading || isDailyPreparing}
                   />
-                  <button type="submit" title="Enviar mensaje" aria-label="Enviar mensaje" disabled={!chatInput.trim() || isChatLoading || isDailyPreparing} className="self-end p-3 bg-brand-blue dark:bg-brand-cyan text-white rounded-lg hover:bg-blue-700 dark:hover:bg-cyan-600 disabled:opacity-50 transition-colors">
+                  <button type="submit" title="Enviar mensaje" aria-label="Enviar mensaje" disabled={!chatInput.trim() || isChatLoading || isDailyPreparing} className="self-end rounded-[10px] bg-[#0071e3] p-3 text-white transition-colors hover:bg-[#0077ed] disabled:opacity-50 dark:bg-[#0a84ff]">
                     <Send size={18} />
                   </button>
                 </form>
@@ -902,35 +893,35 @@ export const AiControlPanel = () => {
 
       {/* Modal Cerebro del Negocio */}
       {isContextModalOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-brand-surface w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-brand-cyan/20">
-            <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-brand-dark/50">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-[24px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)] dark:bg-[#1c1c1e]">
+            <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#fbfbfd] p-6 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
               <div className="flex items-center gap-3">
-                <div className="bg-brand-blue/10 dark:bg-brand-cyan/20 p-2 rounded-lg text-brand-blue dark:text-brand-cyan">
+                <div className="rounded-[10px] bg-[#0071e3]/10 p-2 text-[#0071e3] dark:bg-[#0a84ff]/15 dark:text-[#64d2ff]">
                   <BookOpen size={20} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">Cerebro del Negocio</h2>
-                  <p className="text-xs text-slate-500">Contexto global que leen todos los agentes de IA</p>
+                  <h2 className="text-[20px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-white">Cerebro del negocio</h2>
+                  <p className="text-[13px] text-[#6e6e73]">Contexto global que leen todos los agentes de IA</p>
                 </div>
               </div>
-              <button onClick={() => setIsContextModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white bg-slate-100 dark:bg-slate-800 rounded-lg transition-colors">
+              <button onClick={() => setIsContextModalOpen(false)} aria-label="Cerrar contexto" className="rounded-full bg-[#e8e8ed] p-2 text-[#6e6e73] transition-colors hover:text-[#1d1d1f] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-white">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-5">
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">Redacta aquí el contexto de negocio que leerán el Copilot y todos los agentes de IA al analizar tus datos.</p>
+            <div className="p-6">
+              <p className="mb-3 text-[15px] text-[#424245] dark:text-slate-200">Redacta el contexto de negocio que leerán el Copilot y todos los agentes de IA al analizar tus datos.</p>
               <textarea
                 value={businessContext}
                 onChange={(e) => setBusinessContext(e.target.value)}
                 placeholder="Ejemplo: Nuestro objetivo es no tener más de 15 días de cobertura..."
-                className="w-full h-64 p-4 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-brand-blue dark:focus:border-brand-cyan text-slate-800 dark:text-slate-200 resize-none"
+                className="h-64 w-full resize-none rounded-[12px] border border-black/[0.12] bg-[#fbfbfd] p-4 text-[14px] text-[#1d1d1f] placeholder:text-[#86868b] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               />
-              <p className="text-xs text-slate-400 mt-1">{businessContext.length} caracteres</p>
+              <p className="mt-1 text-[12px] text-[#86868b]">{businessContext.length} caracteres</p>
             </div>
-            <div className="p-5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-brand-dark/50 flex justify-end gap-3">
-              <button onClick={() => setIsContextModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancelar</button>
-              <button onClick={handleSaveContext} disabled={isSavingContext} className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-brand-blue dark:bg-brand-cyan text-white dark:text-brand-dark rounded-lg hover:bg-brand-blue/90 disabled:opacity-70 shadow-md">
+            <div className="flex justify-end gap-3 border-t border-black/[0.08] bg-[#fbfbfd] p-5 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
+              <button onClick={() => setIsContextModalOpen(false)} className="min-h-10 rounded-[10px] px-4 text-[14px] font-medium text-[#424245] transition-colors hover:bg-[#e8e8ed] dark:text-slate-300 dark:hover:bg-slate-700">Cancelar</button>
+              <button onClick={handleSaveContext} disabled={isSavingContext} className="flex min-h-10 items-center gap-2 rounded-[10px] bg-[#0071e3] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:opacity-70 dark:bg-[#0a84ff]">
                 {isSavingContext ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                 {isSavingContext ? 'Guardando...' : 'Guardar Contexto'}
               </button>

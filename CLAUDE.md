@@ -57,6 +57,13 @@ La ruta interna `/alerts` también está documentada porque sigue registrada en 
 
 No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de Git. Si una migración de producción fuese necesaria, incluir una ruta segura de inicialización o la migración correspondiente.
 
+## Actualización v1.49 — episodios y decisiones de Control IA
+
+- Control IA correlaciona señales deterministas en episodios, con enlaces declarados, solape mínimo de siete días y deduplicación de facetas. No sumar dos veces una misma incidencia por `duplica`.
+- Conservar separados `impacto_realizado_eur`, `impacto_en_riesgo_eur` e `impacto_capital_eur`; `impacto_ponderado_eur` es solo la prioridad operativa y no una cifra que pueda presentarse como pérdida realizada.
+- El CEO consume episodios y debe referirse a sus enlaces como explicación estructural, nunca como causalidad demostrada. Las decisiones propuestas necesitan episodio, responsable, métrica y horizonte; se persisten y se cierran con resultado.
+- Toda señal descartada requiere motivo y feedback. Un `falso_positivo` o `no_accionable` suprime la misma señal durante 30 días; si reaparece después, vuelve como incidencia nueva con trazabilidad de reincidencia.
+
 ## Versiones y precedentes relevantes
 
 - v1.17 inicializa de forma segura la tabla de histórico de inventario en producción.

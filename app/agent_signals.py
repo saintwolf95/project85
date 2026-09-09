@@ -12,16 +12,41 @@ from datetime import date, datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .models import AgentSignal
+from .models import AgentSignal, AgentSignalFeedback
 
 
 ACTIVE_STATES = ("nueva", "persistente")
 MAX_NEW_SIGNALS_PER_AGENT_PER_DAY = 5
 FDR_ALPHA = 0.10
+SUPRESION_DIAS = 30
+IMPACTO_FACTOR = {"realizado": 1.00, "en_riesgo": 0.60, "capital": 0.30}
+IMPACTO_TIPO_POR_DETECTOR = {
+    "caida_facturacion_familia": "realizado",
+    "precio_volumen_familia": "realizado",
+    "erosion_mgd_familia": "realizado",
+    "rotura_stock_clase_a": "en_riesgo",
+    "cobertura_vs_lead_time": "en_riesgo",
+    "concentracion_clientes": "en_riesgo",
+    "exceso_cobertura": "capital",
+    "stock_muerto_90d": "capital",
+}
 
 
 def _number(value, default=0.0):
     return float(value or default)
+
+
+def is_signal_suppressed(db: Session, signal: AgentSignal, now: datetime) -> bool:
+    """Una señal descartada conserva trazabilidad pero no vuelve a la bandeja durante 30 días."""
+    if signal.estado != "descartada" or not signal.descartada_en:
+        return False
+    if (now - signal.descartada_en).days >= SUPRESION_DIAS:
+        return False
+    feedback = db.query(AgentSignalFeedback.veredicto).filter(
+        AgentSignalFeedback.empresa_id == signal.empresa_id,
+        AgentSignalFeedback.signal_id == signal.id,
+    ).order_by(AgentSignalFeedback.created_at.desc()).first()
+    return bool(feedback and feedback[0] in {"falso_positivo", "no_accionable"})
 
 
 def _fingerprint(signal: dict) -> str:
@@ -31,11 +56,20 @@ def _fingerprint(signal: dict) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def impact_type_for_detector(detector: str) -> str:
+    """Clasifica la naturaleza económica sin alterar el importe de negocio."""
+    return IMPACTO_TIPO_POR_DETECTOR.get(detector, "en_riesgo")
+
+
 def _signal(agent, detector, entity_type, entity_id, start, end, severity, impact, confidence, current, expected, evidence):
+    impact_eur = max(0.0, _number(impact))
+    impact_type = impact_type_for_detector(detector)
     signal = {
         "agente": agent, "detector": detector, "entidad_tipo": entity_type,
         "entidad_id": str(entity_id), "periodo_inicio": start, "periodo_fin": end,
-        "severidad": severity, "impacto_eur": max(0.0, _number(impact)),
+        "severidad": severity, "impacto_eur": impact_eur,
+        "impacto_tipo": impact_type,
+        "impacto_ponderado_eur": impact_eur * IMPACTO_FACTOR[impact_type],
         "confianza": max(0.0, min(1.0, _number(confidence))),
         "valor_actual": _number(current), "valor_esperado": _number(expected),
         "desviacion": _number(current) - _number(expected), "evidencia": evidence,
@@ -221,6 +255,9 @@ def _inventory_signals(db: Session, empresa_id: int) -> list[dict]:
     snapshot = db.execute(text("SELECT MAX(ih.fecha_inventario) FROM inventario_historico ih JOIN productos p ON p.id=ih.producto_id WHERE p.empresa_id=:empresa_id"), {"empresa_id": empresa_id}).scalar()
     if not snapshot:
         return []
+    # El snapshot representa un riesgo vigente durante la última semana operativa.
+    # Así puede compararse con ventanas de ventas sin convertirlo en una tendencia.
+    snapshot_window_start = snapshot - timedelta(days=6)
     rows = db.execute(text("""
         SELECT p.sku, p.nombre, COALESCE(p.familia, 'Sin familia') familia, pm.abc,
           ih.unidades_inventario unidades, ih.inventario_eur valor, COALESCE(pm.dias_cobertura, 0) cobertura,
@@ -236,11 +273,11 @@ def _inventory_signals(db: Session, empresa_id: int) -> list[dict]:
         base = {"fecha_snapshot": str(snapshot), "sku": row["sku"], "articulo": row["nombre"], "familia": row["familia"],
                 "clase_abc": row["abc"], "unidades_inventario": units, "valor_inventario_eur": value, "cobertura_dias": coverage, "lead_time_dias": lead}
         if row["abc"] == "A" and units == 0:
-            signals.append(_signal("maria", "rotura_stock_clase_a", "sku", row["sku"], snapshot, snapshot, 5, max(value, 1), .9, units, 1, dict(base, metodo="nivel de stock actual de SKU clase A")))
+            signals.append(_signal("maria", "rotura_stock_clase_a", "sku", row["sku"], snapshot_window_start, snapshot, 5, max(value, 1), .9, units, 1, dict(base, metodo="nivel de stock actual de SKU clase A")))
         elif row["abc"] == "A" and coverage > 0 and coverage <= lead:
-            signals.append(_signal("maria", "cobertura_vs_lead_time", "sku", row["sku"], snapshot, snapshot, 4, max(value, 1), .85, coverage, lead, dict(base, metodo="cobertura calculada frente a lead time configurado")))
+            signals.append(_signal("maria", "cobertura_vs_lead_time", "sku", row["sku"], snapshot_window_start, snapshot, 4, max(value, 1), .85, coverage, lead, dict(base, metodo="cobertura calculada frente a lead time configurado")))
         if coverage > 180 and value > 1000:
-            signals.append(_signal("maria", "exceso_cobertura", "sku", row["sku"], snapshot, snapshot, 3, value, .8, coverage, 180, dict(base, metodo="cobertura superior a 180 dias y valor inmovilizado superior a 1.000 EUR")))
+            signals.append(_signal("maria", "exceso_cobertura", "sku", row["sku"], snapshot_window_start, snapshot, 3, value, .8, coverage, 180, dict(base, metodo="cobertura superior a 180 dias y valor inmovilizado superior a 1.000 EUR")))
     # Stock muerto frente a ventas de 90 días: el valor es del último snapshot.
     dead = db.execute(text("""
         SELECT p.sku, p.nombre, COALESCE(p.familia,'Sin familia') familia, ih.inventario_eur valor
@@ -308,7 +345,7 @@ def refresh_agent_signals(db: Session, empresa_id: int) -> list[AgentSignal]:
         if row.estado in ACTIVE_STATES and row.primera_deteccion and row.primera_deteccion >= start_of_day:
             new_counts[row.agente] += 1
     # El p-valor filtra la entrada; impacto EUR, confianza y severidad eligen las cinco nuevas.
-    detected.sort(key=lambda item: item["impacto_eur"] * item["confianza"] * (1 + .15 * (item["severidad"] - 1)), reverse=True)
+    detected.sort(key=lambda item: item["impacto_ponderado_eur"] * item["confianza"] * (1 + .15 * (item["severidad"] - 1)), reverse=True)
     accepted_detected = []
     for data in detected:
         if data["fingerprint"] in existing or new_counts[data["agente"]] < MAX_NEW_SIGNALS_PER_AGENT_PER_DAY:
@@ -319,11 +356,14 @@ def refresh_agent_signals(db: Session, empresa_id: int) -> list[AgentSignal]:
     for data in accepted_detected:
         row = existing.get(data["fingerprint"])
         if row:
-            for field in ("severidad", "impacto_eur", "confianza", "valor_actual", "valor_esperado", "desviacion"):
+            for field in ("severidad", "impacto_eur", "impacto_tipo", "impacto_ponderado_eur", "confianza", "valor_actual", "valor_esperado", "desviacion"):
                 setattr(row, field, data[field])
             row.evidencia = json.dumps(data["evidencia"], ensure_ascii=False, default=str)
             row.ultima_deteccion = now
-            if row.estado != "descartada":
+            if row.estado == "descartada" and not is_signal_suppressed(db, row, now):
+                row.estado = "nueva"
+                row.evidencia = json.dumps(dict(data["evidencia"], reincidencia=True), ensure_ascii=False, default=str)
+            elif row.estado != "descartada":
                 row.estado = "persistente"
         else:
             db.add(AgentSignal(
@@ -348,14 +388,28 @@ def get_active_signals(db: Session, empresa_id: int, agent: str | None = None, l
     rows = query.all()
     def priority(row):
         age = max(0, (datetime.utcnow() - (row.primera_deteccion or datetime.utcnow())).days)
-        return _number(row.impacto_eur) * _number(row.confianza) * (1 + .15 * (int(row.severidad or 1) - 1)) * (1 + min(age, 30) / 100)
+        return _number(row.impacto_ponderado_eur) * _number(row.confianza) * (1 + .15 * (int(row.severidad or 1) - 1)) * (1 + min(age, 30) / 100)
     return sorted(rows, key=priority, reverse=True)[:limit]
 
 
-def build_evidence_bundle(db: Session, empresa_id: int, agent: str, limit: int = 7) -> dict:
+def _signal_evidence(signal: AgentSignal) -> dict:
+    return {"id": signal.id, "agente": signal.agente, "detector": signal.detector, "entidad": {"tipo": signal.entidad_tipo, "id": signal.entidad_id}, "periodo": [str(signal.periodo_inicio), str(signal.periodo_fin)], "severidad": signal.severidad, "impacto_eur": _number(signal.impacto_eur), "impacto_tipo": signal.impacto_tipo, "impacto_ponderado_eur": _number(signal.impacto_ponderado_eur), "confianza": _number(signal.confianza), "valor_actual": _number(signal.valor_actual), "valor_esperado": _number(signal.valor_esperado), "desviacion": _number(signal.desviacion), "estado": signal.estado, "primera_deteccion": str(signal.primera_deteccion), "evidencia": json.loads(signal.evidencia or "{}")}
+
+
+def build_evidence_bundle(db: Session, empresa_id: int, agent: str, limit: int = 7, signal_id: int | None = None) -> dict:
     signals = get_active_signals(db, empresa_id, agent, limit)
+    selected_signal = None
+    if signal_id:
+        selected_signal = db.query(AgentSignal).filter(
+            AgentSignal.id == signal_id,
+            AgentSignal.empresa_id == empresa_id,
+            AgentSignal.agente == agent,
+        ).first()
+        if selected_signal:
+            signals = [selected_signal, *[signal for signal in signals if signal.id != selected_signal.id]]
     payload = []
     for signal in signals:
-        payload.append({"id": signal.id, "agente": signal.agente, "detector": signal.detector, "entidad": {"tipo": signal.entidad_tipo, "id": signal.entidad_id}, "periodo": [str(signal.periodo_inicio), str(signal.periodo_fin)], "severidad": signal.severidad, "impacto_eur": _number(signal.impacto_eur), "confianza": _number(signal.confianza), "valor_actual": _number(signal.valor_actual), "valor_esperado": _number(signal.valor_esperado), "desviacion": _number(signal.desviacion), "estado": signal.estado, "primera_deteccion": str(signal.primera_deteccion), "evidencia": json.loads(signal.evidencia or "{}")})
+        payload.append(_signal_evidence(signal))
     return {"fuente": "agent_signals", "agente": agent, "regla": "Las cifras y los hallazgos son deterministas; no se permiten calculos nuevos.", "senales": payload,
+            "senal_contextual": _signal_evidence(selected_signal) if selected_signal else None,
             "limitaciones": ["El histórico de inventario comienza el 2026-08-06: no se infieren tendencias ni XYZ fiables hasta acumular más observaciones."]}

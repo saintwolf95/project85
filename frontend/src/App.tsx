@@ -10,6 +10,7 @@ import { DemandForecasting } from './pages/DemandForecasting';
 import { ActionableInsights } from './pages/ActionableInsights';
 import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
+import { AiControlDecisions, AiControlEpisodeDetail, AiControlSignalDetail, AiControlToday } from './pages/AiControlToday';
 import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
 import { PowerBiMock } from './pages/PowerBiMock';
@@ -36,7 +37,11 @@ function App() {
             <Route path="forecast" element={<DemandForecasting />} />
             <Route path="alerts" element={<ActionableInsights />} />
             <Route path="copilot" element={<AiCopilot />} />
-            <Route path="ai-control" element={<AiControlPanel />} />
+            <Route path="ai-control" element={<AiControlToday />} />
+            <Route path="ai-control/analistas" element={<AiControlPanel />} />
+            <Route path="ai-control/senal/:id" element={<AiControlSignalDetail />} />
+            <Route path="ai-control/episodio/:id" element={<AiControlEpisodeDetail />} />
+            <Route path="ai-control/decisiones" element={<AiControlDecisions />} />
             <Route path="integrations" element={<DataEngineering />} />
             <Route path="import-guide" element={<DataImportGuide />} />
             <Route path="powerbi" element={<PowerBiMock />} />

@@ -67,6 +67,7 @@ def ensure_agent_signals_schema() -> None:
                 agente VARCHAR(40) NOT NULL, detector VARCHAR(120) NOT NULL,
                 entidad_tipo VARCHAR(40), entidad_id VARCHAR(255), periodo_inicio DATE, periodo_fin DATE,
                 severidad SMALLINT NOT NULL DEFAULT 1, impacto_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                impacto_tipo VARCHAR(20) NOT NULL DEFAULT 'en_riesgo', impacto_ponderado_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
                 confianza DOUBLE PRECISION NOT NULL DEFAULT 0, valor_actual DOUBLE PRECISION,
                 valor_esperado DOUBLE PRECISION, desviacion DOUBLE PRECISION, evidencia TEXT NOT NULL DEFAULT '{}',
                 fingerprint VARCHAR(64) NOT NULL, estado VARCHAR(20) NOT NULL DEFAULT 'nueva',
@@ -76,6 +77,102 @@ def ensure_agent_signals_schema() -> None:
             )
         """))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_estado ON agent_signals (empresa_id, estado)"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS impacto_tipo VARCHAR(20) NOT NULL DEFAULT 'en_riesgo'"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS impacto_ponderado_eur DOUBLE PRECISION NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS episodio_id INTEGER"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_por INTEGER"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_motivo TEXT"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_en TIMESTAMP"))
+        connection.execute(text("""
+            UPDATE agent_signals
+            SET impacto_tipo = CASE detector
+                WHEN 'caida_facturacion_familia' THEN 'realizado'
+                WHEN 'precio_volumen_familia' THEN 'realizado'
+                WHEN 'erosion_mgd_familia' THEN 'realizado'
+                WHEN 'rotura_stock_clase_a' THEN 'en_riesgo'
+                WHEN 'cobertura_vs_lead_time' THEN 'en_riesgo'
+                WHEN 'concentracion_clientes' THEN 'en_riesgo'
+                WHEN 'exceso_cobertura' THEN 'capital'
+                WHEN 'stock_muerto_90d' THEN 'capital'
+                ELSE 'en_riesgo'
+            END
+        """))
+        connection.execute(text("""
+            UPDATE agent_signals
+            SET impacto_ponderado_eur = impacto_eur * CASE impacto_tipo
+                WHEN 'realizado' THEN 1.00
+                WHEN 'capital' THEN 0.30
+                ELSE 0.60
+            END
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_episodes (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                fingerprint VARCHAR(64) NOT NULL, titulo VARCHAR(500) NOT NULL,
+                entidad_tipo VARCHAR(40), entidad_id VARCHAR(255), severidad_max SMALLINT NOT NULL DEFAULT 1,
+                impacto_realizado_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                impacto_en_riesgo_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                impacto_capital_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                impacto_ponderado_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                estado VARCHAR(20) NOT NULL DEFAULT 'abierto',
+                primera_deteccion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                ultima_deteccion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_agent_episodes_empresa_fingerprint UNIQUE (empresa_id, fingerprint),
+                CONSTRAINT ck_agent_episodes_estado CHECK (estado IN ('abierto', 'resuelto', 'descartado'))
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_signal_links (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                signal_origen_id INTEGER NOT NULL REFERENCES agent_signals(id) ON DELETE CASCADE,
+                signal_destino_id INTEGER NOT NULL REFERENCES agent_signals(id) ON DELETE CASCADE,
+                tipo_relacion VARCHAR(20) NOT NULL, regla VARCHAR(120) NOT NULL,
+                solape_dias INTEGER NOT NULL DEFAULT 0, detalle TEXT NOT NULL DEFAULT '{}',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_agent_signal_links_rule UNIQUE (empresa_id, signal_origen_id, signal_destino_id, regla),
+                CONSTRAINT ck_agent_signal_links_tipo CHECK (tipo_relacion IN ('explica', 'agrava', 'duplica', 'contradice'))
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_signal_feedback (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id), signal_id INTEGER NOT NULL REFERENCES agent_signals(id) ON DELETE CASCADE,
+                veredicto VARCHAR(20) NOT NULL, motivo TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT ck_agent_signal_feedback_veredicto CHECK (veredicto IN ('util', 'ya_conocida', 'no_accionable', 'falso_positivo'))
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_decisions (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                episodio_id INTEGER REFERENCES agent_episodes(id) ON DELETE SET NULL,
+                signal_id INTEGER REFERENCES agent_signals(id) ON DELETE SET NULL,
+                titulo VARCHAR(500) NOT NULL, descripcion TEXT NOT NULL DEFAULT '',
+                responsable VARCHAR(255) NOT NULL DEFAULT 'Sin asignar',
+                metrica_objetivo VARCHAR(500) NOT NULL DEFAULT 'Sin métrica definida', valor_objetivo DOUBLE PRECISION,
+                horizonte_fecha DATE NOT NULL, origen VARCHAR(20) NOT NULL, estado VARCHAR(20) NOT NULL DEFAULT 'propuesta',
+                resultado_texto TEXT, creada_por INTEGER REFERENCES usuarios(id),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, cerrada_en TIMESTAMP,
+                CONSTRAINT ck_agent_decisions_origen CHECK (origen IN ('ceo', 'usuario')),
+                CONSTRAINT ck_agent_decisions_estado CHECK (estado IN ('propuesta', 'aceptada', 'en_curso', 'completada', 'descartada'))
+            )
+        """))
+        connection.execute(text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_agent_signals_episodio') THEN
+                    ALTER TABLE agent_signals ADD CONSTRAINT fk_agent_signals_episodio
+                    FOREIGN KEY (episodio_id) REFERENCES agent_episodes(id) ON DELETE SET NULL;
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_agent_signals_descartada_por') THEN
+                    ALTER TABLE agent_signals ADD CONSTRAINT fk_agent_signals_descartada_por
+                    FOREIGN KEY (descartada_por) REFERENCES usuarios(id) ON DELETE SET NULL;
+                END IF;
+            END $$;
+        """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_impacto_ponderado ON agent_signals (empresa_id, impacto_ponderado_eur DESC)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signal_links_empresa ON agent_signal_links (empresa_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_episodes_empresa_estado ON agent_episodes (empresa_id, estado)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_decisions_empresa_estado ON agent_decisions (empresa_id, estado)"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -172,7 +269,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.48.0",
+    version="1.49.0",
     lifespan=lifespan
 )
 

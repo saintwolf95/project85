@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
-from datetime import datetime
+from datetime import date, datetime
 
 class Token(BaseModel):
     access_token: str
@@ -107,10 +107,41 @@ class AgentChatMessage(BaseModel):
 
 class AgentChatRequest(BaseModel):
     chat_id: Optional[int] = None
+    signal_id: Optional[int] = Field(default=None, ge=1)
     history: List[AgentChatMessage] = Field(..., min_length=1, max_length=20)
 
 class AgentInvestigationRequest(BaseModel):
     question: str = Field(..., min_length=8, max_length=1200)
+
+
+class AgentSignalFeedbackRequest(BaseModel):
+    veredicto: Literal["util", "ya_conocida", "no_accionable", "falso_positivo"]
+    motivo: Optional[str] = Field(default=None, max_length=1000)
+
+
+class AgentDiscardRequest(BaseModel):
+    motivo: str = Field(..., min_length=1, max_length=1000)
+    veredicto: Literal["no_accionable", "falso_positivo"] = "no_accionable"
+
+
+class AgentDecisionCreateRequest(BaseModel):
+    episodio_id: Optional[int] = None
+    signal_id: Optional[int] = None
+    titulo: str = Field(..., min_length=1, max_length=500)
+    descripcion: str = Field(default="", max_length=5000)
+    responsable: str = Field(default="Sin asignar", max_length=255)
+    metrica_objetivo: str = Field(default="Sin métrica definida", max_length=500)
+    valor_objetivo: Optional[float] = None
+    horizonte_fecha: date
+
+
+class AgentDecisionUpdateRequest(BaseModel):
+    estado: Optional[Literal["propuesta", "aceptada", "en_curso", "completada", "descartada"]] = None
+    responsable: Optional[str] = Field(default=None, max_length=255)
+    metrica_objetivo: Optional[str] = Field(default=None, max_length=500)
+    valor_objetivo: Optional[float] = None
+    horizonte_fecha: Optional[date] = None
+    resultado_texto: Optional[str] = Field(default=None, max_length=5000)
 
 class LibreriaDocumentoResponse(BaseModel):
     id: int

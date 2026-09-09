@@ -5,6 +5,7 @@ import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import axios from 'axios';
+import { useSearchParams } from 'react-router-dom';
 
 interface AgentInfo {
   id: string;
@@ -58,6 +59,9 @@ const EXECUTION_STAGES = [
 ];
 
 export const AiControlPanel = () => {
+  const [searchParams] = useSearchParams();
+  const agentFromUrl = searchParams.get('agent')?.toLowerCase().replace('í', 'i');
+  const signalFromUrl = searchParams.get('signal');
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
   const [insightsHistory, setInsightsHistory] = useState<AgentInsight[]>([]);
   const [dataReadiness, setDataReadiness] = useState<AgentDataReadiness | null>(null);
@@ -106,6 +110,26 @@ export const AiControlPanel = () => {
   };
 
   useEffect(() => {
+    if (!agentFromUrl || !AGENTS_INFO[agentFromUrl]) return;
+    const timer = window.setTimeout(() => {
+      setAgentChatHistory([]);
+      setChatSuggestions(AGENTS_INFO[agentFromUrl].prompts);
+      setStudyTab('report');
+      setAgentStudies(null);
+      setStudiesError(null);
+      setInvestigation(null);
+      setInvestigationError(null);
+      setIsChatLoading(true);
+      setIsStudiesLoading(true);
+      setSelectedAgent(agentFromUrl);
+      if (signalFromUrl) {
+        setChatInput(`Quiero analizar la señal #${signalFromUrl}. Usa su evidencia y explica qué decisión corresponde.`);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [agentFromUrl, signalFromUrl]);
+
+  useEffect(() => {
     if (selectedAgent) {
       getAgentChat(selectedAgent)
         .then(data => setAgentChatHistory(data))
@@ -131,7 +155,8 @@ export const AiControlPanel = () => {
     setChatInput('');
     setIsChatLoading(true);
     try {
-      const response = await sendAgentMessage(selectedAgent, updatedHistory);
+      const selectedSignalId = signalFromUrl ? Number(signalFromUrl) : undefined;
+      const response = await sendAgentMessage(selectedAgent, updatedHistory, Number.isFinite(selectedSignalId) ? selectedSignalId : undefined);
       setAgentChatHistory([...updatedHistory, { role: 'assistant', content: response.reply }]);
       setChatSuggestions(response.suggestions || []);
     } catch {

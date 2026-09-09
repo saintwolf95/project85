@@ -196,6 +196,8 @@ class AgentSignal(Base):
     periodo_fin = Column(Date, nullable=True)
     severidad = Column(Integer, nullable=False, default=1)
     impacto_eur = Column(Float, nullable=False, default=0.0)
+    impacto_tipo = Column(String(20), nullable=False, default="en_riesgo")
+    impacto_ponderado_eur = Column(Float, nullable=False, default=0.0)
     confianza = Column(Float, nullable=False, default=0.0)
     valor_actual = Column(Float, nullable=True)
     valor_esperado = Column(Float, nullable=True)
@@ -205,6 +207,83 @@ class AgentSignal(Base):
     estado = Column(String(20), nullable=False, default="nueva")
     primera_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
     ultima_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    episodio_id = Column(Integer, ForeignKey("agent_episodes.id"), nullable=True, index=True)
+    descartada_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    descartada_motivo = Column(Text, nullable=True)
+    descartada_en = Column(DateTime, nullable=True)
+
+
+class AgentSignalLink(Base):
+    __tablename__ = "agent_signal_links"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "signal_origen_id", "signal_destino_id", "regla", name="uq_agent_signal_links_rule"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    signal_origen_id = Column(Integer, ForeignKey("agent_signals.id", ondelete="CASCADE"), nullable=False, index=True)
+    signal_destino_id = Column(Integer, ForeignKey("agent_signals.id", ondelete="CASCADE"), nullable=False, index=True)
+    tipo_relacion = Column(String(20), nullable=False)
+    regla = Column(String(120), nullable=False)
+    solape_dias = Column(Integer, nullable=False, default=0)
+    detalle = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AgentEpisode(Base):
+    __tablename__ = "agent_episodes"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "fingerprint", name="uq_agent_episodes_empresa_fingerprint"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    fingerprint = Column(String(64), nullable=False)
+    titulo = Column(String(500), nullable=False)
+    entidad_tipo = Column(String(40), nullable=True)
+    entidad_id = Column(String(255), nullable=True)
+    severidad_max = Column(Integer, nullable=False, default=1)
+    impacto_realizado_eur = Column(Float, nullable=False, default=0.0)
+    impacto_en_riesgo_eur = Column(Float, nullable=False, default=0.0)
+    impacto_capital_eur = Column(Float, nullable=False, default=0.0)
+    impacto_ponderado_eur = Column(Float, nullable=False, default=0.0)
+    estado = Column(String(20), nullable=False, default="abierto")
+    primera_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ultima_deteccion = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AgentSignalFeedback(Base):
+    __tablename__ = "agent_signal_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    signal_id = Column(Integer, ForeignKey("agent_signals.id", ondelete="CASCADE"), nullable=False, index=True)
+    veredicto = Column(String(20), nullable=False)
+    motivo = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AgentDecision(Base):
+    __tablename__ = "agent_decisions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    episodio_id = Column(Integer, ForeignKey("agent_episodes.id", ondelete="SET NULL"), nullable=True, index=True)
+    signal_id = Column(Integer, ForeignKey("agent_signals.id", ondelete="SET NULL"), nullable=True, index=True)
+    titulo = Column(String(500), nullable=False)
+    descripcion = Column(Text, nullable=False, default="")
+    responsable = Column(String(255), nullable=False, default="Sin asignar")
+    metrica_objetivo = Column(String(500), nullable=False, default="Sin métrica definida")
+    valor_objetivo = Column(Float, nullable=True)
+    horizonte_fecha = Column(Date, nullable=False)
+    origen = Column(String(20), nullable=False)
+    estado = Column(String(20), nullable=False, default="propuesta")
+    resultado_texto = Column(Text, nullable=True)
+    creada_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    cerrada_en = Column(DateTime, nullable=True)
 
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"

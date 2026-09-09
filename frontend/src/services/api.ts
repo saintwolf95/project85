@@ -585,6 +585,90 @@ export const getAgentDataReadiness = async (): Promise<AgentDataReadiness> => {
   return response.data;
 };
 
+export type ImpactType = 'realizado' | 'en_riesgo' | 'capital';
+export type SignalState = 'nueva' | 'persistente' | 'resuelta' | 'descartada';
+
+export interface AgentSignalRecord {
+  id: number;
+  agente: string;
+  detector: string;
+  entidad_tipo: string;
+  entidad_id: string;
+  periodo_inicio: string;
+  periodo_fin: string;
+  severidad: number;
+  impacto_eur: number;
+  impacto_tipo: ImpactType;
+  impacto_ponderado_eur: number;
+  confianza: number;
+  estado: SignalState;
+  episodio_id?: number | null;
+  primera_deteccion: string;
+  ultima_deteccion: string;
+  evidencia?: string;
+  enlaces?: Array<Record<string, unknown>>;
+  feedback?: Array<Record<string, unknown>>;
+}
+
+export interface AgentEpisodeRecord {
+  id: number;
+  titulo: string;
+  entidad: { tipo: string; id: string };
+  severidad_max: number;
+  impactos: { realizado_eur: number; en_riesgo_eur: number; capital_eur: number; ponderado_eur: number };
+  estado: 'abierto' | 'resuelto' | 'descartado';
+  primera_deteccion: string;
+  ultima_deteccion: string;
+  senales: Array<AgentSignalRecord & { entidad: { tipo: string; id: string } }>;
+  enlaces: Array<{ origen_id: number; destino_id: number; tipo_relacion: string; regla: string; solape_dias: number }>;
+  decisiones?: AgentDecisionRecord[];
+}
+
+export interface AgentDecisionRecord {
+  id: number;
+  episodio_id?: number | null;
+  signal_id?: number | null;
+  titulo: string;
+  descripcion: string;
+  responsable: string;
+  metrica_objetivo: string;
+  valor_objetivo?: number | null;
+  horizonte_fecha: string;
+  origen: 'ceo' | 'usuario';
+  estado: 'propuesta' | 'aceptada' | 'en_curso' | 'completada' | 'descartada';
+  resultado_texto?: string | null;
+}
+
+export interface AgentQualityMetric {
+  detector: string;
+  senales_emitidas: number;
+  activas: number;
+  resueltas: number;
+  descartadas: number;
+  feedback_registros: number;
+  conclusivo: boolean;
+  tasa_falso_positivo?: number | null;
+  tasa_feedback?: number | null;
+  dias_medianos_primer_feedback?: number | null;
+  euros_senalados: Record<ImpactType, number>;
+  euros_cubiertos_decision: number;
+}
+
+export interface AgentEpisodeListResponse {
+  items: AgentEpisodeRecord[];
+  diff_diario?: { nuevos: number; empeoran: number; resueltos: number; disponible: boolean };
+}
+
+export const getAgentEpisodes = async (): Promise<AgentEpisodeListResponse> => (await api.get('/agents/episodes')).data;
+export const getAgentEpisode = async (episodeId: number): Promise<AgentEpisodeRecord> => (await api.get(`/agents/episodes/${episodeId}`)).data;
+export const getAgentSignal = async (signalId: number): Promise<AgentSignalRecord & { episodio?: AgentEpisodeRecord }> => (await api.get(`/agents/signals/${signalId}`)).data;
+export const getAgentDecisions = async (): Promise<{ items: AgentDecisionRecord[] }> => (await api.get('/agents/decisions')).data;
+export const getAgentQuality = async (): Promise<{ por_detector: AgentQualityMetric[] }> => (await api.get('/agents/quality')).data;
+export const createAgentFeedback = async (signalId: number, veredicto: 'util' | 'ya_conocida' | 'no_accionable' | 'falso_positivo', motivo?: string) => api.post(`/agents/signals/${signalId}/feedback`, { veredicto, motivo });
+export const discardAgentSignal = async (signalId: number, motivo: string, veredicto: 'no_accionable' | 'falso_positivo' = 'no_accionable') => api.post(`/agents/signals/${signalId}/discard`, { motivo, veredicto });
+export const createAgentDecision = async (payload: { episodio_id?: number; signal_id?: number; titulo: string; descripcion?: string; responsable?: string; metrica_objetivo?: string; horizonte_fecha: string }) => (await api.post('/agents/decisions', payload)).data;
+export const updateAgentDecision = async (decisionId: number, payload: Partial<Pick<AgentDecisionRecord, 'estado' | 'responsable' | 'metrica_objetivo' | 'valor_objetivo' | 'horizonte_fecha' | 'resultado_texto'>>) => (await api.patch(`/agents/decisions/${decisionId}`, payload)).data;
+
 // --- Agent Chat ---
 export interface AgentChatMessage {
   role: 'user' | 'assistant';
@@ -596,7 +680,7 @@ export const getAgentChat = async (agentName: string): Promise<AgentChatMessage[
   return response.data;
 };
 
-export const sendAgentMessage = async (agentName: string, history: AgentChatMessage[]): Promise<{ reply: string; suggestions?: string[] }> => {
-  const response = await api.post(`/agents/${agentName}/chat`, { history });
+export const sendAgentMessage = async (agentName: string, history: AgentChatMessage[], signalId?: number): Promise<{ reply: string; suggestions?: string[] }> => {
+  const response = await api.post(`/agents/${agentName}/chat`, { history, ...(signalId ? { signal_id: signalId } : {}) });
   return response.data;
 };

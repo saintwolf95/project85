@@ -3,6 +3,7 @@
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/ai-control`; componente: `frontend/src/pages/AiControlPanel.tsx`; backend: `app/routers/agents.py`, `app/agents_service.py`, `app/agent_metrics.py` y `app/agent_studies.py`.
+- Contexto exhaustivo del módulo: `docs/claude-tabs/control-ia/CONTEXTO_CONTROL_IA.md`. Actualizarlo cuando cambien detectores, contratos de evidencia, rutas, cálculos, límites o comportamiento visible.
 - Coordina agentes: María (inventario), Lucía (ventas), Mattia (finanzas) y consolidación CEO.
 - Carga configuración de fases, readiness de datos, informe diario, históricos, estudios y chat por agente usando el cliente API central.
 - Antes de habilitar conclusiones, respetar `readiness`: ventas e inventario incompletos deben convertirse en aviso explícito, no en hallazgo.
@@ -54,3 +55,11 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Control IA presenta configuración, readiness, informes, estudios, expedientes y chats con superficies neutras, tipografía de sistema y azul único para interacción.
 - Los colores verde, ámbar y rojo solo comunican estados reales: disponibilidad, calidad, éxito, aviso o error. No usarlos como decoración de agentes o fases.
 - Mantener los informes Markdown, tablas, laboratorio y chat de cada agente con controles nativos, foco visible y desplazamiento seguro en contenido extenso.
+
+## Actualización v1.49 — episodios, feedback y decisiones
+
+- La entrada de Control IA es `/ai-control` (vista **Hoy**). El gabinete previo se mantiene en `/ai-control/analistas`; las rutas directas son `/ai-control/senal/:id`, `/ai-control/episodio/:id` y `/ai-control/decisiones`.
+- `agent_signals` guarda tipo de impacto, importe ponderado, episodio y datos de descarte. `agent_signal_links` solo puede crearse mediante reglas deterministas; `agent_episodes` agrupa componentes conexas y deduplica enlaces `duplica`.
+- Los importes realizado, en riesgo y capital deben mostrarse y totalizarse por separado. El ponderado sirve únicamente para ordenar.
+- `POST /agents/signals/{id}/feedback` y `/discard` alimentan calidad por detector; el descarte necesita motivo y aplica supresión de 30 días a falso positivo/no accionable.
+- Las decisiones se gestionan en `/agents/decisions` y siempre se vinculan a una señal o episodio de la misma empresa. Al abrir un expediente desde una señal, el chat recibe `signal_id` y su evidence bundle exacto.

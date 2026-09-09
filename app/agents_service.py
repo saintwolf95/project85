@@ -1,6 +1,7 @@
 """Orquestación de Control IA: detectores deterministas y narración de evidencia."""
 import json
 import logging
+import re
 import threading
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -8,8 +9,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from .agent_signals import build_evidence_bundle, get_active_signals, refresh_agent_signals
+from .agent_correlation import build_episode_bundle, refresh_agent_episodes
 from .copilot_service import get_openai_client
-from .models import AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
+from .models import AgentDecision, AgentEpisode, AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
 
 
 logger = logging.getLogger(__name__)
@@ -83,21 +85,95 @@ def narrate_agent_signals(db: Session, empresa_id: int, agent: str) -> str:
 
 
 def run_ceo_from_signals(db: Session, empresa_id: int) -> str:
-    return _narrate(
-        db, empresa_id, "ceo",
-        "Eres CEO IA. Consolida solo las 5-7 señales verificadas de mayor impacto. Identifica tensiones entre ventas, margen e inventario solo si ambas evidencias las sustentan. Da hasta tres decisiones con responsable, métrica y horizonte.",
-    )
+    client = get_openai_client()
+    if not client:
+        return "Error: API Key de OpenAI no configurada."
+    evidence = build_episode_bundle(db, empresa_id, limit=7)
+    messages = [
+        {"role": "system", "content": "Eres CEO IA. Consolida solo los episodios del evidence bundle. No ejecutes SQL ni calcules cifras. Cita siempre el subtotal y su tipo de impacto; nunca sumes realizado, en_riesgo y capital en una sola cifra. Cuando exista un enlace explica, descríbelo como correlación estructural, no como prueba causal. Da hasta tres decisiones con responsable, métrica, horizonte y el id de episodio de origen. Al final añade exactamente un comentario HTML <!--DECISIONS_JSON:[...]--> con una lista JSON. Cada objeto debe contener episodio_id, titulo, descripcion, responsable, metrica_objetivo y horizonte_fecha ISO. No incluyas una decisión si no puedes enlazarla a un episodio existente."},
+        {"role": "user", "content": f"EVIDENCE BUNDLE:\n{json.dumps(evidence, ensure_ascii=False, default=str)}\n\nCONTEXTO:\n{get_business_context(db, empresa_id) or 'No configurado.'}"},
+    ]
+    try:
+        return client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2).choices[0].message.content
+    except Exception as error:
+        logger.error("Error narrando episodios CEO: %s", error)
+        return "Error al generar informe del CEO."
+
+
+_DECISIONS_MARKER = re.compile(r"<!--DECISIONS_JSON\s*:\s*(\[.*?\])\s*-->", re.DOTALL)
+
+
+def persist_ceo_decisions(db: Session, empresa_id: int, report: str) -> str:
+    """Guarda solo decisiones con vínculo explícito a un episodio existente."""
+    marker = _DECISIONS_MARKER.search(report or "")
+    if not marker:
+        logger.warning("El CEO no devolvió decisiones estructuradas; no se persiste ninguna decisión.")
+        return report
+    cleaned_report = _DECISIONS_MARKER.sub("", report).strip()
+    try:
+        decisions = json.loads(marker.group(1))
+    except json.JSONDecodeError:
+        logger.warning("El bloque de decisiones del CEO no contiene JSON válido.")
+        return cleaned_report
+    if not isinstance(decisions, list):
+        return cleaned_report
+    valid_episode_ids = {
+        row[0] for row in db.query(AgentEpisode.id).filter(AgentEpisode.empresa_id == empresa_id, AgentEpisode.estado == "abierto").all()
+    }
+    for item in decisions[:3]:
+        if not isinstance(item, dict):
+            continue
+        episode_id = item.get("episodio_id")
+        if episode_id not in valid_episode_ids:
+            logger.warning("Decisión CEO sin episodio válido: %s", episode_id)
+            continue
+        try:
+            horizon = date.fromisoformat(str(item.get("horizonte_fecha")))
+        except (TypeError, ValueError):
+            logger.warning("Decisión CEO sin horizonte válido para episodio %s", episode_id)
+            continue
+        title = str(item.get("titulo") or "").strip()
+        metric = str(item.get("metrica_objetivo") or "").strip()
+        if not title or not metric:
+            logger.warning("Decisión CEO incompleta para episodio %s", episode_id)
+            continue
+        existing = db.query(AgentDecision.id).filter(
+            AgentDecision.empresa_id == empresa_id,
+            AgentDecision.episodio_id == episode_id,
+            AgentDecision.origen == "ceo",
+            AgentDecision.titulo == title,
+            AgentDecision.estado.in_(("propuesta", "aceptada", "en_curso")),
+        ).first()
+        if existing:
+            continue
+        db.add(AgentDecision(
+            empresa_id=empresa_id,
+            episodio_id=episode_id,
+            titulo=title[:500],
+            descripcion=str(item.get("descripcion") or "").strip()[:5000],
+            responsable=str(item.get("responsable") or "Sin asignar").strip()[:255] or "Sin asignar",
+            metrica_objetivo=metric[:500],
+            valor_objetivo=item.get("valor_objetivo"),
+            horizonte_fecha=horizon,
+            origen="ceo",
+            estado="propuesta",
+        ))
+    return cleaned_report
 
 
 def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_fase2: bool):
     alertas_fase1, maria_md, lucia_md, mattia_md = [], None, None, None
     if run_fase1:
         refresh_agent_signals(db, empresa_id)
+        episodes = refresh_agent_episodes(db, empresa_id)
+        episode_impact = {episode.id: episode.impacto_ponderado_eur for episode in episodes}
         maria_md = narrate_agent_signals(db, empresa_id, "maria")
         lucia_md = narrate_agent_signals(db, empresa_id, "lucia")
         mattia_md = narrate_agent_signals(db, empresa_id, "mattia")
-        alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
+        alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "impacto_tipo": item.impacto_tipo, "impacto_ponderado_eur": item.impacto_ponderado_eur, "episodio_id": item.episodio_id, "episodio_impacto_ponderado_eur": episode_impact.get(item.episodio_id), "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
     ceo_summary = run_ceo_from_signals(db, empresa_id) if run_fase2 and (run_fase1 or get_daily_agent_insight(db, empresa_id)) else None
+    if ceo_summary:
+        ceo_summary = persist_ceo_decisions(db, empresa_id, ceo_summary)
     insight = AgentInsights(empresa_id=empresa_id, fase1_raw_json=json.dumps(alertas_fase1) if alertas_fase1 else None, fase1_maria_md=maria_md, fase1_lucia_md=lucia_md, fase1_mattia_md=mattia_md, fase2_ceo_markdown=ceo_summary)
     db.add(insight)
     db.commit()
@@ -105,12 +181,12 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
     return insight
 
 
-def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: list, dossier: dict | None = None) -> str:
+def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: list, dossier: dict | None = None, signal_id: int | None = None) -> str:
     normalized_agent = agent_name.lower().replace("í", "i")
     client = get_openai_client()
     if not client:
         return "Error: API Key de OpenAI no configurada."
-    evidence = build_evidence_bundle(db, empresa_id, normalized_agent, limit=7)
+    evidence = build_evidence_bundle(db, empresa_id, normalized_agent, limit=7, signal_id=signal_id)
     prompt = (
         f"Eres el agente {normalized_agent}. Responde la pregunta usando exclusivamente el EVIDENCE BUNDLE. "
         "No ejecutas SQL ni recalculas. Si falta el dato, dilo y pide un detector o investigación. "

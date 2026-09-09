@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .agent_signals import build_evidence_bundle
 from .copilot_service import get_openai_client
 from .evidence_contract import verify_report
+from .agent_playbooks import get_playbook, select_playbook_questions
 
 
 CATALOG = {
@@ -17,6 +18,10 @@ CATALOG = {
     "family_top_customers": "Identifica los clientes que explican el cambio de ventas de una familia.",
     "family_inventory_risk": "Relaciona una familia con roturas, cobertura y valor actual de inventario.",
     "signal_summary": "Recupera la señal original con impacto, periodo y confianza.",
+    "family_missing_days": "Comprueba si existen días sin ventas anómalos en el período actual.",
+    "family_base_peak": "Comprueba si el período base contiene un pico diario atípico.",
+    "family_single_sku": "Cuantifica qué SKU explican la variación de ventas de la familia.",
+    "family_seasonality": "Comprueba si la familia tiene una regla estacional vigente.",
 }
 
 
@@ -24,43 +29,22 @@ def _number(value: Any) -> float:
     return float(value or 0)
 
 
-def _anchor(bundle: dict) -> tuple[date, date, str]:
+def _anchor(bundle: dict) -> tuple[date, date, str, str]:
     signal = next((item for item in bundle["senales"] if item["entidad"]["tipo"] == "familia"), None)
     if not signal:
         raise ValueError("No hay una señal por familia investigable.")
     start, end = (date.fromisoformat(value) for value in signal["periodo"])
-    return start, end, signal["entidad"]["id"]
+    return start, end, signal["entidad"]["id"], signal["detector"]
 
 
 def _safe_plan(question: str, bundle: dict) -> list[str]:
-    """Plan de reserva, limitado al catálogo; evita ejecutar una intención no autorizada."""
-    _, _, family = _anchor(bundle)
-    plan = ["signal_summary", "family_sales_comparison", "family_price_volume", "family_top_customers"]
-    if any(word in question.lower() for word in ("stock", "rotura", "inventario", "cobertura")):
-        plan.append("family_inventory_risk")
-    return plan
+    """El detector ancla decide el playbook; el usuario no puede abrir consultas libres."""
+    _, _, _, detector = _anchor(bundle)
+    return select_playbook_questions(detector)
 
 
 def propose_plan(question: str, bundle: dict) -> list[str]:
-    """El LLM propone solo ids del catálogo; si falla, se usa el plan seguro."""
-    fallback = _safe_plan(question, bundle)
-    client = get_openai_client()
-    if not client:
-        return fallback
-    prompt = {
-        "tarea": "Propón las preguntas a investigar seleccionando solo ids del catálogo.",
-        "pregunta_usuario": question[:1200], "catalogo": CATALOG, "evidence_bundle": bundle,
-        "respuesta": "JSON estricto: {\"queries\":[\"id_catalogo\"]}. Máximo 5. No SQL.",
-    }
-    try:
-        content = client.chat.completions.create(
-            model="gpt-4o", messages=[{"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}], temperature=0,
-        ).choices[0].message.content
-        planned = json.loads(content).get("queries", [])
-        selected = [item for item in planned if item in CATALOG]
-        return selected[:5] or fallback
-    except Exception:
-        return fallback
+    return _safe_plan(question, bundle)
 
 
 def _query(db: Session, sql: str, params: dict) -> list[dict]:
@@ -68,7 +52,7 @@ def _query(db: Session, sql: str, params: dict) -> list[dict]:
 
 
 def collect_evidence(db: Session, empresa_id: int, plan: list[str], bundle: dict) -> dict[str, dict]:
-    current_start, current_end, family = _anchor(bundle)
+    current_start, current_end, family, _ = _anchor(bundle)
     duration = (current_end - current_start).days + 1
     previous_end = current_start - timedelta(days=1)
     previous_start = previous_end - timedelta(days=duration - 1)
@@ -119,6 +103,29 @@ def collect_evidence(db: Session, empresa_id: int, plan: list[str], bundle: dict
                 WHERE p.empresa_id=:empresa_id AND p.familia=:family AND ih.fecha_inventario=(SELECT MAX(ih2.fecha_inventario) FROM inventario_historico ih2 JOIN productos p2 ON p2.id=ih2.producto_id WHERE p2.empresa_id=:empresa_id)
                 ORDER BY ih.inventario_eur DESC LIMIT 20
             """, params)}
+        elif item == "family_missing_days":
+            evidence[key] = {"query": item, "data": _query(db, """
+                SELECT COUNT(DISTINCT v.fecha_venta) dias_con_ventas
+                FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
+                WHERE p.empresa_id=:empresa_id AND p.familia=:family AND v.fecha_venta BETWEEN :cs AND :ce
+            """, params), "dias_periodo": duration}
+        elif item == "family_base_peak":
+            evidence[key] = {"query": item, "data": _query(db, """
+                SELECT MAX(ventas_dia) max_ventas_dia_eur, AVG(ventas_dia) media_ventas_dia_eur FROM (
+                  SELECT v.fecha_venta, SUM(v.ingreso_total) ventas_dia FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
+                  WHERE p.empresa_id=:empresa_id AND p.familia=:family AND v.fecha_venta BETWEEN :ps AND :pe GROUP BY v.fecha_venta
+                ) diario
+            """, params)}
+        elif item == "family_single_sku":
+            evidence[key] = {"query": item, "data": _query(db, """
+                SELECT p.sku, p.nombre, SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END) ventas_actuales_eur,
+                  SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END) ventas_base_eur
+                FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
+                WHERE p.empresa_id=:empresa_id AND p.familia=:family AND v.fecha_venta BETWEEN :ps AND :ce
+                GROUP BY p.sku, p.nombre ORDER BY (SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END)-SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END)) ASC LIMIT 10
+            """, params)}
+        elif item == "family_seasonality":
+            evidence[key] = {"query": item, "data": [{"nota": "La regla estacional aplicada se conserva en la evidencia de la señal ancla.", "senal_ancla": [signal for signal in bundle["senales"] if signal["entidad"]["id"] == family]}]}
     return evidence
 
 
@@ -153,4 +160,6 @@ def run_investigation(db: Session, empresa_id: int, agent: str, question: str) -
     plan = propose_plan(question, bundle)
     evidence = collect_evidence(db, empresa_id, plan, bundle)
     result = redact_and_verify(question, plan, evidence)
-    return {"question": question, "plan": [{"id": item, "question": CATALOG[item]} for item in plan], "evidence": evidence, **result}
+    _, _, _, detector = _anchor(bundle)
+    playbook = get_playbook(detector)
+    return {"question": question, "detector_ancla": detector, "plan": [{"id": item, "question": CATALOG[item], "tramo": next(phase for phase, ids in playbook.items() if item in ids)} for item in plan], "evidence": evidence, **result}

@@ -1,6 +1,6 @@
 # Control IA — Gabinete de Analistas IA
 
-> Documento de referencia funcional y técnico. Describe la implementación existente a fecha de la versión `v1.49`; no define funcionalidad futura.
+> Documento de referencia funcional y técnico. Describe la implementación existente a fecha de la versión `v1.50`; no define funcionalidad futura.
 
 ## 1. Propósito
 
@@ -127,6 +127,7 @@ Cuando falta inventario, María no debe concluir roturas, cobertura o capital in
 | `impacto_ponderado_eur` | Importe de priorización: realizado × 1,00; en riesgo × 0,60; capital × 0,30. No representa pérdida realizada. |
 | `episodio_id` | Episodio de negocio abierto al que pertenece mientras la señal está activa. |
 | `descartada_por`, `descartada_motivo`, `descartada_en` | Trazabilidad obligatoria de un descarte. |
+| `naturaleza` | `riesgo` u `oportunidad`; no cambia el tipo económico del importe. |
 
 La restricción única `(empresa_id, fingerprint)` evita alertas duplicadas. El período no forma parte del fingerprint para que una señal de la misma entidad siga siendo la misma al actualizar la ventana.
 
@@ -138,6 +139,7 @@ La restricción única `(empresa_id, fingerprint)` evita alertas duplicadas. El 
 | `agent_episodes` | Componentes conexas de señales activas, con ancla, impacto por tipo, ponderado y ciclo abierto/resuelto. |
 | `agent_signal_feedback` | Veredicto del usuario (`util`, `ya_conocida`, `no_accionable`, `falso_positivo`) y motivo. |
 | `agent_decisions` | Decisión asociada a episodio o señal, responsable, métrica, horizonte, origen y resultado. |
+| `empresa_reglas_negocio` | Reglas con ámbito, vigencia, valor y usuario que las actualizó. |
 
 Un enlace exige misma empresa y al menos **siete días de solape** cuando aplica. Reglas disponibles: R1 rotura→caída de familia, R2 cobertura crítica→caída, R3 precio/volumen como faceta duplicada, R4 erosión MGD que agrava caída, R5 exceso sobre familia en caída y R6 stock muerto como faceta de exceso. El enlace explica una asociación estructural; no prueba una causa.
 
@@ -334,6 +336,42 @@ La entrada `/ai-control` carga en paralelo episodios abiertos, cambios frente a 
 
 Desde `v1.48` sigue el sistema visual Apple UI: tipografía de sistema, superficies neutras, separadores finos, azul para interacción y colores semánticos solo para éxito, advertencia, error o variación. Los Markdown se sanitizan con `rehype-sanitize`; tablas extensas mantienen desplazamiento horizontal y los controles tienen foco visible.
 
+## 11.1 Profundidad de dominio v1.50 (Bloque 3)
+
+### Naturaleza y priorización
+
+Cada señal declara si es un `riesgo` o una `oportunidad`. Ambas conservan su `impacto_tipo` económico (`realizado`, `en_riesgo` o `capital`), que no se debe sumar con otros tipos. La admisión diaria separa los cupos por agente: hasta cinco riesgos y hasta dos oportunidades. La bandeja **Hoy** y el CEO los presentan en grupos distintos; un riesgo de severidad 5 siempre conserva prioridad frente a una oportunidad.
+
+### Reglas de negocio
+
+`empresa_reglas_negocio` es la única fuente editable de reglas. Una regla tiene clave, ámbito (`empresa`, `familia`, `sku`, `cliente` o `comercial`), valor, vigencia y usuario actualizador. `app/business_rules.py` resuelve en cascada SKU → familia → empresa → constante; las reglas específicas de cliente o comercial solo se usan cuando el detector trabaja sobre esa entidad. La evidencia expone `{valor, origen, regla_id}` bajo `reglas_aplicadas`.
+
+| Clave | Uso |
+|---|---|
+| `lead_time_dias` | Cobertura frente a lead time; entre 1 y 365 días. |
+| `margen_objetivo_pct` | Objetivo MGD por familia o empresa; entre −100 y 100 %. |
+| `cliente_estrategico` | Eleva una severidad para señales de cliente afectado. |
+| `sku_discontinuado` | Excluye rotura y cobertura/exceso del SKU discontinuado. |
+| `familia_estacional` | Meses de actividad de una familia; fuera de temporada no se emiten señales temporales de caída/aceleración. |
+| `umbral_detector` | Excepción global o nombrada para un detector; se aplica en el cálculo y se cita. |
+
+La pantalla `/ai-control/reglas` permite crear, editar y eliminar reglas. Las mutaciones requieren administrador y la API rechaza valores fuera de rango, ámbitos incompatibles, fechas invertidas y solapes de vigencia.
+
+### Detectores añadidos
+
+| Agente | Detectores B3 | Regla de negocio resumida |
+|---|---|---|
+| Lucía | `cliente_en_fuga`, `caida_ventas_sku`, `caida_ventas_comercial`, `perdida_amplitud_cliente`, `dispersion_precio_sku` | Recencia individual, ventas equivalentes, pérdida de familias y dispersión real de precio por cliente. |
+| Lucía (oportunidades) | `cliente_recuperado`, `familia_en_aceleracion` | Recuperación tras una brecha real de 180 días y crecimiento persistente con CUSUM superior. |
+| Mattia | `erosion_mgd_cliente`, `erosion_mgd_comercial`, `venta_bajo_coste`, `margen_bajo_objetivo`, `concentracion_margen` | Erosión ponderada, MGD negativo, brecha de objetivo configurado y concentración de margen. |
+| María | `cobertura_clase_b`, `sku_sin_stock_sin_ventas`, `stock_sobre_familia_en_declive` | Nivel de cobertura B, saneamiento de catálogo y capital inmovilizado en familias que caen. |
+
+`erosion_mgd_familia` incorpora un puente de margen por precio, coste efectivo inferido de ventas/MGD y residuo de mix. El residuo se identifica explícitamente como tal, no como una causa observada.
+
+### Playbooks de investigación
+
+`app/agent_playbooks.py` asigna 5–8 preguntas cerradas por detector. Para una caída familiar, el plan comprueba días sin datos, comparación con base/pico, concentración de clientes, SKU dominante, precio×volumen, stock y estacionalidad. `app/agent_investigations.py` solo puede recoger bloques desde el catálogo permitido; el LLM no genera SQL ni cambia el plan.
+
 ## 12. API expuesta
 
 | Método y ruta | Autorización / límite | Función |
@@ -356,6 +394,8 @@ Desde `v1.48` sigue el sistema visual Apple UI: tipografía de sistema, superfic
 | `GET /agents/episodes` y `/{id}` | Usuario autenticado | Bandeja y detalle de episodios de empresa. |
 | `GET/POST/PATCH /agents/decisions` | Usuario autenticado | Consulta, crea o actualiza decisiones sin cruzar tenants. |
 | `GET /agents/quality` | Usuario autenticado | Métricas de feedback por detector en ventana de 90 días. |
+| `GET /agents/business-rules` | Usuario autenticado | Lista reglas de negocio aisladas por empresa. |
+| `POST/PATCH/DELETE /agents/business-rules` | Administrador | Crea, edita o elimina una regla validada, sin solapes de vigencia. |
 
 Nombres aceptados: `maria`/`maría`, `lucia`/`lucía`, `mattia` y `ceo`. Los estudios e investigaciones solo están disponibles para los tres agentes de área.
 
@@ -367,6 +407,8 @@ Nombres aceptados: `maria`/`maría`, `lucia`/`lucía`, `mattia` y `ceo`. Los est
 - No inventar compras, causas de negocio, datos de cliente ni explicaciones de precio/inventario sin evidencia.
 - No priorizar por p-valor: se prioriza por impacto EUR, confianza, severidad y persistencia.
 - No superar cinco señales nuevas por agente y día sin revisar los umbrales.
+- No superar dos oportunidades nuevas por agente y día; una oportunidad jamás desplaza un riesgo de severidad 5.
+- No dispersar reglas de negocio en detectores. Usar `resolve_rule` o `resolve_detector_threshold` y añadir `reglas_aplicadas` a la evidencia cuando intervengan.
 - No publicar una investigación que no pase `verify_report`.
 - No mezclar empresa, usuario o chats entre tenants.
 - No considerar un informe diario vigente si precede a una actualización de métricas de la empresa.

@@ -68,6 +68,7 @@ def ensure_agent_signals_schema() -> None:
                 entidad_tipo VARCHAR(40), entidad_id VARCHAR(255), periodo_inicio DATE, periodo_fin DATE,
                 severidad SMALLINT NOT NULL DEFAULT 1, impacto_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
                 impacto_tipo VARCHAR(20) NOT NULL DEFAULT 'en_riesgo', impacto_ponderado_eur DOUBLE PRECISION NOT NULL DEFAULT 0,
+                naturaleza VARCHAR(20) NOT NULL DEFAULT 'riesgo',
                 confianza DOUBLE PRECISION NOT NULL DEFAULT 0, valor_actual DOUBLE PRECISION,
                 valor_esperado DOUBLE PRECISION, desviacion DOUBLE PRECISION, evidencia TEXT NOT NULL DEFAULT '{}',
                 fingerprint VARCHAR(64) NOT NULL, estado VARCHAR(20) NOT NULL DEFAULT 'nueva',
@@ -79,6 +80,7 @@ def ensure_agent_signals_schema() -> None:
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_estado ON agent_signals (empresa_id, estado)"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS impacto_tipo VARCHAR(20) NOT NULL DEFAULT 'en_riesgo'"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS impacto_ponderado_eur DOUBLE PRECISION NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS naturaleza VARCHAR(20) NOT NULL DEFAULT 'riesgo'"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS episodio_id INTEGER"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_por INTEGER"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_motivo TEXT"))
@@ -170,9 +172,23 @@ def ensure_agent_signals_schema() -> None:
             END $$;
         """))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_impacto_ponderado ON agent_signals (empresa_id, impacto_ponderado_eur DESC)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signals_empresa_naturaleza ON agent_signals (empresa_id, naturaleza)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_signal_links_empresa ON agent_signal_links (empresa_id)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_episodes_empresa_estado ON agent_episodes (empresa_id, estado)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_decisions_empresa_estado ON agent_decisions (empresa_id, estado)"))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS empresa_reglas_negocio (
+                id SERIAL PRIMARY KEY, empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+                clave VARCHAR(80) NOT NULL, ambito_tipo VARCHAR(20), ambito_id VARCHAR(255),
+                valor_num DOUBLE PRECISION, valor_texto VARCHAR(255), valor_json TEXT,
+                vigente_desde DATE NOT NULL, vigente_hasta DATE,
+                actualizado_por INTEGER REFERENCES usuarios(id), updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_regla_negocio_vigencia UNIQUE (empresa_id, clave, ambito_tipo, ambito_id, vigente_desde),
+                CONSTRAINT ck_regla_negocio_clave CHECK (clave IN ('lead_time_dias', 'margen_objetivo_pct', 'cliente_estrategico', 'sku_discontinuado', 'familia_estacional', 'umbral_detector')),
+                CONSTRAINT ck_regla_negocio_ambito CHECK (ambito_tipo IN ('empresa', 'familia', 'sku', 'cliente', 'comercial'))
+            )
+        """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reglas_negocio_empresa_clave ON empresa_reglas_negocio (empresa_id, clave)"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -269,7 +285,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.49.0",
+    version="1.50.0",
     lifespan=lifespan
 )
 

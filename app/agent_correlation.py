@@ -10,7 +10,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from .agent_signals import ACTIVE_STATES, _number
-from .models import AgentEpisode, AgentSignal, AgentSignalLink, Producto
+from .models import AgentEpisode, AgentSignal, AgentSignalLink, Cliente, Producto, VentaHistorica
 
 
 MIN_OVERLAP_DAYS = 7
@@ -47,6 +47,22 @@ def _sku_family_map(db: Session, empresa_id: int, signals: list[AgentSignal]) ->
         Producto.sku.in_(skus),
     ).all()
     return {str(sku): family or "Sin familia" for sku, family in rows}
+
+
+def _client_family_map(db: Session, empresa_id: int, signals: list[AgentSignal]) -> dict[str, set[str]]:
+    clients = {signal.entidad_id for signal in signals if signal.entidad_tipo == "cliente" and signal.entidad_id}
+    if not clients:
+        return {}
+    rows = db.query(Cliente.cliente_pk, Producto.familia).join(
+        VentaHistorica, VentaHistorica.cliente_id == Cliente.id
+    ).join(Producto, Producto.id == VentaHistorica.producto_id).filter(
+        Producto.empresa_id == empresa_id,
+        Cliente.cliente_pk.in_(clients),
+    ).distinct().all()
+    result: dict[str, set[str]] = defaultdict(set)
+    for client_pk, family in rows:
+        result[str(client_pk)].add(family or "Sin familia")
+    return result
 
 
 def _upsert_link(
@@ -90,6 +106,7 @@ def refresh_signal_links(db: Session, empresa_id: int) -> list[AgentSignalLink]:
         AgentSignal.estado.in_(ACTIVE_STATES),
     ).all()
     sku_family = _sku_family_map(db, empresa_id, signals)
+    client_family = _client_family_map(db, empresa_id, signals)
     by_detector: dict[str, list[AgentSignal]] = defaultdict(list)
     for signal in signals:
         by_detector[signal.detector].append(signal)
@@ -131,7 +148,34 @@ def refresh_signal_links(db: Session, empresa_id: int) -> list[AgentSignalLink]:
         for excess in by_detector["exceso_cobertura"]:
             days = overlap_days(dead_stock, excess)
             if dead_stock.entidad_id == excess.entidad_id and days >= MIN_OVERLAP_DAYS:
-                links.append(_upsert_link(db, empresa_id, dead_stock, excess, "duplica", "R6_stock_muerto_faceta", days))
+                    links.append(_upsert_link(db, empresa_id, dead_stock, excess, "duplica", "R6_stock_muerto_faceta", days))
+
+    # Correlaciones del catálogo B3: solo entidad compatible y solape verificable.
+    for sku_drop in by_detector["caida_ventas_sku"]:
+        for family_drop in family_drops:
+            days = overlap_days(sku_drop, family_drop)
+            if sku_family.get(sku_drop.entidad_id) == family_drop.entidad_id and days >= MIN_OVERLAP_DAYS:
+                links.append(_upsert_link(db, empresa_id, sku_drop, family_drop, "explica", "R7_sku_explica_familia", days, family_drop.entidad_id))
+    for churn in by_detector["cliente_en_fuga"]:
+        for family_drop in family_drops:
+            days = overlap_days(churn, family_drop)
+            if family_drop.entidad_id in client_family.get(churn.entidad_id, set()) and days >= MIN_OVERLAP_DAYS:
+                links.append(_upsert_link(db, empresa_id, churn, family_drop, "explica", "R8_fuga_explica_caida", days, family_drop.entidad_id))
+    for below_cost in by_detector["venta_bajo_coste"]:
+        for erosion in by_detector["erosion_mgd_familia"]:
+            days = overlap_days(below_cost, erosion)
+            if sku_family.get(below_cost.entidad_id) == erosion.entidad_id and days >= MIN_OVERLAP_DAYS:
+                links.append(_upsert_link(db, empresa_id, below_cost, erosion, "agrava", "R9_bajo_coste_agrava_erosion", days, erosion.entidad_id))
+    for decline_stock in by_detector["stock_sobre_familia_en_declive"]:
+        for excess in by_detector["exceso_cobertura"]:
+            days = overlap_days(decline_stock, excess)
+            if decline_stock.entidad_id == excess.entidad_id and days >= MIN_OVERLAP_DAYS:
+                links.append(_upsert_link(db, empresa_id, decline_stock, excess, "duplica", "R10_declive_faceta", days, sku_family.get(excess.entidad_id)))
+    for dispersion in by_detector["dispersion_precio_sku"]:
+        for erosion in by_detector["erosion_mgd_familia"]:
+            days = overlap_days(dispersion, erosion)
+            if sku_family.get(dispersion.entidad_id) == erosion.entidad_id and days >= MIN_OVERLAP_DAYS:
+                links.append(_upsert_link(db, empresa_id, dispersion, erosion, "explica", "R11_dispersion_explica_erosion", days, erosion.entidad_id))
 
     db.flush()
     return links
@@ -335,6 +379,7 @@ def serialize_episode(db: Session, episode: AgentEpisode) -> dict:
             "entidad": {"tipo": signal.entidad_tipo, "id": signal.entidad_id},
             "impacto_eur": _number(signal.impacto_eur), "impacto_tipo": signal.impacto_tipo,
             "impacto_ponderado_eur": _number(signal.impacto_ponderado_eur),
+            "naturaleza": signal.naturaleza,
             "severidad": signal.severidad, "confianza": _number(signal.confianza),
             "periodo": [str(signal.periodo_inicio), str(signal.periodo_fin)], "estado": signal.estado,
             "evidencia": json.loads(signal.evidencia or "{}"),

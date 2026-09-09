@@ -146,6 +146,27 @@ class EmpresaConfiguracion(Base):
     __tablename__ = "empresa_configuraciones"
     empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)
     contexto_negocio = Column(String, default="")
+
+
+class EmpresaReglaNegocio(Base):
+    """Parámetros verificables que modifican detectores sin depender del texto libre."""
+    __tablename__ = "empresa_reglas_negocio"
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "clave", "ambito_tipo", "ambito_id", "vigente_desde", name="uq_regla_negocio_vigencia"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    clave = Column(String(80), nullable=False, index=True)
+    ambito_tipo = Column(String(20), nullable=True)
+    ambito_id = Column(String(255), nullable=True)
+    valor_num = Column(Float, nullable=True)
+    valor_texto = Column(String(255), nullable=True)
+    valor_json = Column(Text, nullable=True)
+    vigente_desde = Column(Date, nullable=False)
+    vigente_hasta = Column(Date, nullable=True)
+    actualizado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
 class AgentSettings(Base):
     __tablename__ = "agent_settings"
@@ -198,6 +219,7 @@ class AgentSignal(Base):
     impacto_eur = Column(Float, nullable=False, default=0.0)
     impacto_tipo = Column(String(20), nullable=False, default="en_riesgo")
     impacto_ponderado_eur = Column(Float, nullable=False, default=0.0)
+    naturaleza = Column(String(20), nullable=False, default="riesgo", index=True)
     confianza = Column(Float, nullable=False, default=0.0)
     valor_actual = Column(Float, nullable=True)
     valor_esperado = Column(Float, nullable=True)

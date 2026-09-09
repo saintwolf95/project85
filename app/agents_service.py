@@ -90,7 +90,7 @@ def run_ceo_from_signals(db: Session, empresa_id: int) -> str:
         return "Error: API Key de OpenAI no configurada."
     evidence = build_episode_bundle(db, empresa_id, limit=7)
     messages = [
-        {"role": "system", "content": "Eres CEO IA. Consolida solo los episodios del evidence bundle. No ejecutes SQL ni calcules cifras. Cita siempre el subtotal y su tipo de impacto; nunca sumes realizado, en_riesgo y capital en una sola cifra. Cuando exista un enlace explica, descríbelo como correlación estructural, no como prueba causal. Da hasta tres decisiones con responsable, métrica, horizonte y el id de episodio de origen. Al final añade exactamente un comentario HTML <!--DECISIONS_JSON:[...]--> con una lista JSON. Cada objeto debe contener episodio_id, titulo, descripcion, responsable, metrica_objetivo y horizonte_fecha ISO. No incluyas una decisión si no puedes enlazarla a un episodio existente."},
+        {"role": "system", "content": "Eres CEO IA. Consolida solo los episodios del evidence bundle. No ejecutes SQL ni calcules cifras. Separa riesgos y oportunidades; ordénalos por impacto ponderado dentro de su naturaleza y nunca dejes que una oportunidad desplace un riesgo de severidad 5. Cita siempre el subtotal y su tipo de impacto; nunca sumes realizado, en_riesgo y capital en una sola cifra. Cuando exista un enlace explica, descríbelo como correlación estructural, no como prueba causal. Da hasta tres decisiones con responsable, métrica, horizonte y el id de episodio de origen. Al final añade exactamente un comentario HTML <!--DECISIONS_JSON:[...]--> con una lista JSON. Cada objeto debe contener episodio_id, titulo, descripcion, responsable, metrica_objetivo y horizonte_fecha ISO. No incluyas una decisión si no puedes enlazarla a un episodio existente."},
         {"role": "user", "content": f"EVIDENCE BUNDLE:\n{json.dumps(evidence, ensure_ascii=False, default=str)}\n\nCONTEXTO:\n{get_business_context(db, empresa_id) or 'No configurado.'}"},
     ]
     try:
@@ -170,7 +170,7 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
         maria_md = narrate_agent_signals(db, empresa_id, "maria")
         lucia_md = narrate_agent_signals(db, empresa_id, "lucia")
         mattia_md = narrate_agent_signals(db, empresa_id, "mattia")
-        alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "impacto_tipo": item.impacto_tipo, "impacto_ponderado_eur": item.impacto_ponderado_eur, "episodio_id": item.episodio_id, "episodio_impacto_ponderado_eur": episode_impact.get(item.episodio_id), "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
+        alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "impacto_tipo": item.impacto_tipo, "impacto_ponderado_eur": item.impacto_ponderado_eur, "naturaleza": item.naturaleza or "riesgo", "episodio_id": item.episodio_id, "episodio_impacto_ponderado_eur": episode_impact.get(item.episodio_id), "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
     ceo_summary = run_ceo_from_signals(db, empresa_id) if run_fase2 and (run_fase1 or get_daily_agent_insight(db, empresa_id)) else None
     if ceo_summary:
         ceo_summary = persist_ceo_decisions(db, empresa_id, ceo_summary)

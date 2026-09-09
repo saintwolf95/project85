@@ -587,6 +587,7 @@ export const getAgentDataReadiness = async (): Promise<AgentDataReadiness> => {
 
 export type ImpactType = 'realizado' | 'en_riesgo' | 'capital';
 export type SignalState = 'nueva' | 'persistente' | 'resuelta' | 'descartada';
+export type SignalNature = 'riesgo' | 'oportunidad';
 
 export interface AgentSignalRecord {
   id: number;
@@ -600,6 +601,7 @@ export interface AgentSignalRecord {
   impacto_eur: number;
   impacto_tipo: ImpactType;
   impacto_ponderado_eur: number;
+  naturaleza: SignalNature;
   confianza: number;
   estado: SignalState;
   episodio_id?: number | null;
@@ -668,6 +670,11 @@ export const createAgentFeedback = async (signalId: number, veredicto: 'util' | 
 export const discardAgentSignal = async (signalId: number, motivo: string, veredicto: 'no_accionable' | 'falso_positivo' = 'no_accionable') => api.post(`/agents/signals/${signalId}/discard`, { motivo, veredicto });
 export const createAgentDecision = async (payload: { episodio_id?: number; signal_id?: number; titulo: string; descripcion?: string; responsable?: string; metrica_objetivo?: string; horizonte_fecha: string }) => (await api.post('/agents/decisions', payload)).data;
 export const updateAgentDecision = async (decisionId: number, payload: Partial<Pick<AgentDecisionRecord, 'estado' | 'responsable' | 'metrica_objetivo' | 'valor_objetivo' | 'horizonte_fecha' | 'resultado_texto'>>) => (await api.patch(`/agents/decisions/${decisionId}`, payload)).data;
+export interface BusinessRuleRecord { id: number; clave: string; ambito_tipo: string; ambito_id?: string | null; valor_num?: number | null; valor_texto?: string | null; valor_json?: string | null; vigente_desde: string; vigente_hasta?: string | null; }
+export const getBusinessRules = async (): Promise<{ items: BusinessRuleRecord[] }> => (await api.get('/agents/business-rules')).data;
+export const createBusinessRule = async (payload: Omit<BusinessRuleRecord, 'id'>) => (await api.post('/agents/business-rules', payload)).data;
+export const updateBusinessRule = async (ruleId: number, payload: Omit<BusinessRuleRecord, 'id'>) => (await api.patch(`/agents/business-rules/${ruleId}`, payload)).data;
+export const deleteBusinessRule = async (ruleId: number) => api.delete(`/agents/business-rules/${ruleId}`);
 
 // --- Agent Chat ---
 export interface AgentChatMessage {

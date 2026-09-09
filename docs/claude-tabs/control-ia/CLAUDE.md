@@ -63,3 +63,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Los importes realizado, en riesgo y capital deben mostrarse y totalizarse por separado. El ponderado sirve únicamente para ordenar.
 - `POST /agents/signals/{id}/feedback` y `/discard` alimentan calidad por detector; el descarte necesita motivo y aplica supresión de 30 días a falso positivo/no accionable.
 - Las decisiones se gestionan en `/agents/decisions` y siempre se vinculan a una señal o episodio de la misma empresa. Al abrir un expediente desde una señal, el chat recibe `signal_id` y su evidence bundle exacto.
+
+## Actualización v1.50 — profundidad de dominio (Bloque 3)
+
+- Las señales guardan `naturaleza`: `riesgo` u `oportunidad`. Mantener los topes independientes de cinco riesgos y dos oportunidades nuevas por agente/día; el CEO y la bandeja no deben mezclar ambas naturalezas como una pérdida única.
+- `empresa_reglas_negocio` centraliza `lead_time_dias`, `margen_objetivo_pct`, `cliente_estrategico`, `sku_discontinuado`, `familia_estacional` y `umbral_detector`. Resolver en `app/business_rules.py`, registrar el origen en evidencia y rechazar solapes de fechas.
+- La gestión de reglas está en `/ai-control/reglas` y en `GET/POST/PATCH/DELETE /agents/business-rules`; solo administradores pueden mutarlas.
+- Los playbooks se eligen por detector en `app/agent_playbooks.py`. Una investigación no debe generar preguntas ni SQL libre.

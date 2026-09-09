@@ -64,6 +64,13 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El CEO consume episodios y debe referirse a sus enlaces como explicación estructural, nunca como causalidad demostrada. Las decisiones propuestas necesitan episodio, responsable, métrica y horizonte; se persisten y se cierran con resultado.
 - Toda señal descartada requiere motivo y feedback. Un `falso_positivo` o `no_accionable` suprime la misma señal durante 30 días; si reaparece después, vuelve como incidencia nueva con trazabilidad de reincidencia.
 
+## Actualización v1.50 — profundidad de dominio de Control IA
+
+- `agent_signals` diferencia `riesgo` y `oportunidad`. Cada agente admite como máximo cinco riesgos nuevos y dos oportunidades nuevas por día; las oportunidades se muestran y priorizan aparte y nunca desplazan un riesgo de severidad 5.
+- `empresa_reglas_negocio` y `app/business_rules.py` son la única fuente de reglas configurables. La resolución sigue SKU → familia → empresa → constante, con ámbito específico de cliente/comercial cuando la métrica lo requiere; la evidencia debe declarar valor, origen y `regla_id`.
+- Las reglas se administran en `/ai-control/reglas` y se validan tanto por tipo como por vigencia. No permitir solapes. Cada excepción de `umbral_detector` se aplica y queda citada por el detector.
+- Los nuevos detectores B3 siguen siendo deterministas; los playbooks de investigación son cerrados por detector. No adelantar agentes de calidad, compras ni bloques posteriores sin una solicitud explícita.
+
 ## Versiones y precedentes relevantes
 
 - v1.17 inicializa de forma segura la tabla de histórico de inventario en producción.

@@ -143,6 +143,17 @@ class AgentDecisionUpdateRequest(BaseModel):
     horizonte_fecha: Optional[date] = None
     resultado_texto: Optional[str] = Field(default=None, max_length=5000)
 
+
+class BusinessRuleRequest(BaseModel):
+    clave: Literal["lead_time_dias", "margen_objetivo_pct", "cliente_estrategico", "sku_discontinuado", "familia_estacional", "umbral_detector"]
+    ambito_tipo: Literal["empresa", "familia", "sku", "cliente", "comercial"]
+    ambito_id: Optional[str] = Field(default=None, max_length=255)
+    valor_num: Optional[float] = None
+    valor_texto: Optional[str] = Field(default=None, max_length=255)
+    valor_json: Optional[str] = Field(default=None, max_length=5000)
+    vigente_desde: date
+    vigente_hasta: Optional[date] = None
+
 class LibreriaDocumentoResponse(BaseModel):
     id: int
     filename: str

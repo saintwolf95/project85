@@ -7,15 +7,16 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import logging
 from ..database import get_db
-from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, Usuario
+from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, EmpresaReglaNegocio, Usuario
 from ..api.deps import get_current_user, get_current_active_admin
-from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest
+from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest, BusinessRuleRequest
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..agent_studies import ALLOWED_STUDY_AGENTS, ensure_agent_study_snapshot
 from ..core.rate_limit import limiter
 from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
+from ..business_rules import ensure_no_overlap, validate_rule_payload
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ def _serialize_signal(db: Session, signal: AgentSignal) -> dict:
         "periodo_inicio": str(signal.periodo_inicio), "periodo_fin": str(signal.periodo_fin),
         "severidad": signal.severidad, "impacto_eur": signal.impacto_eur,
         "impacto_tipo": signal.impacto_tipo, "impacto_ponderado_eur": signal.impacto_ponderado_eur,
+        "naturaleza": signal.naturaleza,
         "confianza": signal.confianza, "valor_actual": signal.valor_actual,
         "valor_esperado": signal.valor_esperado, "desviacion": signal.desviacion,
         "evidencia": signal.evidencia, "estado": signal.estado, "episodio_id": signal.episodio_id,
@@ -69,6 +71,74 @@ def _serialize_signal(db: Session, signal: AgentSignal) -> dict:
         "enlaces": [{"id": link.id, "origen_id": link.signal_origen_id, "destino_id": link.signal_destino_id, "tipo_relacion": link.tipo_relacion, "regla": link.regla, "solape_dias": link.solape_dias, "detalle": link.detalle} for link in links],
         "feedback": [{"id": row.id, "usuario_id": row.usuario_id, "veredicto": row.veredicto, "motivo": row.motivo, "created_at": row.created_at} for row in feedback],
     }
+
+
+def _serialize_business_rule(rule: EmpresaReglaNegocio) -> dict:
+    return {
+        "id": rule.id, "clave": rule.clave, "ambito_tipo": rule.ambito_tipo, "ambito_id": rule.ambito_id,
+        "valor_num": rule.valor_num, "valor_texto": rule.valor_texto, "valor_json": rule.valor_json,
+        "vigente_desde": str(rule.vigente_desde), "vigente_hasta": str(rule.vigente_hasta) if rule.vigente_hasta else None,
+        "actualizado_por": rule.actualizado_por, "updated_at": rule.updated_at,
+    }
+
+
+@router.get("/agents/business-rules")
+def list_business_rules(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    rules = db.query(EmpresaReglaNegocio).filter(EmpresaReglaNegocio.empresa_id == current_user.empresa_id).order_by(
+        EmpresaReglaNegocio.clave, EmpresaReglaNegocio.ambito_tipo, EmpresaReglaNegocio.vigente_desde.desc(),
+    ).all()
+    return {"items": [_serialize_business_rule(rule) for rule in rules]}
+
+
+@router.post("/agents/business-rules")
+def create_business_rule(payload: BusinessRuleRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    try:
+        validate_rule_payload(payload.clave, payload.ambito_tipo, payload.ambito_id, payload.valor_num, payload.valor_texto, payload.valor_json)
+        if payload.vigente_hasta and payload.vigente_hasta < payload.vigente_desde:
+            raise ValueError("La vigencia final no puede ser anterior a la inicial")
+        rule = EmpresaReglaNegocio(empresa_id=current_user.empresa_id, actualizado_por=current_user.id, **payload.model_dump())
+        ensure_no_overlap(db, rule)
+        db.add(rule)
+        db.commit()
+        db.refresh(rule)
+        return _serialize_business_rule(rule)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(error))
+
+
+@router.patch("/agents/business-rules/{rule_id}")
+def update_business_rule(rule_id: int, payload: BusinessRuleRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    rule = db.query(EmpresaReglaNegocio).filter(
+        EmpresaReglaNegocio.id == rule_id,
+        EmpresaReglaNegocio.empresa_id == current_user.empresa_id,
+    ).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Regla de negocio no encontrada")
+    try:
+        validate_rule_payload(payload.clave, payload.ambito_tipo, payload.ambito_id, payload.valor_num, payload.valor_texto, payload.valor_json)
+        if payload.vigente_hasta and payload.vigente_hasta < payload.vigente_desde:
+            raise ValueError("La vigencia final no puede ser anterior a la inicial")
+        for field, value in payload.model_dump().items():
+            setattr(rule, field, value)
+        rule.actualizado_por = current_user.id
+        ensure_no_overlap(db, rule, exclude_id=rule.id)
+        db.commit()
+        db.refresh(rule)
+        return _serialize_business_rule(rule)
+    except ValueError as error:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(error))
+
+
+@router.delete("/agents/business-rules/{rule_id}")
+def delete_business_rule(rule_id: int, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    rule = db.query(EmpresaReglaNegocio).filter(EmpresaReglaNegocio.id == rule_id, EmpresaReglaNegocio.empresa_id == current_user.empresa_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Regla de negocio no encontrada")
+    db.delete(rule)
+    db.commit()
+    return {"deleted": rule_id}
 
 
 def _serialize_decision(decision: AgentDecision) -> dict:

@@ -76,6 +76,11 @@ class AgentSignalPersistenceTests(unittest.TestCase):
         self.assertIsNone(bundle["senal_contextual"])
         self.assertEqual([signal["entidad"]["id"] for signal in bundle["senales"]], ["Local"])
 
+    def test_oportunidad_tiene_naturaleza_propia_y_no_cambia_el_impacto_tipado(self):
+        signal = _signal("lucia", "cliente_recuperado", "cliente", "C-1", date(2026, 8, 1), date(2026, 8, 2), 2, 750, .8, 750, 500, {})
+        self.assertEqual(signal["naturaleza"], "oportunidad")
+        self.assertEqual(signal["impacto_tipo"], "realizado")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -208,3 +208,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - AI Copilot y Control IA usan tipografía de sistema, superficies neutras, separadores finos y azul único para acciones e interacción; conservar los colores semánticos exclusivamente para estados, variaciones y alertas.
 - No cambiar APIs, modelos, historial, estudios, señales, chats ni cálculos por un ajuste visual. Las tablas de informes y respuestas deben conservar su accesibilidad, desplazamiento horizontal y cifras tabulares.
 - Mantener la misma jerarquía en claro y oscuro: modal con fondo atenuado, tarjetas sin adornos cromáticos, controles segmentados y foco visible para teclado.
+
+## Actualización v1.51 — guía de Control IA
+
+- Control IA incorpora un glosario único, recorrido accesible y guía permanente en `/ai-control/guia`; las definiciones de la guía y los tooltips deben proceder de `frontend/src/content/glosario.ts`.
+- El progreso del recorrido y de puesta en marcha se persiste por usuario, empresa y flujo en backend; no usar `localStorage` como fuente de verdad.
+- La lista de puesta en marcha solo marca elementos comprobados en datos o configuración real. La síntesis semanal no existe todavía: debe indicarse como no disponible, sin simular una confirmación manual.
+- Los estados sin datos explican la causa, el impacto y la siguiente acción. Esta capa no altera detectores, prioridades, evidencia ni cálculos de Control IA.

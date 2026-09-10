@@ -70,3 +70,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - `empresa_reglas_negocio` centraliza `lead_time_dias`, `margen_objetivo_pct`, `cliente_estrategico`, `sku_discontinuado`, `familia_estacional` y `umbral_detector`. Resolver en `app/business_rules.py`, registrar el origen en evidencia y rechazar solapes de fechas.
 - La gestión de reglas está en `/ai-control/reglas` y en `GET/POST/PATCH/DELETE /agents/business-rules`; solo administradores pueden mutarlas.
 - Los playbooks se eligen por detector en `app/agent_playbooks.py`. Una investigación no debe generar preguntas ni SQL libre.
+
+## Actualización v1.51 — guía y puesta en marcha
+
+- `frontend/src/content/glosario.ts` es la fuente única de definiciones para la guía y los tooltips; no duplicar sus textos en componentes.
+- El recorrido se abre desde `Cómo funciona`, se persiste con `/agents/onboarding/control_ia_tour` y debe mantener foco atrapado, anuncio de paso, Escape, salto y comportamiento de hoja inferior en móvil.
+- `/ai-control/guia` es la guía permanente. El checklist de `/ai-control` consulta estado real mediante `/agents/setup-checklist`; nunca debe permitir marcar una configuración no comprobada.
+- Los estados vacíos comunican cobertura insuficiente, ausencia de cambios relevantes, falta de feedback o ausencia de decisiones y enlazan al siguiente paso útil.

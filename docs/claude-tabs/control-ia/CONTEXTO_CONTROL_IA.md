@@ -1,6 +1,6 @@
 # Control IA — Gabinete de Analistas IA
 
-> Documento de referencia funcional y técnico. Describe la implementación existente a fecha de la versión `v1.50`; no define funcionalidad futura.
+> Documento de referencia funcional y técnico. Describe la implementación existente a fecha de la versión `v1.51`; no define funcionalidad futura.
 
 ## 1. Propósito
 
@@ -396,6 +396,8 @@ La pantalla `/ai-control/reglas` permite crear, editar y eliminar reglas. Las mu
 | `GET /agents/quality` | Usuario autenticado | Métricas de feedback por detector en ventana de 90 días. |
 | `GET /agents/business-rules` | Usuario autenticado | Lista reglas de negocio aisladas por empresa. |
 | `POST/PATCH/DELETE /agents/business-rules` | Administrador | Crea, edita o elimina una regla validada, sin solapes de vigencia. |
+| `GET/PUT /agents/onboarding/{flow}` | Usuario autenticado | Lee o persiste progreso de `control_ia_tour` y `control_ia_setup` por usuario y empresa. |
+| `GET /agents/setup-checklist` | Usuario autenticado | Calcula los elementos de puesta en marcha desde reglas, contexto, feedback y decisiones reales. |
 
 Nombres aceptados: `maria`/`maría`, `lucia`/`lucía`, `mattia` y `ceo`. Los estudios e investigaciones solo están disponibles para los tres agentes de área.
 
@@ -412,6 +414,15 @@ Nombres aceptados: `maria`/`maría`, `lucia`/`lucía`, `mattia` y `ceo`. Los est
 - No publicar una investigación que no pase `verify_report`.
 - No mezclar empresa, usuario o chats entre tenants.
 - No considerar un informe diario vigente si precede a una actualización de métricas de la empresa.
+- No presentar una configuración o síntesis semanal como completada si no existe soporte funcional para comprobarla.
+
+## 13.1 Guía interactiva v1.51
+
+La entrada **Hoy** incorpora tres ayudas complementarias sin cambiar el motor analítico: el glosario central `frontend/src/content/glosario.ts`, el recorrido `ControlIaTour` y la guía permanente `/ai-control/guia`. Los tooltips y la guía reutilizan exactamente el mismo diccionario de términos para evitar definiciones divergentes.
+
+El estado del recorrido y del checklist se persiste en `usuario_onboarding` y sus eventos en `usuario_onboarding_eventos`, aislados por `usuario_id`, `empresa_id` y `flujo`. El recorrido registra inicio, paso, abandono y finalización; se puede reiniciar desde **Cómo funciona**, respeta `Escape`, foco modal, lector de pantalla y hoja inferior en móvil.
+
+`GET /agents/setup-checklist` verifica los tres bloqueantes (lead time, margen objetivo y SKU discontinuados) y los elementos de valor (clientes estratégicos, estacionalidad, contexto, feedback y decisiones) contra datos reales. La síntesis semanal sigue sin estar implementada y se declara no disponible. Los estados vacíos de episodios, estudios, calidad y decisiones explican qué falta y enlazan al siguiente paso accionable.
 
 ## 14. Diagnóstico rápido
 

@@ -374,7 +374,7 @@ export const AiControlPanel = () => {
               </tbody>
             </table>
           </div>
-        ) : <p className="py-10 text-center text-sm text-slate-400">No hay datos suficientes para este estudio.</p>}
+        ) : <div className="py-10 text-center text-sm text-slate-400"><p className="font-medium text-slate-600 dark:text-slate-300">No hay datos suficientes para este estudio.</p><p className="mt-2">La fuente necesaria no tiene cobertura para este análisis; revisa la preparación de datos antes de interpretarlo.</p><a href="#data-readiness" className="mt-3 inline-flex font-medium text-[#0071e3] dark:text-brand-cyan">Ver preparación de datos</a></div>}
         {section?.methodology && <p className="mt-4 text-[12px] text-[#6e6e73]"><strong>Método:</strong> {String(section.methodology)}</p>}
       </div>
     );
@@ -465,7 +465,7 @@ export const AiControlPanel = () => {
           </div>
 
           {dataReadiness && (
-            <div className="mt-5 border-y border-black/[0.08] py-5 dark:border-slate-800">
+            <div id="data-readiness" className="mt-5 border-y border-black/[0.08] py-5 dark:border-slate-800">
               <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
                 <div className="flex items-center gap-3">
                   <Database size={18} className="shrink-0 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />

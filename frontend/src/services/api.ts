@@ -696,6 +696,8 @@ export interface MarginSignal { id: number; detector: string; entidad_tipo: stri
 export const getMarginOverview = async (ventana: MarginWindow): Promise<MarginOverview> => (await api.get('/margin/overview', { params: { ventana } })).data;
 export const getMarginBridge = async (metrica: MarginMetric, ventana: MarginWindow): Promise<MarginBridge> => (await api.get('/margin/bridge', { params: { metrica, ventana } })).data;
 export const getMarginSignals = async (): Promise<{ senales: MarginSignal[]; mattia_markdown?: string | null }> => (await api.get('/margin/signals')).data;
+export interface MarginConcentration { total_eur: number; total_positivo_eur: number; top10_eur: number; top10_total_pct: number | null; top10_positivos_pct: number | null; skus_50_pct: number | null; skus_80_pct: number | null; hhi: number; filas: Array<{ sku: string; nombre: string; familia: string; product_manager: string; ventas_eur: number; margen_eur: number; tasa_margen_pct: number | null; peso_total_pct: number | null; peso_acumulado_pct: number | null; peso_sobre_positivos_pct: number | null; }>; nota_unidad: string; }
+export const getMarginConcentration = async (metrica: MarginMetric, ventana: MarginWindow): Promise<MarginConcentration> => (await api.get('/margin/concentration', { params: { metrica, ventana, unidad: 'eur' } })).data;
 
 // --- Agent Chat ---
 export interface AgentChatMessage {

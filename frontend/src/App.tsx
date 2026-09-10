@@ -17,6 +17,7 @@ import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
 import { PowerBiMock } from './pages/PowerBiMock';
 import { Libreria } from './pages/Libreria';
+import { Marginality } from './pages/Marginality';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -46,6 +47,7 @@ function App() {
             <Route path="ai-control/decisiones" element={<AiControlDecisions />} />
             <Route path="ai-control/reglas" element={<AiControlBusinessRules />} />
             <Route path="ai-control/guia" element={<AiControlGuide />} />
+            <Route path="marginalidad" element={<Marginality />} />
             <Route path="integrations" element={<DataEngineering />} />
             <Route path="import-guide" element={<DataImportGuide />} />
             <Route path="powerbi" element={<PowerBiMock />} />

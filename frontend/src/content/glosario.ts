@@ -14,6 +14,8 @@ export const GLOSARIO = {
   supresion: { termino: 'Supresión', definicion: 'Cuando descartas algo como falso, no vuelve a aparecer en 30 días.' },
   preparacion_datos: { termino: 'Preparación de datos', definicion: 'Qué fuentes hay disponibles hoy y, por tanto, qué análisis se pueden creer y cuáles no.' },
   factor_ponderacion: { termino: 'Factor de ponderación', definicion: 'Criterio usado solo para ordenar los episodios según impacto, confianza, severidad y persistencia. No representa una pérdida.' },
+  mg: { termino: 'MG', definicion: 'Margen bruto. En esta base se calcula como SUM(margen_bruto_eur) / SUM(ventas netas) × 100; nunca como promedio de porcentajes por línea.' },
+  mgd: { termino: 'MGD', definicion: 'Margen puesto en destino. Incluye, además del MG, gastos financieros, de transporte y de logística de almacén. Se calcula como SUM(margen_destino_eur) / SUM(ventas netas) × 100.' },
 } as const;
 
 export type GlossaryKey = keyof typeof GLOSARIO;

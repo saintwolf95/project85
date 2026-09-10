@@ -688,6 +688,15 @@ export const updateOnboardingProgress = async (flow: OnboardingProgress['flujo']
 export interface ControlIaSetupItem { id: string; bloqueante: boolean; completado: boolean; disponible?: boolean; destino: string; texto: string; }
 export const getControlIaSetup = async (): Promise<{ items: ControlIaSetupItem[]; bloqueantes_completados: boolean }> => (await api.get('/agents/setup-checklist')).data;
 
+export type MarginMetric = 'mg' | 'mgd';
+export type MarginWindow = '30d' | '90d' | '12m';
+export interface MarginOverview { periodo: { inicio: string; fin: string; anterior_inicio: string; anterior_fin: string }; actual: Record<string, number | null>; anterior: Record<string, number | null>; variacion: Record<string, number | null>; top10_mgd_positivo_pct: number | null; serie_diaria: Array<{ fecha: string; ventas_eur: number; mg_eur: number; mgd_eur: number; mg_pct: number | null; mgd_pct: number | null; }>; }
+export interface MarginBridge { metrica: MarginMetric; efecto_precio_eur: number; efecto_coste_eur: number; efecto_mix_residual_eur: number; delta_margen_eur: number; nota: string; }
+export interface MarginSignal { id: number; detector: string; entidad_tipo: string; entidad_id: string; severidad: number; impacto_eur: number; impacto_tipo: string; impacto_ponderado_eur: number; episodio_id?: number | null; episodio_titulo?: string | null; }
+export const getMarginOverview = async (ventana: MarginWindow): Promise<MarginOverview> => (await api.get('/margin/overview', { params: { ventana } })).data;
+export const getMarginBridge = async (metrica: MarginMetric, ventana: MarginWindow): Promise<MarginBridge> => (await api.get('/margin/bridge', { params: { metrica, ventana } })).data;
+export const getMarginSignals = async (): Promise<{ senales: MarginSignal[]; mattia_markdown?: string | null }> => (await api.get('/margin/signals')).data;
+
 // --- Agent Chat ---
 export interface AgentChatMessage {
   role: 'user' | 'assistant';

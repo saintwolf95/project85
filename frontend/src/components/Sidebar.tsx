@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power, BookOpen } from 'lucide-react';
+import { LayoutDashboard, BarChart3, TrendingUp, Bot, Database, LogOut, Sun, Moon, FileSpreadsheet, X, Power, BookOpen, BadgeEuro } from 'lucide-react';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
 import { VERSION_APP } from '../config/version';
@@ -20,6 +20,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { to: '/forecast', icon: TrendingUp, label: 'Predicción Demanda' },
     { to: '/copilot', icon: Bot, label: 'AI Copilot' },
     { to: '/ai-control', icon: Power, label: 'Control IA' },
+    { to: '/marginalidad', icon: BadgeEuro, label: 'Marginalidad' },
     { to: '/integrations', icon: Database, label: 'Data Engineering' },
     { to: '/import-guide', icon: FileSpreadsheet, label: 'Guía de Importación' },
     { to: '/libreria', icon: BookOpen, label: 'LibrerIA' },

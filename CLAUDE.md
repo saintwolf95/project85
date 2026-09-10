@@ -215,3 +215,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El progreso del recorrido y de puesta en marcha se persiste por usuario, empresa y flujo en backend; no usar `localStorage` como fuente de verdad.
 - La lista de puesta en marcha solo marca elementos comprobados en datos o configuración real. La síntesis semanal no existe todavía: debe indicarse como no disponible, sin simular una confirmación manual.
 - Los estados sin datos explican la causa, el impacto y la siguiente acción. Esta capa no altera detectores, prioridades, evidencia ni cálculos de Control IA.
+
+## Conocimiento de negocio — Marginalidad
+
+- `MG` es el margen bruto registrado en `ventas_historicas.margen_bruto_eur`.
+- `MGD` es el margen puesto en destino registrado en `ventas_historicas.margen_destino_eur`: a diferencia del MG incorpora gastos financieros, de transporte y de logística de almacén.
+- Cualquier porcentaje agregado de MG o MGD se calcula ponderado sobre las ventas netas del mismo conjunto de líneas; nunca se promedian porcentajes de línea.

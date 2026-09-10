@@ -65,6 +65,8 @@ Todos los accesos de datos se aíslan por `empresa_id`. Los chats, informes, se�
 | `producto_metricas` | Clase ABC/XYZ, días de cobertura y riesgo calculado. |
 | `empresa_configuraciones` | Texto de Cerebro del negocio, limitado a 8.000 caracteres al inyectarlo. |
 
+`MG` se persiste como `margen_bruto_eur`. `MGD` se persiste como `margen_destino_eur` y, frente al MG, incorpora gastos financieros, de transporte y de logística de almacén. Sus porcentajes agregados usan siempre el cociente ponderado entre la suma de margen y la suma de ventas del mismo conjunto de líneas.
+
 ### 3.2 Ancla de datos
 
 La fecha de referencia no es la fecha del sistema: es `MAX(ventas_historicas.fecha_venta)` para la empresa activa. Con ella se calculan ventanas comparables:

@@ -12,6 +12,7 @@ import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
 import { AiControlDecisions, AiControlEpisodeDetail, AiControlSignalDetail, AiControlToday } from './pages/AiControlToday';
 import { AiControlBusinessRules } from './pages/AiControlBusinessRules';
+import { AiControlGuide } from './pages/AiControlGuide';
 import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
 import { PowerBiMock } from './pages/PowerBiMock';
@@ -44,6 +45,7 @@ function App() {
             <Route path="ai-control/episodio/:id" element={<AiControlEpisodeDetail />} />
             <Route path="ai-control/decisiones" element={<AiControlDecisions />} />
             <Route path="ai-control/reglas" element={<AiControlBusinessRules />} />
+            <Route path="ai-control/guia" element={<AiControlGuide />} />
             <Route path="integrations" element={<DataEngineering />} />
             <Route path="import-guide" element={<DataImportGuide />} />
             <Route path="powerbi" element={<PowerBiMock />} />

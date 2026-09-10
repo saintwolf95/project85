@@ -221,3 +221,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - `MG` es el margen bruto registrado en `ventas_historicas.margen_bruto_eur`.
 - `MGD` es el margen puesto en destino registrado en `ventas_historicas.margen_destino_eur`: a diferencia del MG incorpora gastos financieros, de transporte y de logística de almacén.
 - Cualquier porcentaje agregado de MG o MGD se calcula ponderado sobre las ventas netas del mismo conjunto de líneas; nunca se promedian porcentajes de línea.
+
+## Actualización v1.52 — Marginalidad
+
+- La pestaña `/marginalidad` usa `ventas_historicas`, `productos` y `clientes`, siempre anclada a la última fecha de ventas de la empresa activa, no a la fecha de sistema.
+- Las agregaciones son SQL directo aislado por `empresa_id`; la concentración se ordena por euros de MG o MGD, nunca por porcentajes.
+- Las señales visibles se reutilizan desde Control IA. No introducir detectores ni llamadas LLM para la pestaña.

@@ -16,6 +16,7 @@ import {
 import type { AgentDecisionRecord, AgentEpisodeRecord, AgentQualityMetric, AgentSignalRecord, ImpactType } from '../services/api';
 import { GlossaryTooltip } from '../components/GlossaryTooltip';
 import { ControlIaTour } from '../components/ControlIaTour';
+import { ControlIaSetupChecklist } from '../components/ControlIaSetupChecklist';
 
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const dateTime = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
@@ -83,6 +84,7 @@ export const AiControlToday = () => {
       <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.03em] text-[#1d1d1f] dark:text-white">Prioridades de hoy</h1>
       <p className="mt-2 max-w-2xl text-[15px] text-[#6e6e73] dark:text-slate-400">Incidentes conectados por evidencia. Los importes realizados, en riesgo y de capital se mantienen separados.</p></div><div className="flex gap-2"><button type="button" onClick={() => setTourOpen(true)} className="rounded-[10px] border border-black/[0.12] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 focus-visible:ring-2 focus-visible:ring-[#0071e3] dark:border-slate-700 dark:text-brand-cyan">Cómo funciona</button><Link to="/ai-control/guia" className="rounded-[10px] border border-black/[0.12] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 focus-visible:ring-2 focus-visible:ring-[#0071e3] dark:border-slate-700 dark:text-brand-cyan">Guía</Link></div></div>
     </header>
+    <ControlIaSetupChecklist />
 
     {loading ? <div className="flex min-h-64 items-center justify-center text-[#6e6e73]"><Loader2 className="mr-3 animate-spin" size={20} />Cargando episodios…</div> : error ? <div className="rounded-[14px] border border-red-200 bg-red-50 p-4 text-[14px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</div> : <>
       <section id="today-impactos" className="grid gap-4 md:grid-cols-3">

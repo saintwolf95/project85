@@ -685,6 +685,8 @@ export interface OnboardingProgress {
 
 export const getOnboardingProgress = async (flow: OnboardingProgress['flujo']): Promise<OnboardingProgress> => (await api.get(`/agents/onboarding/${flow}`)).data;
 export const updateOnboardingProgress = async (flow: OnboardingProgress['flujo'], payload: Omit<OnboardingProgress, 'flujo' | 'updated_at'> & { evento: 'inicio' | 'paso' | 'abandono' | 'finalizacion' | 'elemento_completado'; detalle?: string }) => (await api.put(`/agents/onboarding/${flow}`, payload)).data;
+export interface ControlIaSetupItem { id: string; bloqueante: boolean; completado: boolean; disponible?: boolean; destino: string; texto: string; }
+export const getControlIaSetup = async (): Promise<{ items: ControlIaSetupItem[]; bloqueantes_completados: boolean }> => (await api.get('/agents/setup-checklist')).data;
 
 // --- Agent Chat ---
 export interface AgentChatMessage {

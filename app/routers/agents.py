@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import logging
 from ..database import get_db
-from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, EmpresaReglaNegocio, Usuario, UsuarioOnboarding, UsuarioOnboardingEvento
+from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, Empresa, EmpresaReglaNegocio, Usuario, UsuarioOnboarding, UsuarioOnboardingEvento
 from ..api.deps import get_current_user, get_current_active_admin
 from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest, BusinessRuleRequest, OnboardingProgressRequest
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
@@ -96,6 +96,42 @@ def _serialize_onboarding(row: UsuarioOnboarding | None, flow: str) -> dict:
         "paso_ultimo": row.paso_ultimo if row else 0,
         "updated_at": row.updated_at if row else None,
     }
+
+
+def _active_business_rules(db: Session, empresa_id: int) -> list[EmpresaReglaNegocio]:
+    today = datetime.utcnow().date()
+    return db.query(EmpresaReglaNegocio).filter(
+        EmpresaReglaNegocio.empresa_id == empresa_id,
+        EmpresaReglaNegocio.vigente_desde <= today,
+        (EmpresaReglaNegocio.vigente_hasta.is_(None) | (EmpresaReglaNegocio.vigente_hasta >= today)),
+    ).all()
+
+
+def _is_true_business_rule(rule: EmpresaReglaNegocio) -> bool:
+    return str(rule.valor_texto or "").strip().lower() in {"true", "1", "si", "sí", "yes"}
+
+
+@router.get("/agents/setup-checklist")
+def get_setup_checklist(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    rules = _active_business_rules(db, current_user.empresa_id)
+    by_key = lambda key: [rule for rule in rules if rule.clave == key]
+    empresa = db.query(Empresa).filter(Empresa.id == current_user.empresa_id).first()
+    first_episode = db.query(AgentEpisode.id).filter(
+        AgentEpisode.empresa_id == current_user.empresa_id,
+        AgentEpisode.estado == "abierto",
+    ).order_by(AgentEpisode.impacto_ponderado_eur.desc()).first()
+    items = [
+        {"id": "lead_time", "bloqueante": True, "completado": any(rule.ambito_tipo in {"familia", "sku"} for rule in by_key("lead_time_dias")), "destino": "/ai-control/reglas", "texto": "Configura los plazos de reposición por familia o producto. Sin esto se usa un mínimo genérico de 7 días y las alertas de cobertura serán engañosas."},
+        {"id": "margin_target", "bloqueante": True, "completado": any(rule.ambito_tipo == "familia" for rule in by_key("margen_objetivo_pct")), "destino": "/ai-control/reglas", "texto": "Configura los márgenes objetivo por familia. Sin esto no se detecta cuándo un margen está por debajo de lo que debería."},
+        {"id": "discontinued", "bloqueante": True, "completado": any(rule.ambito_tipo == "sku" and _is_true_business_rule(rule) for rule in by_key("sku_discontinuado")), "destino": "/ai-control/reglas", "texto": "Marca los productos discontinuados, para que dejen de generar alertas de rotura de algo que ya no vas a reponer."},
+        {"id": "strategic_customers", "bloqueante": False, "completado": any(_is_true_business_rule(rule) for rule in by_key("cliente_estrategico")), "destino": "/ai-control/reglas", "texto": "Marca tus clientes estratégicos, cuyas incidencias suben un nivel de prioridad."},
+        {"id": "seasonality", "bloqueante": False, "completado": bool(by_key("familia_estacional")), "destino": "/ai-control/reglas", "texto": "Indica qué familias son estacionales y en qué meses."},
+        {"id": "business_context", "bloqueante": False, "completado": bool((empresa.contexto_negocio if empresa else "") or ""), "destino": "/ai-control/analistas", "texto": "Escribe el contexto de negocio: a qué se dedica la empresa, qué es normal y qué no."},
+        {"id": "first_discard", "bloqueante": False, "completado": db.query(AgentSignalFeedback.id).filter(AgentSignalFeedback.empresa_id == current_user.empresa_id, AgentSignalFeedback.usuario_id == current_user.id, AgentSignalFeedback.veredicto.in_(("no_accionable", "falso_positivo"))).first() is not None, "destino": f"/ai-control/episodio/{first_episode[0]}" if first_episode else "/ai-control", "texto": "Descarta tu primera señal con un motivo, para ver cómo el sistema aprende de ello."},
+        {"id": "first_decision", "bloqueante": False, "completado": db.query(AgentDecision.id).filter(AgentDecision.empresa_id == current_user.empresa_id, AgentDecision.creada_por == current_user.id).first() is not None, "destino": f"/ai-control/episodio/{first_episode[0]}" if first_episode else "/ai-control", "texto": "Crea tu primera decisión a partir de un episodio."},
+        {"id": "weekly_summary", "bloqueante": False, "completado": False, "disponible": False, "destino": "/ai-control/guia#rutina", "texto": "Activa el resumen semanal y elige destinatarios y día de envío."},
+    ]
+    return {"items": items, "bloqueantes_completados": all(item["completado"] for item in items if item["bloqueante"])}
 
 
 @router.get("/agents/onboarding/{flow}")

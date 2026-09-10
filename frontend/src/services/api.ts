@@ -698,6 +698,8 @@ export const getMarginBridge = async (metrica: MarginMetric, ventana: MarginWind
 export const getMarginSignals = async (): Promise<{ senales: MarginSignal[]; mattia_markdown?: string | null }> => (await api.get('/margin/signals')).data;
 export interface MarginConcentration { total_eur: number; total_positivo_eur: number; top10_eur: number; top10_total_pct: number | null; top10_positivos_pct: number | null; skus_50_pct: number | null; skus_80_pct: number | null; hhi: number; filas: Array<{ sku: string; nombre: string; familia: string; product_manager: string; ventas_eur: number; margen_eur: number; tasa_margen_pct: number | null; peso_total_pct: number | null; peso_acumulado_pct: number | null; peso_sobre_positivos_pct: number | null; }>; nota_unidad: string; }
 export const getMarginConcentration = async (metrica: MarginMetric, ventana: MarginWindow): Promise<MarginConcentration> => (await api.get('/margin/concentration', { params: { metrica, ventana, unidad: 'eur' } })).data;
+export interface MarginEntity { entidad_tipo: string; entidad_id: string; serie_mensual: Array<{ mes: string; ventas_eur: number; mg_eur: number; mgd_eur: number; mg_pct: number | null; mgd_pct: number | null; }>; senales_activas: Array<{ id: number; detector: string; severidad: number; impacto_ponderado_eur: number; }>; }
+export const getMarginEntity = async (tipo: string, id: string): Promise<MarginEntity> => (await api.get(`/margin/entity/${encodeURIComponent(tipo)}/${encodeURIComponent(id)}`)).data;
 
 // --- Agent Chat ---
 export interface AgentChatMessage {

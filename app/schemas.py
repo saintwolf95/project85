@@ -154,6 +154,13 @@ class BusinessRuleRequest(BaseModel):
     vigente_desde: date
     vigente_hasta: Optional[date] = None
 
+
+class OnboardingProgressRequest(BaseModel):
+    estado: Literal["pendiente", "completado", "saltado"] = "pendiente"
+    paso_ultimo: int = Field(default=0, ge=0, le=20)
+    evento: Literal["inicio", "paso", "abandono", "finalizacion", "elemento_completado"]
+    detalle: Optional[str] = Field(default=None, max_length=500)
+
 class LibreriaDocumentoResponse(BaseModel):
     id: int
     filename: str

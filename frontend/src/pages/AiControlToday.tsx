@@ -10,10 +10,12 @@ import {
   getAgentEpisodes,
   getAgentQuality,
   getAgentSignal,
+  getOnboardingProgress,
   updateAgentDecision,
 } from '../services/api';
 import type { AgentDecisionRecord, AgentEpisodeRecord, AgentQualityMetric, AgentSignalRecord, ImpactType } from '../services/api';
 import { GlossaryTooltip } from '../components/GlossaryTooltip';
+import { ControlIaTour } from '../components/ControlIaTour';
 
 const currency = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 const dateTime = new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
@@ -34,7 +36,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => (
 const Navigation = ({ current }: { current: 'today' | 'decisions' }) => (
   <nav className="mb-6 flex flex-wrap items-center gap-2 rounded-[14px] bg-white p-2 dark:bg-slate-900" aria-label="Navegación de Control IA">
     <Link to="/ai-control" className={`min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium ${current === 'today' ? 'bg-[#0071e3] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Hoy</Link>
-    <Link to="/ai-control/decisiones" className={`min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium ${current === 'decisions' ? 'bg-[#0071e3] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Decisiones</Link>
+    <Link id="today-decisions" to="/ai-control/decisiones" className={`min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium ${current === 'decisions' ? 'bg-[#0071e3] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Decisiones</Link>
     <Link to="/ai-control/reglas" className="min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 dark:text-brand-cyan">Reglas</Link><Link to="/ai-control/analistas" className="ml-auto min-h-9 rounded-[10px] bg-[#f5f5f7] px-3 py-2 text-[13px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/10 dark:bg-slate-800 dark:text-brand-cyan">Gabinete de analistas <ArrowRight className="ml-1 inline" size={14} /></Link>
   </nav>
 );
@@ -52,6 +54,7 @@ export const AiControlToday = () => {
   const [diff, setDiff] = useState<{ nuevos: number; empeoran: number; resueltos: number; disponible: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([getAgentEpisodes(), getAgentQuality()])
@@ -63,6 +66,7 @@ export const AiControlToday = () => {
       .catch(() => setError('No se pudo cargar la bandeja de episodios.'))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { getOnboardingProgress('control_ia_tour').then((progress) => setTourOpen(progress.estado === 'pendiente')).catch(() => undefined); }, []);
 
   const impacts = useMemo(() => episodes.reduce((total, episode) => ({
     realizado: total.realizado + episode.impactos.realizado_eur,
@@ -74,14 +78,14 @@ export const AiControlToday = () => {
 
   return <AppShell>
     <Navigation current="today" />
-    <header className="mb-6 rounded-[24px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900 md:p-8">
-      <p className="text-[13px] font-medium text-[#0071e3] dark:text-brand-cyan">Control IA</p>
+    <header id="control-header" className="mb-6 rounded-[24px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900 md:p-8">
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[13px] font-medium text-[#0071e3] dark:text-brand-cyan">Control IA</p>
       <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.03em] text-[#1d1d1f] dark:text-white">Prioridades de hoy</h1>
-      <p className="mt-2 max-w-2xl text-[15px] text-[#6e6e73] dark:text-slate-400">Incidentes conectados por evidencia. Los importes realizados, en riesgo y de capital se mantienen separados.</p>
+      <p className="mt-2 max-w-2xl text-[15px] text-[#6e6e73] dark:text-slate-400">Incidentes conectados por evidencia. Los importes realizados, en riesgo y de capital se mantienen separados.</p></div><div className="flex gap-2"><button type="button" onClick={() => setTourOpen(true)} className="rounded-[10px] border border-black/[0.12] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 focus-visible:ring-2 focus-visible:ring-[#0071e3] dark:border-slate-700 dark:text-brand-cyan">Cómo funciona</button><Link to="/ai-control/guia" className="rounded-[10px] border border-black/[0.12] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 focus-visible:ring-2 focus-visible:ring-[#0071e3] dark:border-slate-700 dark:text-brand-cyan">Guía</Link></div></div>
     </header>
 
     {loading ? <div className="flex min-h-64 items-center justify-center text-[#6e6e73]"><Loader2 className="mr-3 animate-spin" size={20} />Cargando episodios…</div> : error ? <div className="rounded-[14px] border border-red-200 bg-red-50 p-4 text-[14px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</div> : <>
-      <section className="grid gap-4 md:grid-cols-3">
+      <section id="today-impactos" className="grid gap-4 md:grid-cols-3">
         <Metric label="Impacto realizado" value={impacts.realizado} tone="danger" glossary="impacto_realizado" />
         <Metric label="Ventas o margen en riesgo" value={impacts.riesgo} tone="warning" glossary="impacto_en_riesgo" />
         <Metric label="Capital inmovilizado" value={impacts.capital} glossary="impacto_capital" />
@@ -94,13 +98,14 @@ export const AiControlToday = () => {
         ] as const).map(([label, value, Icon]) => <div key={label} className="flex items-center gap-3 rounded-[14px] bg-white px-5 py-4 dark:bg-slate-900"><Icon className="text-[#0071e3] dark:text-brand-cyan" size={18} /><div><p className="text-[12px] text-[#6e6e73]">{label} vs. ejecución anterior</p><p className="ai-tnum text-[20px] font-semibold text-[#1d1d1f] dark:text-white">{diff?.disponible ? value : '—'}</p></div></div>)}
       </section>
 
-      <section className="rounded-[20px] border border-black/[0.08] bg-white dark:border-slate-800 dark:bg-slate-900">
+      <section id="today-episodes" className="rounded-[20px] border border-black/[0.08] bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-black/[0.08] p-5 dark:border-slate-800"><div><h2 className="flex items-center text-[18px] font-semibold text-[#1d1d1f] dark:text-white">Episodios abiertos<GlossaryTooltip term="episodio" /></h2><p className="mt-1 flex items-center text-[13px] text-[#6e6e73]">Ordenados por impacto ponderado, severidad y persistencia.<GlossaryTooltip term="factor_ponderacion" /></p></div><ShieldAlert className="text-[#0071e3] dark:text-brand-cyan" size={20} /></div>
         {episodes.length ? <div className="divide-y divide-black/[0.06] dark:divide-slate-800">{riskEpisodes.map((episode) => <Link key={episode.id} to={`/ai-control/episodio/${episode.id}`} className="block p-5 transition-colors hover:bg-[#f5f5f7] dark:hover:bg-slate-800/50"><div className="flex flex-col gap-3 md:flex-row md:items-center"><div className="min-w-0 flex-1"><p className="text-[15px] font-medium text-[#1d1d1f] dark:text-white">{episode.titulo}</p><p className="mt-1 flex items-center text-[12px] text-[#6e6e73]">Riesgo<GlossaryTooltip term="naturaleza" /> · Severidad {episode.severidad_max}<GlossaryTooltip term="severidad" /> · {episode.senales.length} señales · desde {dateTime.format(new Date(episode.primera_deteccion))}</p></div><div className="flex flex-wrap gap-2">{(['realizado', 'en_riesgo', 'capital'] as const).filter((type) => episode.impactos[`${type === 'en_riesgo' ? 'en_riesgo' : type}_eur` as keyof typeof episode.impactos] > 0).map((type) => <span key={type} className={`ai-tnum rounded-full px-2.5 py-1 text-[11px] font-medium ${impactClass[type]}`}>{impactLabel[type]} {currency.format(episode.impactos[`${type === 'en_riesgo' ? 'en_riesgo' : type}_eur` as keyof typeof episode.impactos])}</span>)}</div><ArrowRight className="hidden text-[#0071e3] md:block dark:text-brand-cyan" size={18} /></div></Link>)}{opportunityEpisodes.length > 0 && <><div className="border-y border-emerald-100 bg-emerald-50/60 px-5 py-3 text-[13px] font-medium text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">Oportunidades verificadas</div>{opportunityEpisodes.map((episode) => <Link key={episode.id} to={`/ai-control/episodio/${episode.id}`} className="block p-5 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-500/5"><p className="text-[15px] font-medium text-[#1d1d1f] dark:text-white">{episode.titulo}</p><p className="mt-1 text-[12px] text-emerald-700 dark:text-emerald-300">Oportunidad · {currency.format(episode.impactos.ponderado_eur)} priorizada</p></Link>)}</>}</div> : <div className="p-10 text-center text-[14px] text-[#6e6e73]">No hay episodios abiertos con la evidencia actual.</div>}
       </section>
 
-      <section className="mt-6 rounded-[20px] bg-white p-5 dark:bg-slate-900"><h2 className="text-[16px] font-semibold text-[#1d1d1f] dark:text-white">Calidad de detectores</h2><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-[12px]"><thead className="border-b border-black/[0.08] text-[#6e6e73] dark:border-slate-700"><tr><th className="px-2 py-3 font-medium">Detector</th><th className="px-2 py-3 font-medium">Emitidas</th><th className="px-2 py-3 font-medium">Feedback</th><th className="px-2 py-3 font-medium">Falsos positivos</th><th className="px-2 py-3 font-medium">Cobertura</th></tr></thead><tbody>{quality.map((item) => <tr key={item.detector} className="border-b border-black/[0.06] dark:border-slate-800"><td className="px-2 py-3 text-[#424245] dark:text-slate-300">{item.detector}</td><td className="ai-tnum px-2 py-3">{item.senales_emitidas}</td><td className="ai-tnum px-2 py-3">{item.feedback_registros}</td><td className="px-2 py-3">{item.conclusivo && typeof item.tasa_falso_positivo === 'number' ? `${(item.tasa_falso_positivo * 100).toFixed(1)} %` : 'No concluyente'}</td><td className="ai-tnum px-2 py-3">{currency.format(item.euros_cubiertos_decision)}</td></tr>)}</tbody></table></div></section>
+      <section id="today-quality" className="mt-6 rounded-[20px] bg-white p-5 dark:bg-slate-900"><h2 className="text-[16px] font-semibold text-[#1d1d1f] dark:text-white">Calidad de detectores</h2><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-[12px]"><thead className="border-b border-black/[0.08] text-[#6e6e73] dark:border-slate-700"><tr><th className="px-2 py-3 font-medium">Detector</th><th className="px-2 py-3 font-medium">Emitidas</th><th className="px-2 py-3 font-medium">Feedback</th><th className="px-2 py-3 font-medium">Falsos positivos</th><th className="px-2 py-3 font-medium">Cobertura</th></tr></thead><tbody>{quality.map((item) => <tr key={item.detector} className="border-b border-black/[0.06] dark:border-slate-800"><td className="px-2 py-3 text-[#424245] dark:text-slate-300">{item.detector}</td><td className="ai-tnum px-2 py-3">{item.senales_emitidas}</td><td className="ai-tnum px-2 py-3">{item.feedback_registros}</td><td className="px-2 py-3">{item.conclusivo && typeof item.tasa_falso_positivo === 'number' ? `${(item.tasa_falso_positivo * 100).toFixed(1)} %` : 'No concluyente'}</td><td className="ai-tnum px-2 py-3">{currency.format(item.euros_cubiertos_decision)}</td></tr>)}</tbody></table></div></section>
     </>}
+    {tourOpen && <ControlIaTour onClose={() => setTourOpen(false)} onComplete={() => { setTourOpen(false); document.getElementById('puesta-en-marcha')?.scrollIntoView({ behavior: 'smooth' }); }} />}
   </AppShell>;
 };
 

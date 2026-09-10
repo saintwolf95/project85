@@ -189,6 +189,24 @@ def ensure_agent_signals_schema() -> None:
             )
         """))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_reglas_negocio_empresa_clave ON empresa_reglas_negocio (empresa_id, clave)"))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS usuario_onboarding (
+                id SERIAL PRIMARY KEY, usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                empresa_id INTEGER NOT NULL REFERENCES empresas(id), flujo VARCHAR(80) NOT NULL,
+                estado VARCHAR(20) NOT NULL DEFAULT 'pendiente', paso_ultimo INTEGER NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_usuario_onboarding_flujo UNIQUE (usuario_id, empresa_id, flujo),
+                CONSTRAINT ck_usuario_onboarding_estado CHECK (estado IN ('pendiente', 'completado', 'saltado'))
+            )
+        """))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS usuario_onboarding_eventos (
+                id SERIAL PRIMARY KEY, onboarding_id INTEGER NOT NULL REFERENCES usuario_onboarding(id) ON DELETE CASCADE,
+                evento VARCHAR(30) NOT NULL, paso INTEGER, detalle VARCHAR(500),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_usuario_onboarding_usuario_flujo ON usuario_onboarding (usuario_id, empresa_id, flujo)"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

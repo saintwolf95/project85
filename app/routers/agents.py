@@ -7,9 +7,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import logging
 from ..database import get_db
-from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, EmpresaReglaNegocio, Usuario
+from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, EmpresaReglaNegocio, Usuario, UsuarioOnboarding, UsuarioOnboardingEvento
 from ..api.deps import get_current_user, get_current_active_admin
-from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest, BusinessRuleRequest
+from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest, BusinessRuleRequest, OnboardingProgressRequest
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..agent_studies import ALLOWED_STUDY_AGENTS, ensure_agent_study_snapshot
@@ -24,6 +24,7 @@ MAX_AGENT_INSIGHTS_HISTORY = 100
 MAX_AGENT_CHAT_MESSAGES = 100
 MAX_AGENT_MODEL_MESSAGES = 20
 ALLOWED_AGENT_NAMES = {"maria", "maría", "lucia", "lucía", "mattia", "ceo"}
+ALLOWED_ONBOARDING_FLOWS = {"control_ia_tour", "control_ia_setup"}
 
 def validate_agent_name(agent_name: str) -> str:
     normalized = agent_name.lower()
@@ -80,6 +81,52 @@ def _serialize_business_rule(rule: EmpresaReglaNegocio) -> dict:
         "vigente_desde": str(rule.vigente_desde), "vigente_hasta": str(rule.vigente_hasta) if rule.vigente_hasta else None,
         "actualizado_por": rule.actualizado_por, "updated_at": rule.updated_at,
     }
+
+
+def _onboarding_or_404(flow: str) -> str:
+    if flow not in ALLOWED_ONBOARDING_FLOWS:
+        raise HTTPException(status_code=404, detail="Flujo de puesta en marcha no encontrado")
+    return flow
+
+
+def _serialize_onboarding(row: UsuarioOnboarding | None, flow: str) -> dict:
+    return {
+        "flujo": flow,
+        "estado": row.estado if row else "pendiente",
+        "paso_ultimo": row.paso_ultimo if row else 0,
+        "updated_at": row.updated_at if row else None,
+    }
+
+
+@router.get("/agents/onboarding/{flow}")
+def get_onboarding(flow: str, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    normalized = _onboarding_or_404(flow)
+    row = db.query(UsuarioOnboarding).filter(
+        UsuarioOnboarding.usuario_id == current_user.id,
+        UsuarioOnboarding.empresa_id == current_user.empresa_id,
+        UsuarioOnboarding.flujo == normalized,
+    ).first()
+    return _serialize_onboarding(row, normalized)
+
+
+@router.put("/agents/onboarding/{flow}")
+def update_onboarding(flow: str, payload: OnboardingProgressRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    normalized = _onboarding_or_404(flow)
+    row = db.query(UsuarioOnboarding).filter(
+        UsuarioOnboarding.usuario_id == current_user.id,
+        UsuarioOnboarding.empresa_id == current_user.empresa_id,
+        UsuarioOnboarding.flujo == normalized,
+    ).first()
+    if row is None:
+        row = UsuarioOnboarding(usuario_id=current_user.id, empresa_id=current_user.empresa_id, flujo=normalized)
+        db.add(row)
+        db.flush()
+    row.estado = payload.estado
+    row.paso_ultimo = payload.paso_ultimo
+    db.add(UsuarioOnboardingEvento(onboarding_id=row.id, evento=payload.evento, paso=payload.paso_ultimo or None, detalle=payload.detalle))
+    db.commit()
+    db.refresh(row)
+    return _serialize_onboarding(row, normalized)
 
 
 @router.get("/agents/business-rules")

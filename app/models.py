@@ -23,6 +23,32 @@ class Usuario(Base):
     empresa = relationship("Empresa")
 
 
+class UsuarioOnboarding(Base):
+    __tablename__ = "usuario_onboarding"
+    __table_args__ = (
+        UniqueConstraint("usuario_id", "empresa_id", "flujo", name="uq_usuario_onboarding_flujo"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    flujo = Column(String(80), nullable=False)
+    estado = Column(String(20), nullable=False, default="pendiente")
+    paso_ultimo = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class UsuarioOnboardingEvento(Base):
+    __tablename__ = "usuario_onboarding_eventos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    onboarding_id = Column(Integer, ForeignKey("usuario_onboarding.id", ondelete="CASCADE"), nullable=False, index=True)
+    evento = Column(String(30), nullable=False)
+    paso = Column(Integer, nullable=True)
+    detalle = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class Cliente(Base):
     __tablename__ = "clientes"
     __table_args__ = (

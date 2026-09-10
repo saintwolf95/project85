@@ -676,6 +676,16 @@ export const createBusinessRule = async (payload: Omit<BusinessRuleRecord, 'id'>
 export const updateBusinessRule = async (ruleId: number, payload: Omit<BusinessRuleRecord, 'id'>) => (await api.patch(`/agents/business-rules/${ruleId}`, payload)).data;
 export const deleteBusinessRule = async (ruleId: number) => api.delete(`/agents/business-rules/${ruleId}`);
 
+export interface OnboardingProgress {
+  flujo: 'control_ia_tour' | 'control_ia_setup';
+  estado: 'pendiente' | 'completado' | 'saltado';
+  paso_ultimo: number;
+  updated_at?: string | null;
+}
+
+export const getOnboardingProgress = async (flow: OnboardingProgress['flujo']): Promise<OnboardingProgress> => (await api.get(`/agents/onboarding/${flow}`)).data;
+export const updateOnboardingProgress = async (flow: OnboardingProgress['flujo'], payload: Omit<OnboardingProgress, 'flujo' | 'updated_at'> & { evento: 'inicio' | 'paso' | 'abandono' | 'finalizacion' | 'elemento_completado'; detalle?: string }) => (await api.put(`/agents/onboarding/${flow}`, payload)).data;
+
 // --- Agent Chat ---
 export interface AgentChatMessage {
   role: 'user' | 'assistant';

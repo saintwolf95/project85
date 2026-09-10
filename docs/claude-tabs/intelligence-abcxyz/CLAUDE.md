@@ -22,3 +22,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Aplicar tipografía de sistema, superficies blancas, fondo secundario `#F5F5F7`, azul `#0071E3` para navegación y acciones, y bordes de baja opacidad. El modo oscuro actual se mantiene sin rediseñarlo.
 - Los KPIs, matriz, distribución, catálogo y alertas se leen como una herramienta de decisión: tarjetas con profundidad mínima, pestañas segmentadas, tablas de encabezado en frase y cifras con `tabular-nums`.
 - No teñir las filas de catálogo por estado. Los riesgos permanecen diferenciados mediante badges y valores semánticos, por lo que las comparativas de datos conservan su legibilidad.
+
+## Actualización v1.53 — recordatorio de clasificación
+
+- El botón `Cómo se clasifica` abre una guía con los cortes reales definidos en `app/semantic_metrics.py`: ABC usa ventas netas EUR acumuladas de 90 días (A 80 %, B hasta 95 %, C restante) y XYZ el valor actual de inventario con los mismos cortes (X, Y, Z).
+- La explicación debe indicar que se trata de contribución acumulada, no de porcentaje individual por SKU; los artículos sin ventas son C y los que no tienen snapshot son `N/D` para XYZ.

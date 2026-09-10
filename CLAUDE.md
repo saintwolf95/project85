@@ -227,3 +227,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La pestaña `/marginalidad` usa `ventas_historicas`, `productos` y `clientes`, siempre anclada a la última fecha de ventas de la empresa activa, no a la fecha de sistema.
 - Las agregaciones son SQL directo aislado por `empresa_id`; la concentración se ordena por euros de MG o MGD, nunca por porcentajes.
 - Las señales visibles se reutilizan desde Control IA. No introducir detectores ni llamadas LLM para la pestaña.
+
+## Actualización v1.53 — guía de lectura ABCXYZ
+
+- Inteligencia ABCXYZ ofrece un recordatorio emergente accesible con las reglas reales de clasificación: ABC por ventas netas acumuladas de 90 días y XYZ por valor de inventario actual, ambos con cortes acumulados 80 % / 15 % / 5 %.
+- No describir XYZ como variabilidad de demanda: en la matriz actual la letra XYZ representa concentración de valor de inventario. Los SKU sin snapshot permanecen en `N/D`.

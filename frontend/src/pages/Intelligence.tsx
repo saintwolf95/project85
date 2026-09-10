@@ -5,7 +5,7 @@ import { KpiCards } from '../components/KpiCards';
 import { Matrix3x3 } from '../components/Matrix3x3';
 import { MatrixBarChart } from '../components/MatrixBarChart';
 import { InventoryTable } from '../components/InventoryTable';
-import { ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, Download, ArrowRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, Download, ArrowRight, Info, X } from 'lucide-react';
 import { MatrixDetail } from '../components/MatrixDetail';
 import { MatrixDetailDashboard } from '../components/MatrixDetailDashboard';
 import * as XLSX from 'xlsx';
@@ -44,6 +44,7 @@ export const Intelligence = () => {
   // KPI Modal State
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'criticas' | 'claseA' | null>(null);
+  const [classificationGuideOpen, setClassificationGuideOpen] = useState(false);
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'general' | 'catalog' | 'risks'>('general');
@@ -208,13 +209,17 @@ export const Intelligence = () => {
   return (
     <div className="intelligence-apple mx-auto flex h-full w-full max-w-[1560px] flex-col gap-5 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between rounded-[24px] border border-black/[0.08] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-center justify-between gap-4 rounded-[24px] border border-black/[0.08] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900">
         <div>
           <p className="mb-2 text-[12px] font-medium tracking-[0.08em] text-[#86868b] uppercase">Inventario y cobertura</p>
           <h1 className="title-corporate text-[32px] font-semibold tracking-[-0.035em] text-[#1d1d1f] dark:text-white">Inteligencia ABCXYZ</h1>
           <p className="mt-1 text-[15px] text-[#6e6e73] dark:text-slate-400">Prioriza el inventario según su impacto comercial y su estabilidad.</p>
         </div>
+        <button onClick={() => setClassificationGuideOpen(true)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-3.5 text-[13px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/10 dark:bg-slate-800 dark:text-brand-cyan"><Info size={16} />Cómo se clasifica</button>
       </div>
+
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+      {classificationGuideOpen && <div className="fixed inset-0 z-[80] flex items-end bg-black/35 p-0 backdrop-blur-[2px] sm:items-center sm:justify-center sm:p-5" role="presentation" onMouseDown={() => setClassificationGuideOpen(false)}><section role="dialog" aria-modal="true" aria-labelledby="abcxyz-guide-title" className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-t-[24px] bg-white p-6 shadow-2xl dark:bg-slate-900 sm:rounded-[24px]" onMouseDown={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><p className="text-[12px] font-medium text-[#0071e3] dark:text-brand-cyan">Reglas activas de esta matriz</p><h2 id="abcxyz-guide-title" className="mt-1 text-[24px] font-semibold tracking-[-0.03em] text-[#1d1d1f] dark:text-white">Cómo leer ABCXYZ</h2></div><button onClick={() => setClassificationGuideOpen(false)} aria-label="Cerrar guía" className="rounded-full p-2 text-[#6e6e73] hover:bg-[#f5f5f7] dark:hover:bg-slate-800"><X size={18} /></button></div><p className="mt-4 text-[14px] leading-6 text-[#424245] dark:text-slate-300">Las letras se asignan por contribución acumulada: no significan que cada SKU A aporte exactamente el 80 %, sino que el grupo A alcanza aproximadamente ese tramo del total ordenado.</p><div className="mt-5 grid gap-4 md:grid-cols-2"><article className="rounded-[16px] bg-[#f5f5f7] p-5 dark:bg-slate-800"><h3 className="text-[16px] font-semibold text-[#1d1d1f] dark:text-white">ABC · ventas</h3><p className="mt-1 text-[12px] text-[#6e6e73]">Ventas netas en euros de los últimos 90 días.</p><dl className="mt-4 space-y-3 text-[13px]"><div><dt className="font-semibold text-[#0071e3] dark:text-brand-cyan">A · primer 80 %</dt><dd className="mt-1 text-[#6e6e73]">SKU que, ordenados por ventas, acumulan hasta el 80 % de las ventas.</dd></div><div><dt className="font-semibold text-[#424245] dark:text-slate-200">B · siguiente 15 %</dt><dd className="mt-1 text-[#6e6e73]">Tramo acumulado entre el 80 % y el 95 %.</dd></div><div><dt className="font-semibold text-[#424245] dark:text-slate-200">C · 5 % restante</dt><dd className="mt-1 text-[#6e6e73]">Resto de contribución; los SKU sin ventas también quedan en C.</dd></div></dl></article><article className="rounded-[16px] bg-[#f5f5f7] p-5 dark:bg-slate-800"><h3 className="text-[16px] font-semibold text-[#1d1d1f] dark:text-white">XYZ · inventario</h3><p className="mt-1 text-[12px] text-[#6e6e73]">Valor actual: unidades en stock × coste unitario.</p><dl className="mt-4 space-y-3 text-[13px]"><div><dt className="font-semibold text-[#0071e3] dark:text-brand-cyan">X · primer 80 %</dt><dd className="mt-1 text-[#6e6e73]">SKU que concentran hasta el 80 % del valor de inventario conocido.</dd></div><div><dt className="font-semibold text-[#424245] dark:text-slate-200">Y · siguiente 15 %</dt><dd className="mt-1 text-[#6e6e73]">Tramo acumulado entre el 80 % y el 95 % del valor.</dd></div><div><dt className="font-semibold text-[#424245] dark:text-slate-200">Z · 5 % restante</dt><dd className="mt-1 text-[#6e6e73]">Resto del valor. Si un artículo no tiene snapshot de inventario aparece como N/D.</dd></div></dl></article></div><div className="mt-5 rounded-[14px] border border-[#0071e3]/15 bg-[#0071e3]/5 p-4 text-[13px] text-[#424245] dark:text-slate-300"><strong>La matriz combina ambas letras:</strong> AX significa alta contribución de ventas y alta concentración de valor de inventario; CZ, baja contribución en ambos criterios. La XYZ actual clasifica por valor de inventario, no por variabilidad de demanda.</div></section></div>}
 
       {/* Tabs */}
       <div className="flex w-full gap-1 overflow-x-auto rounded-[12px] border border-black/[0.06] bg-[#f5f5f7] p-1 md:w-fit dark:border-slate-800 dark:bg-slate-900/50 shrink-0 custom-scrollbar">

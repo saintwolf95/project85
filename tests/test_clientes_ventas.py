@@ -92,6 +92,18 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(valid[0]["cliente_pk"], "CLI-SIN-NOMBRE")
         self.assertEqual(valid[0]["nombre_cliente"], "Sin nombre cliente")
 
+    def test_rechaza_mgd_superior_a_mg(self):
+        headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
+        row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))
+        row["margen_bruto_eur"] = "10"
+        row["margen_destino_eur"] = "10,02"
+
+        valid, errors, _warnings = _validate_rows("sales", [row])
+
+        self.assertEqual(valid, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("MGD no puede ser superior al MG", errors[0]["message"])
+
     def test_ignora_total_y_filtros_de_power_bi_al_final(self):
         output = io.StringIO()
         writer = csv.writer(output)

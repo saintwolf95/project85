@@ -4,7 +4,7 @@ import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.margin_service import concentration, margin_detail, overview
+from app.margin_service import concentration, margin_detail, overview, resolve_period
 from app.models import Cliente, Empresa, Producto, VentaHistorica
 
 
@@ -49,6 +49,12 @@ class MarginServiceTests(unittest.TestCase):
         self.db.commit()
         result = margin_detail(self.db, 1, "sku", "mg", "custom", 1, 50, "entidad", "asc", start=date(2026, 9, 2), end=date(2026, 9, 2))
         self.assertIsNone(result["filas"][0]["mg_pct"])
+
+    def test_fiscal_year_to_date_starts_on_may_first(self):
+        current_start, current_end, previous_start, previous_end = resolve_period(self.db, 1, "fytd")
+
+        self.assertEqual((current_start, current_end), (date(2026, 5, 1), date(2026, 9, 1)))
+        self.assertEqual((previous_start, previous_end), (date(2025, 12, 28), date(2026, 4, 30)))
 
 
 if __name__ == "__main__":

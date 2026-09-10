@@ -33,14 +33,20 @@ def resolve_period(db: Session, empresa_id: int, window: str, start: date | None
     """), {"empresa_id": empresa_id}).scalar()
     if not anchor:
         raise ValueError("No hay ventas cargadas para calcular marginalidad.")
+    if isinstance(anchor, str):
+        anchor = date.fromisoformat(anchor)
     if window == "custom":
         if not start or not end or start > end:
             raise ValueError("El rango personalizado requiere fechas de inicio y fin válidas.")
         current_start, current_end = start, end
     else:
-        days = {"30d": 30, "90d": 90, "12m": 365}[window]
         current_end = anchor
-        current_start = anchor - timedelta(days=days - 1)
+        if window == "fytd":
+            fiscal_year = anchor.year if anchor.month >= 5 else anchor.year - 1
+            current_start = date(fiscal_year, 5, 1)
+        else:
+            days = {"30d": 30, "90d": 90, "12m": 365}[window]
+            current_start = anchor - timedelta(days=days - 1)
     length = (current_end - current_start).days + 1
     previous_end = current_start - timedelta(days=1)
     previous_start = previous_end - timedelta(days=length - 1)
@@ -53,12 +59,14 @@ def _summary(db: Session, empresa_id: int, start: date, end: date) -> dict[str, 
                COALESCE(SUM(v.margen_bruto_eur), 0) mg,
                COALESCE(SUM(v.margen_destino_eur), 0) mgd,
                COUNT(DISTINCT CASE WHEN v.margen_bruto_eur < 0 OR v.margen_destino_eur < 0 THEN p.sku END) sku_negativos,
-               COALESCE(SUM(CASE WHEN v.margen_bruto_eur < 0 OR v.margen_destino_eur < 0 THEN CASE WHEN v.margen_bruto_eur < v.margen_destino_eur THEN v.margen_bruto_eur ELSE v.margen_destino_eur END ELSE 0 END), 0) margen_negativo
+               COALESCE(SUM(CASE WHEN v.margen_bruto_eur < 0 OR v.margen_destino_eur < 0 THEN CASE WHEN v.margen_bruto_eur < v.margen_destino_eur THEN v.margen_bruto_eur ELSE v.margen_destino_eur END ELSE 0 END), 0) margen_negativo,
+               COUNT(CASE WHEN v.margen_destino_eur > v.margen_bruto_eur THEN 1 END) lineas_mgd_superior_mg,
+               COALESCE(SUM(CASE WHEN v.margen_destino_eur > v.margen_bruto_eur THEN v.margen_destino_eur - v.margen_bruto_eur ELSE 0 END), 0) exceso_mgd_sobre_mg_eur
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
         WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :start AND :end
     """), {"empresa_id": empresa_id, "start": start, "end": end}).mappings().one()
     sales, mg, mgd = _number(row["ventas"]), _number(row["mg"]), _number(row["mgd"])
-    return {"ventas_eur": sales, "mg_eur": mg, "mg_pct": _pct(mg, sales), "mgd_eur": mgd, "mgd_pct": _pct(mgd, sales), "diferencia_eur": mg - mgd, "diferencia_pp": (_pct(mg, sales) - _pct(mgd, sales)) if sales > 0 else None, "sku_negativos": int(row["sku_negativos"] or 0), "margen_negativo_eur": _number(row["margen_negativo"])}
+    return {"ventas_eur": sales, "mg_eur": mg, "mg_pct": _pct(mg, sales), "mgd_eur": mgd, "mgd_pct": _pct(mgd, sales), "diferencia_eur": mg - mgd, "diferencia_pp": (_pct(mg, sales) - _pct(mgd, sales)) if sales > 0 else None, "sku_negativos": int(row["sku_negativos"] or 0), "margen_negativo_eur": _number(row["margen_negativo"]), "lineas_mgd_superior_mg": int(row["lineas_mgd_superior_mg"] or 0), "exceso_mgd_sobre_mg_eur": _number(row["exceso_mgd_sobre_mg_eur"])}
 
 
 def overview(db: Session, empresa_id: int, window: str, start: date | None = None, end: date | None = None) -> dict:

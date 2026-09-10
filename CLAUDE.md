@@ -220,6 +220,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `MG` es el margen bruto registrado en `ventas_historicas.margen_bruto_eur`.
 - `MGD` es el margen puesto en destino registrado en `ventas_historicas.margen_destino_eur`: a diferencia del MG incorpora gastos financieros, de transporte y de logística de almacén.
+- Por definición de negocio, cada línea debe cumplir `MGD <= MG`. La importación de ventas debe rechazar un MGD superior al MG (tolerancia técnica de 0,01 €); no ocultar el error recortando el MGD en la interfaz o en consultas agregadas. Los datos históricos afectados se corrigen en PBI y se recargan por período.
 - Cualquier porcentaje agregado de MG o MGD se calcula ponderado sobre las ventas netas del mismo conjunto de líneas; nunca se promedian porcentajes de línea.
 
 ## Actualización v1.52 — Marginalidad
@@ -232,3 +233,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Inteligencia ABCXYZ ofrece un recordatorio emergente accesible con las reglas reales de clasificación: ABC por ventas netas acumuladas de 90 días y XYZ por valor de inventario actual, ambos con cortes acumulados 80 % / 15 % / 5 %.
 - No describir XYZ como variabilidad de demanda: en la matriz actual la letra XYZ representa concentración de valor de inventario. Los SKU sin snapshot permanecen en `N/D`.
+
+## Actualización v1.54 — integridad de marginalidad
+
+- Marginalidad permite Año fiscal a la fecha (desde el 1 de mayo hasta la última venta cargada), Últimos 90 días y Últimos 30 días, en ese orden.
+- El resumen expone una advertencia de calidad cuando los registros ya cargados incumplen `MGD <= MG`; comunica número de líneas e importe excedido, sin alterar los valores fuente.

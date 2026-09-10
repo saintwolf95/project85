@@ -668,6 +668,16 @@ def _validate_rows(
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
                 if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
                     margen_destino_pct = margen_destino_eur / float(ingreso) * 100
+                # El margen puesto en destino descuenta costes posteriores al margen bruto.
+                # Aceptar lo contrario ocultaría un error de origen en la exportación de PBI.
+                if (
+                    margen_bruto_eur is not None
+                    and margen_destino_eur is not None
+                    and margen_destino_eur > margen_bruto_eur + 0.01
+                ):
+                    raise ValueError(
+                        "MGD no puede ser superior al MG: revisa gastos financieros, transporte y logística de almacén"
+                    )
                 cliente_pk = _optional_text(row.get("cliente_pk"), "ClientePK", 120)
                 nombre_cliente = _optional_text(row.get("nombre_cliente"), "Nombre Cliente", 255)
                 if not cliente_pk:

@@ -23,13 +23,13 @@ def _error(callable_):
 
 @router.get("/overview")
 @limiter.limit("30/minute")
-def get_overview(request: Request, ventana: str = Query("90d", pattern="^(30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_overview(request: Request, ventana: str = Query("90d", pattern="^(fytd|30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     return _error(lambda: overview(db, current_user.empresa_id, ventana, inicio, fin))
 
 
 @router.get("/concentration")
 @limiter.limit("30/minute")
-def get_concentration(request: Request, metrica: str = Query("mgd", pattern="^(mg|mgd)$"), unidad: str = Query("eur", pattern="^(eur|pct)$"), ventana: str = Query("90d", pattern="^(30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_concentration(request: Request, metrica: str = Query("mgd", pattern="^(mg|mgd)$"), unidad: str = Query("eur", pattern="^(eur|pct)$"), ventana: str = Query("90d", pattern="^(fytd|30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     payload = _error(lambda: concentration(db, current_user.empresa_id, metrica, ventana, inicio, fin))
     payload["unidad"] = "eur"
     payload["unidad_bloqueada"] = unidad != "eur"
@@ -39,7 +39,7 @@ def get_concentration(request: Request, metrica: str = Query("mgd", pattern="^(m
 
 @router.get("/detail")
 @limiter.limit("30/minute")
-def get_detail(request: Request, dimension: str = Query("sku", pattern="^(sku|familia|cliente|comercial|product_manager)$"), metrica: str = Query("mgd", pattern="^(mg|mgd)$"), unidad: str = Query("eur", pattern="^(eur|pct)$"), ventana: str = Query("90d", pattern="^(30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=500), order: str = Query("mgd_eur"), direction: str = Query("desc", pattern="^(asc|desc)$"), search: str | None = None, familia: str | None = None, product_manager: str | None = None, solo_negativo: bool = False, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_detail(request: Request, dimension: str = Query("sku", pattern="^(sku|familia|cliente|comercial|product_manager)$"), metrica: str = Query("mgd", pattern="^(mg|mgd)$"), unidad: str = Query("eur", pattern="^(eur|pct)$"), ventana: str = Query("90d", pattern="^(fytd|30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=500), order: str = Query("mgd_eur"), direction: str = Query("desc", pattern="^(asc|desc)$"), search: str | None = None, familia: str | None = None, product_manager: str | None = None, solo_negativo: bool = False, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     payload = _error(lambda: margin_detail(db, current_user.empresa_id, dimension, metrica, ventana, page, limit, order, direction, search, familia, product_manager, solo_negativo, inicio, fin))
     payload["unidad_destacada"] = unidad
     return payload
@@ -47,7 +47,7 @@ def get_detail(request: Request, dimension: str = Query("sku", pattern="^(sku|fa
 
 @router.get("/bridge")
 @limiter.limit("30/minute")
-def get_bridge(request: Request, metrica: str = Query("mgd", pattern="^(mg|mgd)$"), ventana: str = Query("90d", pattern="^(30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_bridge(request: Request, metrica: str = Query("mgd", pattern="^(mg|mgd)$"), ventana: str = Query("90d", pattern="^(fytd|30d|90d|12m|custom)$"), inicio: date | None = None, fin: date | None = None, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     return _error(lambda: bridge(db, current_user.empresa_id, metrica, ventana, inicio, fin))
 
 

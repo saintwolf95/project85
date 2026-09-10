@@ -6,7 +6,7 @@ import zipfile
 
 from fastapi import HTTPException
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_percentage, _read_csv, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -103,6 +103,11 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(valid, [])
         self.assertEqual(len(errors), 1)
         self.assertIn("MGD no puede ser superior al MG", errors[0]["message"])
+
+    def test_conserva_decimales_de_una_celda_numerica_xlsx(self):
+        self.assertEqual(_parse_number(792.785, "MGD"), 792.785)
+        self.assertEqual(_parse_number("792,785", "MGD"), 792.785)
+        self.assertEqual(_parse_number("792.785", "MGD"), 792785.0)
 
     def test_ignora_total_y_filtros_de_power_bi_al_final(self):
         output = io.StringIO()

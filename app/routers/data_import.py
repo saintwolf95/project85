@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import math
 import re
 import unicodedata
 import zipfile
@@ -300,6 +301,13 @@ def _decode_csv(content: bytes) -> tuple[str, str]:
 
 
 def _parse_number(value: Any, field: str, required: bool = True) -> float | None:
+    # openpyxl entrega celdas numéricas como int/float. Convertirlas a texto haría
+    # ambigua una cifra como 792.785: el parser de cadenas la leería como miles.
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise ValueError(f"{field} debe ser numerico")
+        return parsed
     raw = str(value or "").strip()
     if not raw:
         if required:

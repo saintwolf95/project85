@@ -8,5 +8,6 @@ Hereda las reglas del `CLAUDE.md` raíz, incluido el versionado obligatorio.
 - MGD nunca puede superar MG en una línea: si sucede, la exportación de PBI es inconsistente. El importador la rechaza con tolerancia técnica de 0,01 €; no compensar ni limitar los importes en esta pestaña. Las líneas ya cargadas se muestran con una advertencia y deben corregirse y recargarse por período.
 - Todo porcentaje es ponderado: suma de margen / suma de ventas netas del mismo conjunto. Con ventas cero o negativas se devuelve nulo y la interfaz muestra `—`.
 - Las ventanas visibles son Año fiscal a la fecha (1 de mayo a última venta), Últimos 90 días y Últimos 30 días. La comparación anterior conserva exactamente la misma duración.
+- Al importar XLSX, una celda numérica conserva sus decimales nativos; no aplicar a esos valores la heurística de separadores reservada para texto. Si una carga anterior infló importes por esta causa, recargar el período original tras publicar la corrección.
 - La concentración usa euros. Los negativos no se ocultan ni se recortan: el Top 10 puede superar el 100 % del total.
 - Reutilizar señales de margen de Control IA; no duplicar detectores ni permitir SQL generado por IA.

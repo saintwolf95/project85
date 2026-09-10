@@ -238,3 +238,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Marginalidad permite Año fiscal a la fecha (desde el 1 de mayo hasta la última venta cargada), Últimos 90 días y Últimos 30 días, en ese orden.
 - El resumen expone una advertencia de calidad cuando los registros ya cargados incumplen `MGD <= MG`; comunica número de líneas e importe excedido, sin alterar los valores fuente.
+
+## Actualización v1.55 — decimales de Excel
+
+- Las celdas numéricas de XLSX deben conservar su valor nativo. No convertir un `float` de Excel a texto antes de normalizarlo: `792.785` es un decimal cuando procede de una celda numérica, mientras que el texto `"792.785"` se interpreta con la configuración española como separador de miles.
+- Una carga afectada por este error requiere recargar el período desde el XLSX original después de publicar la corrección; no corregir importes históricos estimando dónde había decimales.

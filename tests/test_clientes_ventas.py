@@ -5,8 +5,9 @@ import unittest
 import zipfile
 
 from fastapi import HTTPException
+from openpyxl import Workbook
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
+from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _read_xlsx, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -108,6 +109,26 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(_parse_number(792.785, "MGD"), 792.785)
         self.assertEqual(_parse_number("792,785", "MGD"), 792.785)
         self.assertEqual(_parse_number("792.785", "MGD"), 792785.0)
+
+    def test_lector_xlsx_preserva_un_decimal_numerico_hasta_validacion(self):
+        workbook = Workbook()
+        sheet = workbook.active
+        headers = DATASET_CONFIG["sales"]["headers"]
+        row = list(DATASET_CONFIG["sales"]["sample"])
+        row[headers.index("Margen")] = 792.785
+        row[headers.index("MGD")] = 700.25
+        sheet.append(headers)
+        sheet.append(row)
+        output = io.BytesIO()
+        workbook.save(output)
+
+        source_rows, _metadata = _read_xlsx(output.getvalue(), "sales")
+        valid, errors, _warnings = _validate_rows("sales", source_rows)
+
+        self.assertIsInstance(source_rows[0]["margen_bruto_eur"], float)
+        self.assertEqual(errors, [])
+        self.assertEqual(valid[0]["margen_bruto_eur"], 792.785)
+        self.assertEqual(valid[0]["margen_destino_eur"], 700.25)
 
     def test_ignora_total_y_filtros_de_power_bi_al_final(self):
         output = io.StringIO()

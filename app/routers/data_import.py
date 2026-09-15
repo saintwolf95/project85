@@ -470,7 +470,7 @@ def _validate_xlsx_archive(content: bytes) -> None:
             )
 
 
-def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
+def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     try:
         _validate_xlsx_archive(content)
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True, keep_links=False)
@@ -484,27 +484,28 @@ def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict
         if not headers:
             raise HTTPException(status_code=400, detail="El XLSX no contiene cabeceras.")
         normalized_headers = _canonicalize_headers(list(headers), dataset)
-        rows: list[dict[str, str]] = []
+        rows: list[dict[str, Any]] = []
         ignored_powerbi_rows = 0
         reached_filters_footer = False
         for source_row in rows_iterator:
             if len(rows) >= MAX_IMPORT_ROWS:
                 raise HTTPException(status_code=400, detail="El XLSX supera el limite de 100.000 filas.")
-            normalized_row = {
-                header: _cell_to_text(source_row[index] if index < len(source_row) else None)
+            raw_row = {
+                header: source_row[index] if index < len(source_row) else None
                 for index, header in enumerate(normalized_headers)
             }
+            text_row = {header: _cell_to_text(value) for header, value in raw_row.items()}
             if reached_filters_footer:
-                if any(normalized_row.values()):
+                if any(text_row.values()):
                     ignored_powerbi_rows += 1
                 continue
-            if _is_power_bi_trailer(normalized_row):
+            if _is_power_bi_trailer(text_row):
                 ignored_powerbi_rows += 1
-                first_value = next((value for value in normalized_row.values() if value), "")
+                first_value = next((value for value in text_row.values() if value), "")
                 reached_filters_footer = _normalize_header(first_value).startswith(("filtros_aplicados", "filters_applied"))
                 continue
-            if any(normalized_row.values()):
-                rows.append(normalized_row)
+            if any(text_row.values()):
+                rows.append(raw_row)
         if not rows:
             raise HTTPException(status_code=400, detail="El XLSX no contiene filas de datos.")
         return rows, _import_metadata(
@@ -569,7 +570,7 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
     )
 
 
-async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[str, str]], dict[str, Any]]:
+async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if dataset not in SUPPORTED_DATASETS:
         raise HTTPException(status_code=400, detail="Tipo de datos no soportado.")
     extension = (file.filename or "").lower().rsplit(".", 1)[-1]
@@ -584,7 +585,7 @@ async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[
 
 def _validate_rows(
     dataset: str,
-    rows: list[dict[str, str]],
+    rows: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     valid_rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []

@@ -243,3 +243,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Las celdas numéricas de XLSX deben conservar su valor nativo. No convertir un `float` de Excel a texto antes de normalizarlo: `792.785` es un decimal cuando procede de una celda numérica, mientras que el texto `"792.785"` se interpreta con la configuración española como separador de miles.
 - Una carga afectada por este error requiere recargar el período desde el XLSX original después de publicar la corrección; no corregir importes históricos estimando dónde había decimales.
+
+## Actualización v1.56 — preservación de valores XLSX
+
+- `_read_xlsx` conserva el valor nativo de cada celda hasta la validación. Usar una representación de texto solo para detectar pies de Power BI y filas vacías; nunca para los importes que acabarán en `_parse_number`.
+- La garantía se prueba con un libro XLSX real que contiene `792.785` como número, no como texto.

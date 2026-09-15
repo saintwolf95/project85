@@ -32,3 +32,8 @@ La sustitución de ventas se limita al intervalo entre la primera y la última f
 - La interfaz debe ofrecer una sección explícita de actualización incremental para ventas e inventario. Admite desde un día hasta cualquier periodo personalizado; las fechas se infieren de `Fecha`, no de un selector manual separado.
 - Antes de cargar se muestran las fechas detectadas; tras una carga correcta, se confirma ese intervalo y que los registros externos se han conservado.
 - Ventas incrementales actualizan la misma clave diaria (fecha, artículo, cliente, KD y comercial). Inventario actualiza fecha y artículo, conserva snapshots históricos previos y usa la fecha más reciente como stock actual.
+
+## Actualización v1.56 — decimales nativos en XLSX
+
+- El lector XLSX debe mantener los valores numéricos nativos hasta validar las filas. Convertirlos a texto antes de `_parse_number` convierte erróneamente un decimal como `792.785` en `792785` bajo la heurística española de miles.
+- La sustitución por período debe usarse para recargar los bloques históricos afectados, después de validar que los totales coinciden con Power BI.

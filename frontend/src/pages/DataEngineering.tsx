@@ -338,7 +338,7 @@ export const DataEngineering = () => {
               </div>
               {salesImportScope === 'fiscal_anterior' && (
                 <p className="mt-3 border-l-2 border-emerald-500 pl-3 text-xs text-emerald-800 dark:text-emerald-300">
-                  Carga el archivo del FY anterior con sus fechas reales. Se añadirá al histórico sin eliminar el ejercicio actual; no actives la sustitución de datos.
+                  Carga el archivo del FY anterior con sus fechas reales. Si ese intervalo ya estaba cargado y quieres corregirlo, usa la sustitución: solo se reemplazarán las ventas entre la primera y la última fecha del fichero.
                 </p>
               )}
             </section>
@@ -420,7 +420,7 @@ export const DataEngineering = () => {
             )}
           </div>
 
-          {dataset === 'sales' && salesImportScope === 'operativa' && (
+          {dataset === 'sales' && (
             <div className="mt-4 flex items-start gap-3 border-l-2 border-amber-400 bg-amber-50/60 dark:bg-amber-500/5 px-3 py-3">
               <input
                 id="replace-existing-catalog"
@@ -438,7 +438,7 @@ export const DataEngineering = () => {
                   Sustituir las ventas del periodo del archivo
                 </label>
                 <span id="replace-existing-description" className="block text-xs text-amber-700 dark:text-amber-400">
-                  Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva FY anteriores, clientes, catálogo e inventario.
+                  Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva cualquier otro período, además de clientes, catálogo e inventario.
                 </span>
               </span>
             </div>
@@ -558,7 +558,7 @@ export const DataEngineering = () => {
               )}
               {(dataset === 'sales' || dataset === 'inventory') && validation?.date_min && validation?.date_max && (
                 <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">
-                  Periodo incorporado: {validation.date_min} a {validation.date_max}. Los registros fuera de este intervalo se han conservado.
+                  {result.replace_existing ? 'Periodo sustituido' : 'Periodo incorporado'}: {validation.date_min} a {validation.date_max}. Los registros fuera de este intervalo se han conservado.
                 </p>
               )}
               {dataset === 'sales' && (
@@ -568,7 +568,7 @@ export const DataEngineering = () => {
               )}
               {dataset === 'sales' && salesImportScope === 'fiscal_anterior' && (
                 <p className="mt-1 text-sm text-emerald-800 dark:text-emerald-300">
-                  Histórico fiscal incorporado: ya está disponible para comparativas interanuales del Copilot.
+                  {result.replace_existing ? 'Histórico fiscal sustituido' : 'Histórico fiscal incorporado'}: ya está disponible para comparativas interanuales del Copilot.
                 </p>
               )}
               <button onClick={resetFile} className="mt-3 text-sm font-medium text-brand-blue dark:text-brand-cyan hover:underline">

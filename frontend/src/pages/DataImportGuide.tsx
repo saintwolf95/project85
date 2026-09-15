@@ -133,7 +133,7 @@ export const DataImportGuide = () => (
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Primera carga y cargas diarias</h2>
         <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
-          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />En esta primera carga con clientes, activa “Sustituir los datos actuales” para eliminar las ventas y clientes anteriores.</li>
+          <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Para corregir un intervalo ya cargado, activa “Sustituir las ventas del periodo del archivo”. Solo se reemplazan esas fechas; no se eliminan clientes, catálogo ni inventario.</li>
           <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Valida siempre el archivo antes de habilitar la carga.</li>
           <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />Puedes subir todo el periodo fiscal o solo las fechas actualizadas.</li>
           <li className="flex gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />En cargas incrementales se actualiza Fecha + ArticuloPK + ClientePK + KD + Comercial Factura.</li>

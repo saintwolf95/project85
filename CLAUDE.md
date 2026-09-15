@@ -248,3 +248,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `_read_xlsx` conserva el valor nativo de cada celda hasta la validación. Usar una representación de texto solo para detectar pies de Power BI y filas vacías; nunca para los importes que acabarán en `_parse_number`.
 - La garantía se prueba con un libro XLSX real que contiene `792.785` como número, no como texto.
+
+## Actualización v1.57 — recarga segura de años fiscales
+
+- Tanto la carga operativa como el histórico fiscal pueden activar “Sustituir las ventas del periodo del archivo”. La sustitución borra y repone solo las ventas comprendidas entre la fecha mínima y máxima validadas del fichero; no afecta a otros períodos, clientes, catálogo ni inventario.
+- Antes de recargar FY2025, el usuario debe seleccionar “Histórico del año fiscal anterior”, validar cada fichero y marcar sustitución únicamente si ese mismo bloque de fechas ya existía y desea corregirlo.

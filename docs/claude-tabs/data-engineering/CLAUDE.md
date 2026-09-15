@@ -37,3 +37,8 @@ La sustitución de ventas se limita al intervalo entre la primera y la última f
 
 - El lector XLSX debe mantener los valores numéricos nativos hasta validar las filas. Convertirlos a texto antes de `_parse_number` convierte erróneamente un decimal como `792.785` en `792785` bajo la heurística española de miles.
 - La sustitución por período debe usarse para recargar los bloques históricos afectados, después de validar que los totales coinciden con Power BI.
+
+## Actualización v1.57 — sustitución disponible para histórico FY
+
+- El alcance “Histórico del año fiscal anterior” no bloquea la sustitución de ventas. El checkbox debe estar disponible para cualquier carga de ventas, incluidos los bloques FY2025.
+- Con sustitución activa, se reemplazan solo las ventas entre la primera y la última fecha del archivo validado. Se mantienen ventas fuera del rango, clientes, catálogo e inventario.

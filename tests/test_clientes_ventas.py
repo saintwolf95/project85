@@ -7,10 +7,13 @@ import zipfile
 from fastapi import HTTPException
 from openpyxl import Workbook
 
-from app.routers.data_import import DATASET_CONFIG, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _read_xlsx, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
+from app.routers.data_import import DATASET_CONFIG, MAX_IMPORT_ROWS, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _read_xlsx, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
 
 
 class ClientesVentasTests(unittest.TestCase):
+    def test_lote_fiscal_admite_hasta_doscientas_mil_filas(self):
+        self.assertEqual(MAX_IMPORT_ROWS, 200_000)
+
     def test_sustitucion_de_ventas_se_limita_al_periodo_del_archivo(self):
         self.assertEqual(_resolve_sales_mode("upsert_keys", True), "replace_period")
         self.assertEqual(_resolve_sales_mode("upsert_keys", False), "upsert_keys")

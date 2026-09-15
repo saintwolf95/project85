@@ -119,7 +119,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 ## Actualización v1.32 — capacidad segura de importación
 
-- Data Engineering admite archivos CSV/XLSX de hasta 50 MB y libros XLSX con hasta 512 MB de contenido interno, manteniendo el límite operativo de 100.000 filas.
+- Data Engineering admite archivos CSV/XLSX de hasta 50 MB y libros XLSX con hasta 512 MB de contenido interno, manteniendo el límite operativo de 200.000 filas.
 - No volver a usar solo el tamaño descomprimido como detector de seguridad: validar además cantidad de componentes y ratio de compresión para distinguir un Excel comercial normal de una bomba ZIP.
 - Mantener sincronizados los límites visibles en Data Engineering, Guía de Importación y backend.
 
@@ -253,3 +253,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Tanto la carga operativa como el histórico fiscal pueden activar “Sustituir las ventas del periodo del archivo”. La sustitución borra y repone solo las ventas comprendidas entre la fecha mínima y máxima validadas del fichero; no afecta a otros períodos, clientes, catálogo ni inventario.
 - Antes de recargar FY2025, el usuario debe seleccionar “Histórico del año fiscal anterior”, validar cada fichero y marcar sustitución únicamente si ese mismo bloque de fechas ya existía y desea corregirlo.
+
+## Actualización v1.58 — lotes fiscales de Power BI
+
+- Data Engineering admite hasta 200.000 filas por CSV/XLSX. Se conserva el límite de 50 MB, la inspección de archivo XLSX y las protecciones de compresión para mantener la carga acotada.
+- Esta capacidad permite cargar los cuatro bloques FY2025 sin dividirlos artificialmente. Validar y cargar cada bloque por separado, usando siempre el rango de fechas real detectado por el sistema.

@@ -11,7 +11,7 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 ## Actualización v1.32
 
-La guía y Data Engineering informan un máximo de 50 MB por CSV/XLSX y 100.000 filas. El XLSX puede ocupar hasta 512 MB internamente siempre que no presente un patrón de compresión anómalo.
+La guía y Data Engineering informan un máximo de 50 MB por CSV/XLSX y 200.000 filas. El XLSX puede ocupar hasta 512 MB internamente siempre que no presente un patrón de compresión anómalo.
 
 ## Actualización v1.33
 

@@ -415,7 +415,7 @@ export const DataEngineering = () => {
                 >
                   Seleccionar archivo
                 </button>
-                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo {MAX_IMPORT_FILE_SIZE_MB} MB / 100.000 filas</p>
+                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo {MAX_IMPORT_FILE_SIZE_MB} MB / 200.000 filas</p>
               </>
             )}
           </div>

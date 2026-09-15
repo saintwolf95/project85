@@ -38,7 +38,10 @@ MAX_IMPORT_FILE_SIZE = 50 * 1024 * 1024
 MAX_XLSX_UNCOMPRESSED_SIZE = 512 * 1024 * 1024
 MAX_XLSX_COMPRESSION_RATIO = 200
 MAX_XLSX_ARCHIVE_ENTRIES = 2_000
-MAX_IMPORT_ROWS = 100_000
+# Los exportes de Power BI por bloques trimestrales superan con frecuencia las
+# 100.000 filas. El límite mantiene el consumo acotado sin forzar a trocear
+# períodos fiscales que se deben sustituir como una única unidad.
+MAX_IMPORT_ROWS = 200_000
 MAX_IMPORT_COLUMNS = 64
 MAX_REPORTED_ERRORS = 100
 MAX_REPORTED_WARNINGS = 100
@@ -489,7 +492,7 @@ def _read_xlsx(content: bytes, dataset: str) -> tuple[list[dict[str, Any]], dict
         reached_filters_footer = False
         for source_row in rows_iterator:
             if len(rows) >= MAX_IMPORT_ROWS:
-                raise HTTPException(status_code=400, detail="El XLSX supera el limite de 100.000 filas.")
+                raise HTTPException(status_code=400, detail=f"El XLSX supera el limite de {MAX_IMPORT_ROWS:,} filas.")
             raw_row = {
                 header: source_row[index] if index < len(source_row) else None
                 for index, header in enumerate(normalized_headers)
@@ -543,7 +546,7 @@ def _read_csv(content: bytes, dataset: str) -> tuple[list[dict[str, str]], dict[
     reached_filters_footer = False
     for source_row in reader:
         if len(rows) >= MAX_IMPORT_ROWS:
-            raise HTTPException(status_code=400, detail="El CSV supera el limite de 100.000 filas.")
+            raise HTTPException(status_code=400, detail=f"El CSV supera el limite de {MAX_IMPORT_ROWS:,} filas.")
         normalized_row = {
             normalized_headers[index]: str(source_row.get(original_header) or "").strip()
             for index, original_header in enumerate(reader.fieldnames)

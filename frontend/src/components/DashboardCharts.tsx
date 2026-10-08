@@ -4,6 +4,8 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { DashboardExecutiveResponse } from '../services/api';
 import { formatEUR } from '../utils/formatters';
+import { AbcxyzLegend } from './AbcxyzLegend';
+import { quadrantGuide } from '../content/abcxyz';
 
 interface DashboardChartsProps {
   data: DashboardExecutiveResponse;
@@ -64,7 +66,6 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
       cuadrante: code, skus: 0, inventario_eur: 0, ventas_90d_eur: 0,
     });
   }, [data.cuadrantes]);
-  const maxMatrix = Math.max(...matrix.map(item => Number(item[matrixMetric])), 1);
   const selectFamily = (item: unknown) => {
     if (!item || typeof item !== 'object') return;
     const candidate = item as { familia?: string; payload?: { familia?: string } };
@@ -142,21 +143,23 @@ export const DashboardCharts = ({ data, onFamilyClick }: DashboardChartsProps) =
         </div>
         <div className="grid grid-cols-3 gap-2 md:gap-3">
           {matrix.map(item => {
-            const intensity = Math.max(0.06, Number(item[matrixMetric]) / maxMatrix * 0.3);
+            const guide = quadrantGuide[item.cuadrante];
             const value = matrixMetric === 'skus' ? `${item.skus.toLocaleString('es-ES')} SKU` : compactEUR(Number(item[matrixMetric]));
             return (
-              <div key={item.cuadrante} className="relative overflow-hidden rounded-[16px] border border-black/[0.08] p-4 dark:border-slate-700 md:p-5" style={{ background: `color-mix(in srgb, var(--dashboard-accent) ${Math.round(intensity * 100)}%, var(--dashboard-surface))` }}>
+              <div key={item.cuadrante} title={guide.description} className={`relative overflow-hidden rounded-[16px] border border-black/[0.08] p-4 dark:border-slate-700 md:p-5 ${guide.tone}`}>
                 <div className="relative">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">{item.cuadrante}</span>
                     <span className="dashboard-tnum text-[12px] text-slate-500 dark:text-slate-300">{item.skus.toLocaleString('es-ES')} SKU</span>
                   </div>
+                  <p className="mt-2 text-[11px] font-medium text-slate-600 dark:text-slate-300">{guide.label}</p>
                   <p className="dashboard-tnum mt-5 text-[15px] font-medium text-[#1d1d1f] dark:text-white">{value}</p>
                 </div>
               </div>
             );
           })}
         </div>
+        <AbcxyzLegend />
       </section>
     </div>
   );

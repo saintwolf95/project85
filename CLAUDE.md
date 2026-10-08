@@ -258,3 +258,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Data Engineering admite hasta 200.000 filas por CSV/XLSX. Se conserva el límite de 50 MB, la inspección de archivo XLSX y las protecciones de compresión para mantener la carga acotada.
 - Esta capacidad permite cargar los cuatro bloques FY2025 sin dividirlos artificialmente. Validar y cargar cada bloque por separado, usando siempre el rango de fechas real detectado por el sistema.
+
+## Actualización v1.59 — lectura y prioridades ABCXYZ
+
+- Ambas matrices comparten `AbcxyzLegend` y `content/abcxyz.ts`: ABC ventas netas 90D y XYZ valor actual de inventario, con cortes acumulados 80/15/5 vigentes en `app/semantic_metrics.py`. Los tramos son aproximados por SKU, no porcentajes del número de artículos.
+- Los colores identifican un foco de gestión y permanecen constantes al alternar métricas: AX azul estratégico; AY/AZ turquesa de disponibilidad; BX ámbar de capital; CX rojo suave de exceso potencial; CY naranja de rotación; BY/BZ/CZ neutros. Conservar contraste en claro y oscuro y etiquetas textuales.
+- No inferir una rotura, estabilidad de demanda ni exceso confirmado únicamente de la letra XYZ. Las filas son A/B/C y las columnas X/Y/Z. La guía desplegable explica cada cuadrante y no cambia los cálculos.

@@ -27,3 +27,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - El botón `Cómo se clasifica` abre una guía con los cortes reales definidos en `app/semantic_metrics.py`: ABC usa ventas netas EUR acumuladas de 90 días (A 80 %, B hasta 95 %, C restante) y XYZ el valor actual de inventario con los mismos cortes (X, Y, Z).
 - La explicación debe indicar que se trata de contribución acumulada, no de porcentaje individual por SKU; los artículos sin ventas son C y los que no tienen snapshot son `N/D` para XYZ.
+
+## Actualización v1.59 — leyenda permanente y foco de gestión
+
+- `Matrix3x3` muestra los literales de prioridad dentro de cada celda y una leyenda visible 80/15/5 para ventas e inventario. `AbcxyzLegend` ofrece un desplegable accesible para leer el significado de todas las letras y colores, incluido el estado sin inventario real.
+- Los ejes corresponden a la disposición real: filas ABC por ventas 90D y columnas XYZ por inventario actual. XYZ no representa variabilidad de demanda.
+- La paleta semántica compartida en `content/abcxyz.ts` se adapta a claro y oscuro. AX es prioridad estratégica; CX requiere revisar exceso potencial, sin afirmar una alerta confirmada. AY/AZ indican atención a disponibilidad, BX a capital y CY a rotación.

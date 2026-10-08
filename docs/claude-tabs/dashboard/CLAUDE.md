@@ -55,3 +55,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Aplicar tipografía de sistema, superficies blancas, fondo secundario `#F5F5F7`, azul `#0071E3` para acciones y separadores de baja opacidad. Evitar gradientes decorativos, exceso de bordes y tarjetas coloreadas por decoración.
 - Las tablas usan encabezados en frase, números con `tabular-nums`, separadores horizontales y variaciones con flecha + color. Los gráficos no usan líneas verticales y reservan colores semánticos para resultados positivos/negativos.
 - No rediseñar el modo oscuro hasta una petición específica; mantener sus clases y contraste actuales.
+
+## Actualización v1.59 — lectura compartida del mapa ABCXYZ
+
+- `DashboardCharts` reutiliza `AbcxyzLegend` y `content/abcxyz.ts` con la misma explicación y paleta de Inteligencia ABCXYZ. Las tarjetas muestran el foco de gestión con texto y color, en claro y oscuro.
+- La selección de inventario, ventas o SKU cambia la cifra, no el significado del color. La leyenda explica los tramos acumulados 80/15/5 y que XYZ mide capital en stock, no estabilidad de demanda ni alertas confirmadas.

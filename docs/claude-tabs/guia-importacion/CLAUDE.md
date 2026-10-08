@@ -1,5 +1,12 @@
 # Guía de Importación
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificado `DataImportGuide.tsx`: guía visual independiente de la ejecución de cargas. Su contrato debe coincidir con plantillas y validadores de Data Engineering.
+- Antes de cambiar cabeceras o ejemplos, contrastar `DATASET_CONFIG` en `app/routers/data_import.py`. Diferenciar error bloqueante (incluido MGD superior a MG) de advertencias de calidad y filas de pie ignoradas.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/import-guide`; componente: `frontend/src/pages/DataImportGuide.tsx`.

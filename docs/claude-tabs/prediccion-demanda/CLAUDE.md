@@ -1,5 +1,13 @@
 # Predicción Demanda
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificado `DemandForecasting.tsx`: recupera hasta 1.000 SKU, suma ADS por Product Manager/familia/artículo, calcula unidades = ADS × días e importe = suma(ADS × precio_unit) × días para 30/60/90 días.
+- Ordena por unidades proyectadas a 90 días y conserva los 20 primeros grupos. Los dos KPI se calculan sobre esos 20 grupos, no sobre todo el catálogo. No describirlos como total global.
+- Limitación actual: el fallo de API se registra en consola y puede dejar la vista sin datos; el requisito de mostrar un error explícito sigue pendiente. La documentación no implica que se haya implementado.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/forecast`; componente: `frontend/src/pages/DemandForecasting.tsx`.

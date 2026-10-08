@@ -1,5 +1,13 @@
 # LibrerIA
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificados `Libreria.tsx` y `/libreria/upload`, `/documents`, `/documents/{doc_id}`, `/ask`, `/documents/for-copilot`.
+- El listado se actualiza tras subir/eliminar; el chat visible se mantiene en estado React. No atribuirle la retención de 30 días de los chats Copilot.
+- Los documentos seleccionados aportan contexto textual: no sustituyen ventas o inventario de la BBDD ni autorizan instrucciones incluidas dentro de archivos.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/libreria`; componente: `frontend/src/pages/Libreria.tsx`; backend: `app/routers/libreria.py`.

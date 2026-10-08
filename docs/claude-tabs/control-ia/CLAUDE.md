@@ -1,8 +1,16 @@
 # Control IA
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificadas las siete rutas del módulo en `App.tsx`: Hoy, analistas, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
+- `POST /agents/run` ejecuta el flujo y devuelve el informe al terminar. En el gabinete `EXECUTION_STAGES` avanza con `setInterval(..., 4000)`: las etapas intermedias son una animación estimada, no telemetría real.
+- Una futura oficina animada requeriría estados persistentes de ejecución por agente y un canal de actualización (consulta periódica o eventos). Esa funcionalidad está propuesta, no implementada. Vincular los movimientos a estados reales antes de mostrar actividad individual.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
-- Ruta: `/ai-control`; componente: `frontend/src/pages/AiControlPanel.tsx`; backend: `app/routers/agents.py`, `app/agents_service.py`, `app/agent_metrics.py` y `app/agent_studies.py`.
+- Entrada: `/ai-control`, vista Hoy en `frontend/src/pages/AiControlToday.tsx`. Gabinete: `/ai-control/analistas`, `frontend/src/pages/AiControlPanel.tsx`. Backend: `app/routers/agents.py`, `app/agents_service.py`, `app/agent_metrics.py` y `app/agent_studies.py`.
 - Contexto exhaustivo del módulo: `docs/claude-tabs/control-ia/CONTEXTO_CONTROL_IA.md`. Actualizarlo cuando cambien detectores, contratos de evidencia, rutas, cálculos, límites o comportamiento visible.
 - Coordina agentes: María (inventario), Lucía (ventas), Mattia (finanzas) y consolidación CEO.
 - Carga configuración de fases, readiness de datos, informe diario, históricos, estudios y chat por agente usando el cliente API central.
@@ -12,9 +20,9 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 # Actualización v1.25 — motor de señales
 
 - `app/agent_signals.py` ejecuta detectores deterministas y persiste `agent_signals`; el LLM recibe exclusivamente un evidence bundle JSON, sin herramientas SQL ni cálculos propios.
-- `fingerprint` deduplica detector, entidad y ventana. Estados permitidos: nueva, persistente, resuelta y descartada; priorizar impacto EUR × confianza, severidad y persistencia.
+- `fingerprint` identifica detector y entidad; desde v1.29 no incluye la ventana móvil. Estados permitidos: nueva, persistente, resuelta y descartada; priorizar impacto EUR × confianza, severidad y persistencia.
 - Catálogo inicial: Lucía (caída de facturación, precio×volumen, concentración), María (rotura A, cobertura/lead time, exceso y stock muerto) y Mattia (erosión MGD). El CEO consolida solo las señales de mayor prioridad.
-- Con inventario desde el 06/08/2026 no se deben generar tendencias, DIO temporal ni XYZ fiables todavía.
+- Comprobar cobertura real antes de inferir tendencias o DIO temporal. XYZ en esta aplicación clasifica valor de inventario actual y puede calcularse con snapshot; no equivale a estabilidad de demanda.
 
 ## Actualización v1.26 — control de ruido
 

@@ -1,5 +1,12 @@
 # Data Engineering
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificados `/data-import/template/{dataset}`, `/validate`, `/load`, `/status`. La carga es manual de archivos; la propuesta SharePoint no está implementada.
+- Mantener 200.000 filas, decimales XLSX nativos y sustitución acotada por fechas. MGD > MG + 0,01 € rechaza la línea según la regla de negocio actual, aunque proceda de Power BI; el límite -200 % solo afecta a porcentajes.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/integrations`; componente: `frontend/src/pages/DataEngineering.tsx`; backend: `app/routers/data_import.py`.

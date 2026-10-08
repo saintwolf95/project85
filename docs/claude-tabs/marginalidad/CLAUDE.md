@@ -1,5 +1,13 @@
 # Marginalidad
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificados `Marginality.tsx`, `MarginEntity.tsx` y `/margin/overview`, `/concentration`, `/detail`, `/bridge`, `/entity/{tipo}/{entity_id}`, `/signals`.
+- Selector MG/MGD; KPI, serie temporal, puente, concentración y señales enlazadas. El servicio expone participación Top 10 sobre total neto y sobre total positivo: distinguir los denominadores al narrarlos.
+- El puente actual separa precio, coste y mix residual. El residuo no demuestra causalidad por sí mismo.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las reglas del `CLAUDE.md` raíz, incluido el versionado obligatorio.
 
 - Ruta principal: `/marginalidad`; ficha de entidad: `/marginalidad/:tipo/:id`.

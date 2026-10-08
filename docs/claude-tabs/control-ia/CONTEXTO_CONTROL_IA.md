@@ -1,6 +1,12 @@
 # Control IA — Gabinete de Analistas IA
 
-> Documento de referencia funcional y técnico. Describe la implementación existente a fecha de la versión `v1.51`; no define funcionalidad futura.
+> Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 08/10/2026 en documentación v1.60. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
+
+## Estado de ejecución y posible oficina visual
+
+La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas`. Sus expedientes, chat, estudios e investigaciones ya existen. `POST /agents/run` devuelve el resultado al finalizar; el frontend simula las etapas intermedias con un temporizador de cuatro segundos. No hay eventos de progreso por agente, oficina animada ni movimientos entre escritorios implementados.
+
+Una oficina visual es una propuesta futura: debe reutilizar los agentes actuales y sus expedientes. Antes de asociar animaciones a tareas concretas, añadir estados reales por ejecución/agente (pendiente, ejecutando, verificando, terminado, error), persistencia y actualización del cliente. Diferenciar claramente animación ambiental de actividad confirmada. Respetar movimiento reducido, modo claro/oscuro y una vista alternativa de tarjetas.
 
 ## 1. Propósito
 

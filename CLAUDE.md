@@ -38,10 +38,13 @@ Cada pestaña visible tiene su contexto en `docs/claude-tabs/<pestaña>/CLAUDE.m
 3. Predicción Demanda
 4. AI Copilot
 5. Control IA
-6. Data Engineering
-7. Guía de Importación
-8. LibrerIA
-9. Power BI Services
+6. Marginalidad
+7. Data Engineering
+8. Guía de Importación
+9. LibrerIA
+10. Power BI Services
+
+Índice navegable y mapa de rutas verificado: `docs/claude-tabs/README.md`. Leer el contexto de la pestaña afectada antes de trabajar en ella; estos archivos son memoria de referencia y el código sigue siendo la fuente de verdad.
 
 La ruta interna `/alerts` también está documentada porque sigue registrada en el router aunque no está en el menú visible.
 
@@ -81,7 +84,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - El flujo de agentes usa `agent_signals`: detectores deterministas producen evidencia y el LLM solo narra, contextualiza y recomienda sobre ese JSON. No conceder SQL ni cálculo libre al LLM en este flujo.
 - Cada señal mantiene entidad, ventana, severidad, impacto EUR, confianza, evidencia y `fingerprint`; se deduplica como `persistente` y se resuelve cuando deja de detectarse.
-- El CEO consolida las 5-7 señales con mayor impacto/confianza. El inventario empieza el 06/08/2026: hasta ampliar la muestra, usar detectores de nivel y no tendencias ni XYZ fiables.
+- El CEO consolida las 5-7 señales con mayor impacto/confianza. El inventario empieza el 06/08/2026: comprobar cobertura antes de inferir tendencias. XYZ por valor de inventario puede calcularse con snapshot; no mide variabilidad de demanda.
 
 ## Actualización v1.26 — filtro estadístico anti-ruido
 
@@ -264,3 +267,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Ambas matrices comparten `AbcxyzLegend` y `content/abcxyz.ts`: ABC ventas netas 90D y XYZ valor actual de inventario, con cortes acumulados 80/15/5 vigentes en `app/semantic_metrics.py`. Los tramos son aproximados por SKU, no porcentajes del número de artículos.
 - Los colores identifican un foco de gestión y permanecen constantes al alternar métricas: AX azul estratégico; AY/AZ turquesa de disponibilidad; BX ámbar de capital; CX rojo suave de exceso potencial; CY naranja de rotación; BY/BZ/CZ neutros. Conservar contraste en claro y oscuro y etiquetas textuales.
 - No inferir una rotura, estabilidad de demanda ni exceso confirmado únicamente de la letra XYZ. Las filas son A/B/C y las columnas X/Y/Z. La guía desplegable explica cada cuadrante y no cambia los cálculos.
+
+## Actualización v1.60 — memoria por pestaña
+
+- `docs/claude-tabs/README.md` enumera las diez pestañas reales del sidebar, sus contextos y subrutas. Cada `CLAUDE.md` incluye estado verificado el 08/10/2026; se corrigen descripciones antiguas de Dashboard y la entrada de Control IA.
+- Predicción es una extrapolación sobre hasta 1.000 SKU y los KPI visibles suman los 20 grupos seleccionados. Power BI Services es una maqueta; SharePoint y oficina animada de agentes son propuestas pendientes.
+- La progresión intermedia del gabinete es actualmente simulada por temporizador. Cualquier futura representación visual de trabajo individual necesita estados reales del backend.

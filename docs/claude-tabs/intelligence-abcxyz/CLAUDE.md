@@ -1,5 +1,12 @@
 # Intelligence ABCXYZ
 
+## Estado verificado · 08/10/2026 · v1.60
+
+- Verificado `Intelligence.tsx`: vista general, catálogo y alertas; matriz y guía visible compartida con Dashboard desde v1.59.
+- Fuentes de clasificación: `app/services.py` y `app/semantic_metrics.py`; cortes acumulados 0,80 y 0,95. Filas ABC por ventas, columnas XYZ por valor de inventario.
+
+Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
+
 Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obligatorio.
 
 - Ruta: `/inventory`; componente: `frontend/src/pages/Intelligence.tsx`.

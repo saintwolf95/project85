@@ -291,3 +291,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La ruta `/ai-control/oficina` reemplaza el SVG por PixiJS 8 y `@pixi/react` 8, compatibles con React 19. Mantiene el sondeo a `agent_executions`; no inventar SSE ni eventos de negocio. Pixi se carga solo al entrar en la ruta.
 - El mapa textual, BFS, roster de cuatro agentes y máquina de estados viven en `frontend/src/agent-office/`. La actividad ambiental es explícitamente ilustrativa, con catálogo cerrado, baño y puestos reservados. Trabajo real interrumpe la animación ambiental; informes entregados y consolidación del CEO siguen los estados confirmados.
 - Solo se publican placeholders dibujados. No incorporar sprites comerciales, Pixelify, fichas rápidas, historial ni modo pantalla en esta fase; detenerse para validar el comportamiento antes de invertir en gráficos.
+
+## Actualización v1.64 — relevo para continuar desde casa
+
+- `docs/RELEVO_OFICINA_AGENTES.md` reúne estado verificado, decisiones, fases pendientes, archivos clave, riesgos, validación y un primer prompt para retomar el trabajo en otro equipo. Leerlo antes de continuar la oficina.
+- Esta versión solo añade documentación y sincroniza las cuatro marcas de versión; no implementa la fase 2 ni confirma un despliegue de producción.

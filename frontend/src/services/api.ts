@@ -515,6 +515,21 @@ export const runAgentAnalysis = async (): Promise<AgentInsight> => {
   return response.data;
 };
 
+export type AgentWorkState = 'pendiente' | 'trabajando' | 'preparado' | 'completado' | 'error' | 'interrumpido' | 'omitido';
+export interface AgentExecution {
+  run_id: string;
+  estado: 'ejecutando' | 'completada' | 'error' | 'interrumpida';
+  etapa: string;
+  agentes: Record<'maria' | 'lucia' | 'mattia' | 'ceo', AgentWorkState>;
+  inicio: string;
+  actualizado_en: string;
+  informe_id: number | null;
+}
+export const getAgentExecution = async (signal?: AbortSignal): Promise<AgentExecution | null> => {
+  const response = await api.get('/agents/execution', { signal });
+  return response.data;
+};
+
 export const ensureDailyAgentReport = async (): Promise<AgentInsight> => {
   const response = await api.post('/agents/daily/ensure');
   return response.data;

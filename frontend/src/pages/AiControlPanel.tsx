@@ -5,7 +5,8 @@ import { Power, Bot, TrendingUp, DollarSign, Brain, PlayCircle, FileText, Loader
 import ReactMarkdown from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import axios from 'axios';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useAgentExecution } from '../hooks/useAgentExecution';
 
 interface AgentInfo {
   id: string;
@@ -49,16 +50,8 @@ const AGENTS_INFO: Record<string, AgentInfo> = {
   }
 };
 
-const EXECUTION_STAGES = [
-  { phase: 1, msg: 'Preparando métricas verificadas...', agent: null },
-  { phase: 1, msg: 'María analizando disponibilidad...', agent: 'maria' },
-  { phase: 1, msg: 'Lucía analizando ventas y clientes...', agent: 'lucia' },
-  { phase: 1, msg: 'Mattia evaluando la rentabilidad...', agent: 'mattia' },
-  { phase: 2, msg: 'Consolidando el informe ejecutivo...', agent: 'ceo' },
-  { phase: 2, msg: 'Guardando resultados...', agent: null },
-];
-
 export const AiControlPanel = () => {
+  const { execution, error: executionError } = useAgentExecution();
   const [searchParams] = useSearchParams();
   const agentFromUrl = searchParams.get('agent')?.toLowerCase().replace('í', 'i');
   const signalFromUrl = searchParams.get('signal');
@@ -70,7 +63,6 @@ export const AiControlPanel = () => {
   const [dailyError, setDailyError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
-  const [runStage, setRunStage] = useState(0);
   const [runError, setRunError] = useState<string | null>(null);
   const [runSuccess, setRunSuccess] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -128,6 +120,12 @@ export const AiControlPanel = () => {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [agentFromUrl, signalFromUrl]);
+
+  useEffect(() => {
+    if (window.location.hash !== '#informe-ceo' || !insightsHistory.length || expandedRowId !== insightsHistory[0].id) return;
+    const frame = window.requestAnimationFrame(() => document.getElementById('informe-ceo')?.scrollIntoView({ block: 'start' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [insightsHistory, expandedRowId]);
 
   useEffect(() => {
     if (selectedAgent) {
@@ -253,30 +251,16 @@ export const AiControlPanel = () => {
     setRunError(null);
     setRunSuccess(false);
     setIsRunning(true);
-    setRunStage(0);
-
-    // Simular progreso por etapas
-    const stagesFiltered = EXECUTION_STAGES.filter(s =>
-      (s.phase === 1 && settings.fase1_active) || (s.phase === 2 && settings.fase2_active)
-    );
-    let stageIdx = 0;
-    const stageTimer = setInterval(() => {
-      stageIdx = Math.min(stageIdx + 1, stagesFiltered.length - 1);
-      setRunStage(stageIdx);
-    }, 4000);
 
     try {
       const insight = await runAgentAnalysis();
       if (insight.fase1_maria_md && insight.fase1_lucia_md && insight.fase1_mattia_md) {
         setDailyInsight(insight);
       }
-      clearInterval(stageTimer);
-      setRunStage(stagesFiltered.length - 1);
       setRunSuccess(true);
       setTimeout(() => setRunSuccess(false), 4000);
       await refreshData();
     } catch (error: unknown) {
-      clearInterval(stageTimer);
       const responseDetail = axios.isAxiosError(error) ? error.response?.data?.detail : null;
       const detail = typeof responseDetail === 'string'
         ? responseDetail
@@ -285,7 +269,6 @@ export const AiControlPanel = () => {
       setTimeout(() => setRunError(null), 6000);
     } finally {
       setIsRunning(false);
-      setRunStage(0);
     }
   };
 
@@ -448,6 +431,7 @@ export const AiControlPanel = () => {
         <div className="mb-6 rounded-[24px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
+              <Link to="/ai-control/oficina" className="mb-3 inline-flex text-sm font-medium text-[#0071e3] dark:text-brand-cyan">Visitar la oficina del equipo →</Link>
               <h1 className="mb-2 flex items-center gap-3 text-[32px] font-semibold tracking-[-0.03em] text-[#1d1d1f] dark:text-white">
                 <Bot className="h-7 w-7 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
                 Gabinete de Analistas IA
@@ -664,7 +648,7 @@ export const AiControlPanel = () => {
             <div className="flex flex-col items-end gap-2 shrink-0">
               <button
                 onClick={handleRunAnalysis}
-                disabled={isRunning || (!settings.fase1_active && !settings.fase2_active)}
+                disabled={isRunning || execution?.estado === 'ejecutando' || (!settings.fase1_active && !settings.fase2_active)}
                 className="flex min-h-11 min-w-[180px] items-center justify-center gap-2 rounded-[12px] bg-[#0071e3] px-6 py-3 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isRunning ? <Loader2 className="w-5 h-5 animate-spin" /> : <PlayCircle className="w-5 h-5" />}
@@ -672,7 +656,7 @@ export const AiControlPanel = () => {
               </button>
               {isRunning && (
                 <div className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 animate-pulse">
-                  <span>{EXECUTION_STAGES[Math.min(runStage, EXECUTION_STAGES.length - 1)].msg}</span>
+                  <span>{executionError || (execution?.estado === 'ejecutando' ? execution.etapa : 'Esperando confirmación del servidor…')}</span>
                 </div>
               )}
             </div>
@@ -706,7 +690,7 @@ export const AiControlPanel = () => {
 
                   {expandedRowId === insight.id && (
                     <div className="border-t border-black/[0.08] bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-                      {renderAgentAccordion(insight.id, 'ceo', 'Resumen ejecutivo (CEO)', insight.fase2_ceo_markdown, true)}
+                      <div id={idx === 0 ? 'informe-ceo' : undefined}>{renderAgentAccordion(insight.id, 'ceo', 'Resumen ejecutivo (CEO)', insight.fase2_ceo_markdown, true)}</div>
                       <div className="mt-6">
                         <h4 className="mb-3 text-[13px] font-medium text-[#6e6e73]">Informes departamentales</h4>
                         {renderAgentAccordion(insight.id, 'maria', 'Informe de inventario (María)', insight.fase1_maria_md, false)}

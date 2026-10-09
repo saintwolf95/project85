@@ -273,3 +273,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - `docs/claude-tabs/README.md` enumera las diez pestañas reales del sidebar, sus contextos y subrutas. Cada `CLAUDE.md` incluye estado verificado el 08/10/2026; se corrigen descripciones antiguas de Dashboard y la entrada de Control IA.
 - Predicción es una extrapolación sobre hasta 1.000 SKU y los KPI visibles suman los 20 grupos seleccionados. Power BI Services es una maqueta; SharePoint y oficina animada de agentes son propuestas pendientes.
 - La progresión intermedia del gabinete es actualmente simulada por temporizador. Cualquier futura representación visual de trabajo individual necesita estados reales del backend.
+
+## Actualización v1.61 — oficina de analistas con progreso real
+
+- `/ai-control/oficina` añade cuatro escritorios SVG, acceso a expedientes, vista de tarjetas, pausa y movimiento reducido, con temas claro/oscuro. Reutiliza el flujo existente; no añade agentes ni llamadas al LLM.
+- Sustituye la progresión simulada descrita en v1.60: `GET /agents/execution` expone estados reales de la empresa desde `agent_executions`, creada de forma aditiva al arrancar. Consulta cada 3 segundos en ejecución y cada 8 en reposo.
+- Adquisición atómica por empresa, run_id para rechazar publicaciones obsoletas y caducidad de 30 minutos sin progreso. Solo administradores inician ejecuciones. La telemetría conserva la última ejecución, no es una cola de trabajos.
+- Señales y episodios deterministas se confirman antes de narrar. Rechazar narraciones vacías o de error; publicar completado solo después del guardado del informe. Pruebas en `tests/test_agent_execution.py`.

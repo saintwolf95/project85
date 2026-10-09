@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from .agent_signals import build_evidence_bundle, get_active_signals, refresh_agent_signals
 from .agent_correlation import build_episode_bundle, refresh_agent_episodes
 from .copilot_service import get_openai_client
+from .agent_execution import ExecutionProgress
 from .models import AgentDecision, AgentEpisode, AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
 
 
@@ -162,16 +163,53 @@ def persist_ceo_decisions(db: Session, empresa_id: int, report: str) -> str:
 
 
 def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_fase2: bool):
+    if not run_fase1 and not run_fase2:
+        raise ValueError("Activa al menos una fase del análisis.")
+    progress = ExecutionProgress(db.get_bind(), empresa_id, run_fase1, run_fase2)
+    try:
+        result = _execute_agents_workflow(db, empresa_id, run_fase1, run_fase2, progress)
+        progress.publish("Informe guardado", status="completada", report_id=result.id)
+        return result
+    except Exception:
+        db.rollback()
+        try:
+            progress.publish("No se pudo completar el análisis. Revisa la configuración y vuelve a intentarlo.", status="error")
+        except Exception:
+            logger.exception("No se pudo registrar el fallo de ejecución")
+        raise
+
+
+def _checked_report(report: str | None) -> str:
+    if not report or report.lstrip().lower().startswith("error"):
+        raise RuntimeError("No se pudo generar un informe del agente.")
+    return report
+
+
+def _execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_fase2: bool, progress):
     alertas_fase1, maria_md, lucia_md, mattia_md = [], None, None, None
     if run_fase1:
+        progress.publish("Calculando señales y correlaciones verificadas")
         refresh_agent_signals(db, empresa_id)
         episodes = refresh_agent_episodes(db, empresa_id)
         episode_impact = {episode.id: episode.impacto_ponderado_eur for episode in episodes}
-        maria_md = narrate_agent_signals(db, empresa_id, "maria")
-        lucia_md = narrate_agent_signals(db, empresa_id, "lucia")
-        mattia_md = narrate_agent_signals(db, empresa_id, "mattia")
+        # Las señales deterministas quedan disponibles aunque falle la narración.
+        # Libera además el bloqueo de escritura SQLite antes de publicar progreso.
+        db.commit()
+        reports = {}
+        for agent, label in (("maria", "María"), ("lucia", "Lucía"), ("mattia", "Mattia")):
+            progress.publish(f"{label} redactando su análisis", agent)
+            reports[agent] = _checked_report(narrate_agent_signals(db, empresa_id, agent))
+            progress.publish(f"Análisis de {label} preparado", agent, "preparado")
+        maria_md, lucia_md, mattia_md = (reports[name] for name in ("maria", "lucia", "mattia"))
         alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "impacto_tipo": item.impacto_tipo, "impacto_ponderado_eur": item.impacto_ponderado_eur, "naturaleza": item.naturaleza or "riesgo", "episodio_id": item.episodio_id, "episodio_impacto_ponderado_eur": episode_impact.get(item.episodio_id), "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
-    ceo_summary = run_ceo_from_signals(db, empresa_id) if run_fase2 and (run_fase1 or get_daily_agent_insight(db, empresa_id)) else None
+    ceo_summary = None
+    if run_fase2 and (run_fase1 or get_daily_agent_insight(db, empresa_id)):
+        progress.publish("CEO consolidando episodios y decisiones", "ceo")
+        ceo_summary = _checked_report(run_ceo_from_signals(db, empresa_id))
+        progress.publish("Consolidación preparada", "ceo", "preparado")
+    elif run_fase2:
+        raise ValueError("El CEO necesita un informe de los analistas. Activa la fase 1.")
+    progress.publish("Guardando informe y decisiones")
     if ceo_summary:
         ceo_summary = persist_ceo_decisions(db, empresa_id, ceo_summary)
     insight = AgentInsights(empresa_id=empresa_id, fase1_raw_json=json.dumps(alertas_fase1) if alertas_fase1 else None, fase1_maria_md=maria_md, fase1_lucia_md=lucia_md, fase1_mattia_md=mattia_md, fase2_ceo_markdown=ceo_summary)

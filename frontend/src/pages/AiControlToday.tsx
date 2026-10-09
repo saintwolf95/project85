@@ -36,6 +36,7 @@ const AppShell = ({ children }: { children: React.ReactNode }) => (
 
 const Navigation = ({ current }: { current: 'today' | 'decisions' }) => (
   <nav className="mb-6 flex flex-wrap items-center gap-2 rounded-[14px] bg-white p-2 dark:bg-slate-900" aria-label="Navegación de Control IA">
+    <Link to="/ai-control/oficina" className="min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 dark:text-brand-cyan">Oficina del equipo</Link>
     <Link to="/ai-control" className={`min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium ${current === 'today' ? 'bg-[#0071e3] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Hoy</Link>
     <Link id="today-decisions" to="/ai-control/decisiones" className={`min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium ${current === 'decisions' ? 'bg-[#0071e3] text-white' : 'text-[#6e6e73] hover:bg-[#f5f5f7] dark:text-slate-300 dark:hover:bg-slate-800'}`}>Decisiones</Link>
     <Link to="/ai-control/reglas" className="min-h-9 rounded-[10px] px-3 py-2 text-[13px] font-medium text-[#0071e3] hover:bg-[#0071e3]/10 dark:text-brand-cyan">Reglas</Link><Link to="/ai-control/analistas" className="ml-auto min-h-9 rounded-[10px] bg-[#f5f5f7] px-3 py-2 text-[13px] font-medium text-[#0071e3] transition-colors hover:bg-[#0071e3]/10 dark:bg-slate-800 dark:text-brand-cyan">Gabinete de analistas <ArrowRight className="ml-1 inline" size={14} /></Link>

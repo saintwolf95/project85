@@ -10,6 +10,7 @@ import { DemandForecasting } from './pages/DemandForecasting';
 import { ActionableInsights } from './pages/ActionableInsights';
 import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
+import { AgentOffice } from './pages/AgentOffice';
 import { AiControlDecisions, AiControlEpisodeDetail, AiControlSignalDetail, AiControlToday } from './pages/AiControlToday';
 import { AiControlBusinessRules } from './pages/AiControlBusinessRules';
 import { AiControlGuide } from './pages/AiControlGuide';
@@ -43,6 +44,7 @@ function App() {
             <Route path="copilot" element={<AiCopilot />} />
             <Route path="ai-control" element={<AiControlToday />} />
             <Route path="ai-control/analistas" element={<AiControlPanel />} />
+            <Route path="ai-control/oficina" element={<AgentOffice />} />
             <Route path="ai-control/senal/:id" element={<AiControlSignalDetail />} />
             <Route path="ai-control/episodio/:id" element={<AiControlEpisodeDetail />} />
             <Route path="ai-control/decisiones" element={<AiControlDecisions />} />

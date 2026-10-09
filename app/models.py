@@ -200,6 +200,19 @@ class AgentSettings(Base):
     fase1_active = Column(Boolean, default=False)
     fase2_active = Column(Boolean, default=False)
 
+class AgentExecution(Base):
+    """Última ejecución observable por empresa; el run_id protege frente a procesos antiguos."""
+    __tablename__ = "agent_executions"
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), primary_key=True)
+    run_id = Column(String(36), nullable=False)
+    estado = Column(String(24), nullable=False)
+    etapa = Column(String(160), nullable=False)
+    agentes_json = Column(Text, nullable=False)
+    inicio = Column(DateTime, nullable=False)
+    actualizado_en = Column(DateTime, nullable=False)
+    informe_id = Column(Integer, nullable=True)
+
+
 class AgentInsights(Base):
     __tablename__ = "agent_insights"
     id = Column(Integer, primary_key=True, index=True)

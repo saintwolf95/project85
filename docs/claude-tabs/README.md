@@ -20,7 +20,7 @@ Las diez pestañas tienen contexto propio. Las reglas comunes están en el `CLAU
 
 ## Rutas relacionadas
 
-- Control IA: `/ai-control/analistas`, `/ai-control/senal/:id`, `/ai-control/episodio/:id`, `/ai-control/decisiones`, `/ai-control/reglas`, `/ai-control/guia`. Contexto ampliado: [CONTEXTO_CONTROL_IA.md](control-ia/CONTEXTO_CONTROL_IA.md).
+- Control IA: `/ai-control/analistas`, `/ai-control/oficina`, `/ai-control/senal/:id`, `/ai-control/episodio/:id`, `/ai-control/decisiones`, `/ai-control/reglas`, `/ai-control/guia`. Contexto ampliado: [CONTEXTO_CONTROL_IA.md](control-ia/CONTEXTO_CONTROL_IA.md).
 - Marginalidad: `/marginalidad/:tipo/:id`, ficha `MarginEntity.tsx`.
 - `/alerts` es una [ruta interna](alertas-internas/CLAUDE.md), no una undécima pestaña del sidebar.
 - `/login` es autenticación. Tema y cierre de sesión son controles globales.
@@ -29,5 +29,5 @@ Las diez pestañas tienen contexto propio. Las reglas comunes están en el `CLAU
 
 - Power BI Services es una maqueta. La sincronización PBI–SharePoint–BBDD se ha propuesto, pero no está conectada.
 - Predicción extrapola ADS y procesa hasta 1.000 artículos; los indicadores visibles agregan los 20 grupos seleccionados por mayor proyección. No son una previsión estadística global.
-- Los estados intermedios de ejecución del gabinete son simulados con temporizador; no existe un canal de progreso real por agente ni una oficina animada.
+- Desde v1.61 la oficina animada y el gabinete consultan estados reales persistidos por empresa. No es una cola durable ni paraleliza agentes; conserva el estado de la última ejecución.
 - Actualizar documento de pestaña, índice si cambian rutas, contexto global y versión cuando se modifique comportamiento. Conservar evidencia de validación y distinguir código publicado de datos realmente cargados en producción.

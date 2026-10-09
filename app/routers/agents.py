@@ -17,6 +17,7 @@ from ..core.rate_limit import limiter
 from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
 from ..business_rules import ensure_no_overlap, validate_rule_payload
+from ..agent_execution import ExecutionBusy, read_execution
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -278,10 +279,21 @@ def run_agents(request: Request, current_user: Usuario = Depends(get_current_act
             
         insight = execute_agents_workflow(db, current_user.empresa_id, settings.fase1_active, settings.fase2_active)
         return insight
+    except ExecutionBusy as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         db.rollback()
         logger.error(f"Error ejecutando agentes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno ejecutando agentes.")
+
+@router.get("/agents/execution")
+def get_execution(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    return read_execution(db, current_user.empresa_id)
+
 
 @router.get("/agents/insights", response_model=AgentInsightResponse)
 def get_latest_insight(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -516,6 +528,9 @@ def get_daily_report(current_user: Usuario = Depends(get_current_user), db: Sess
 def ensure_daily_report(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
         return ensure_daily_agent_insight(db, current_user.empresa_id)
+    except ExecutionBusy as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception:
         logger.exception("Error preparando el informe diario de agentes")
         raise HTTPException(status_code=500, detail="No se pudo preparar el informe diario")

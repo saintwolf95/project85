@@ -1,10 +1,13 @@
 # Control IA
 
-## Estado verificado · 08/10/2026 · v1.60
+## Estado verificado · 09/10/2026 · v1.61
 
-- Verificadas las siete rutas del módulo en `App.tsx`: Hoy, analistas, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
-- `POST /agents/run` ejecuta el flujo y devuelve el informe al terminar. En el gabinete `EXECUTION_STAGES` avanza con `setInterval(..., 4000)`: las etapas intermedias son una animación estimada, no telemetría real.
-- Una futura oficina animada requeriría estados persistentes de ejecución por agente y un canal de actualización (consulta periódica o eventos). Esa funcionalidad está propuesta, no implementada. Vincular los movimientos a estados reales antes de mostrar actividad individual.
+- Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
+- `/ai-control/oficina` representa los cuatro agentes con escritorios SVG, estados reales, acceso a expedientes, tema claro/oscuro, pausa de movimiento y vista de tarjetas. No ejecuta agentes adicionales.
+- `GET /agents/execution` consulta el último estado de la empresa. `useAgentExecution` actualiza oficina y gabinete cada 3 segundos durante ejecución y cada 8 en reposo. Se elimina el progreso simulado por temporizador.
+- `agent_executions` se crea de forma aditiva al arrancar el backend. `ExecutionProgress` escribe desde sesiones independientes; evita ejecuciones simultáneas por empresa y rechaza publicaciones de un run_id sustituido. Después de 30 minutos sin actualización se informa interrupción y se permite reintento.
+- Señales y episodios deterministas se confirman antes de narrar. Un fallo de API no debe guardar un informe exitoso: `_checked_report` rechaza texto vacío o prefijado por Error. Informe preparado no equivale a informe guardado.
+- Pruebas: `tests/test_agent_execution.py`, aislamiento, concurrencia, caducidad, secuencia real, publicación y fallo de narración. La telemetría conserva solo la última ejecución, no es una cola de trabajos ni un historial de eventos.
 
 Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
 

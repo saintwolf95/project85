@@ -1,23 +1,34 @@
-.agent-office { background: #f5f5f7; color: #1d1d1f; --office-wood: #eee3d5; --office-edge: #d5c3ad; --office-monitor: #344457; --office-chair: #ccd9e5; --office-paper: #fff; }
-.dark .agent-office { background: #0c1220; color: #f1f5f9; --office-wood: #475165; --office-edge: #323e51; --office-monitor: #182335; --office-chair: #334155; --office-paper: #e2e8f0; }
-.office-control { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 42px; padding: .6rem .85rem; border: 1px solid #94a3b833; border-radius: 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
-.office-control:focus-visible, .office-station:focus-visible { outline: 3px solid #0071e3; outline-offset: 4px; }
-.office-floor { position: relative; padding: 26px; border: 1px solid #94a3b826; border-radius: 28px; background-color: #e8edf2; background-image: linear-gradient(30deg, #94a3b818 12%, transparent 12.5%, transparent 87%, #94a3b818 87.5%), linear-gradient(150deg, #94a3b818 12%, transparent 12.5%, transparent 87%, #94a3b818 87.5%); background-size: 70px 120px; }
-.dark .office-floor { background-color: #151f2e; }
-.office-station { display: block; min-width: 0; border: 1px solid #94a3b826; background: #ffffffed; border-radius: 22px; box-shadow: 0 6px 16px #0f172a06; transition: border-color .2s, box-shadow .2s; }
-.dark .office-station { background: #1a2637ed; }
-.office-station:hover { border-color: #0071e380; box-shadow: 0 8px 28px #0071e310; }
-.office-working { border-color: #0071e380; }
-.office-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; border-radius: 20px; background: #94a3b814; padding: 5px 9px; }
-.office-desk { width: 100%; max-height: 235px; display: block; }
-.office-person { transform-box: fill-box; transform-origin: center bottom; transition: transform 1.2s ease-in-out; }
-.office-person-preparado, .office-person-completado { transform: translate(32px, 2px); }
-.office-person-trabajando { animation: office-focus 2.2s ease-in-out infinite; }
-.office-person-trabajando .office-hands { animation: office-type .45s ease-in-out infinite alternate; transform-origin: center; }
-.office-working .office-screen { animation: office-screen 1.8s ease-in-out infinite alternate; }
-@keyframes office-focus { 0%, 100% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(1px, -2px) rotate(1deg); } }
-@keyframes office-type { to { transform: translate(0, -2px); } }
-@keyframes office-screen { to { opacity: .45; } }
-.office-still *, .office-still *::before, .office-still *::after { animation: none !important; transition: none !important; }
+.agent-office { background: #f5f5f7; color: #1d1d1f; }
+.dark .agent-office { background: #0c1220; color: #f1f5f9; }
+.office-control { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 42px; padding: .6rem .85rem; border: 1px solid #94a3b855; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; }
+.dark .office-control { background: #172437; }
+.office-control-primary, .dark .office-control-primary { background: #0071e3; border-color: #0071e3; color: #fff; }
+.office-control:focus-visible, .office-agent-card:focus-visible { outline: 3px solid #0071e3; outline-offset: 3px; }
+.office-hud { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 18px; margin-bottom: 18px; border: 1px solid #94a3b833; border-radius: 18px; background: #fff; }
+.dark .office-hud { background: #172437; }
+.office-hud-main { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; }
+.office-hud-meta { display: flex; flex-wrap: wrap; gap: 20px; font-size: 12px; color: #64748b; }
+.office-hud-meta strong { color: #1d1d1f; }
+.dark .office-hud-meta strong { color: #f1f5f9; }
+.office-scene-panel { overflow: hidden; background: #fff; border: 1px solid #94a3b833; border-radius: 24px; box-shadow: 0 10px 34px #10182809; }
+.dark .office-scene-panel { background: #172437; }
+.office-scene-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 17px 20px; }
+.office-scene-heading h2 { font-size: 17px; font-weight: 650; }
+.office-scene-eyebrow { display: block; margin-bottom: 3px; color: #64748b; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .14em; }
+.office-scene-key { display: inline-flex; align-items: center; gap: 7px; color: #64748b; font-size: 11px; }
+.office-scene-key i { display: block; height: 8px; width: 8px; border-radius: 50%; background: #0071e3; }
+.office-canvas { width: 100%; height: min(65vw, 680px); min-height: 470px; overflow: hidden; }
+.office-canvas canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.office-roster { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.office-agent-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 15px; min-height: 86px; border: 1px solid #94a3b833; border-radius: 16px; background: #fff; }
+.dark .office-agent-card { background: #172437; }
+.office-agent-card:hover { border-color: #0071e380; }
+.office-agent-role { color: #64748b; font-size: 11px; }
+.office-agent-card h3 { font-size: 17px; font-weight: 650; }
+.office-agent-state { display: flex; align-items: center; gap: 5px; text-align: right; color: #64748b; font-size: 11px; }
+.office-agent-state[data-state="trabajando"] { color: #0071e3; }
+.office-agent-state[data-state="error"], .office-agent-state[data-state="interrumpido"] { color: #dc2626; }
+.office-agent-state[data-state="completado"], .office-agent-state[data-state="preparado"] { color: #16814b; }
+@media (max-width: 900px) { .office-roster { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .office-roster { grid-template-columns: 1fr; } .office-canvas { min-height: 400px; height: 430px; } .office-scene-heading { padding: 15px; } }
 @media (prefers-reduced-motion: reduce) { .agent-office *, .agent-office *::before, .agent-office *::after { animation: none !important; transition: none !important; } }
-@media (max-width: 640px) { .office-floor { padding: 12px; border-radius: 20px; } .office-desk { max-height: 205px; } }

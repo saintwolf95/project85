@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
@@ -10,7 +11,6 @@ import { DemandForecasting } from './pages/DemandForecasting';
 import { ActionableInsights } from './pages/ActionableInsights';
 import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
-import { AgentOffice } from './pages/AgentOffice';
 import { AiControlDecisions, AiControlEpisodeDetail, AiControlSignalDetail, AiControlToday } from './pages/AiControlToday';
 import { AiControlBusinessRules } from './pages/AiControlBusinessRules';
 import { AiControlGuide } from './pages/AiControlGuide';
@@ -20,6 +20,8 @@ import { PowerBiMock } from './pages/PowerBiMock';
 import { Libreria } from './pages/Libreria';
 import { Marginality } from './pages/Marginality';
 import { MarginEntity } from './pages/MarginEntity';
+
+const AgentOffice = lazy(() => import('./pages/AgentOffice').then(module => ({ default: module.AgentOffice })));
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -44,7 +46,7 @@ function App() {
             <Route path="copilot" element={<AiCopilot />} />
             <Route path="ai-control" element={<AiControlToday />} />
             <Route path="ai-control/analistas" element={<AiControlPanel />} />
-            <Route path="ai-control/oficina" element={<AgentOffice />} />
+            <Route path="ai-control/oficina" element={<Suspense fallback={<div className="p-8">Cargando oficina…</div>}><AgentOffice /></Suspense>} />
             <Route path="ai-control/senal/:id" element={<AiControlSignalDetail />} />
             <Route path="ai-control/episodio/:id" element={<AiControlEpisodeDetail />} />
             <Route path="ai-control/decisiones" element={<AiControlDecisions />} />

@@ -1,9 +1,12 @@
 # Control IA
 
-## Estado verificado · 09/10/2026 · v1.62
+## Estado verificado · 09/10/2026 · v1.63
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
-- `/ai-control/oficina` representa los cuatro agentes con escritorios SVG, estados reales, acceso a expedientes, tema claro/oscuro, pausa de movimiento y vista de tarjetas. No ejecuta agentes adicionales.
+- `/ai-control/oficina` usa la escena isométrica PixiJS 8 con placeholders pixel dibujados, mapa textual y BFS del módulo `agent-office` adaptados al proyecto. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.
+- La prioridad visual es estado real `agent_executions` → entrega de los tres informes en la mesa central → actividad ambiental solo en reposo. El sondeo existente de 3/8 segundos sigue siendo la fuente; no crear un bus SSE en memoria ni inferir trabajo por animación. El catálogo ambiental está en `frontend/src/agent-office/model.ts`, con destinos, pesos, duraciones y frases genéricas; el baño es exclusivo y dura 20–40 segundos. La pestaña oculta detiene la simulación.
+- La oficina es una ruta lazy para no cargar Pixi en las demás pestañas. `prefers-reduced-motion` evita desplazamientos y tecleo; las etiquetas reales se exponen además como texto fuera del canvas. Fase 1 se detiene con placeholders para revisión visual; fichas rápidas, historial/usage y modo pantalla/móvil específico siguen pendientes en fases 2–4.
+- Capturas de referencia de los placeholders: `docs/screenshots/office-placeholders-light.png` y `docs/screenshots/office-placeholders-dark.png` (estado sintético, sin datos empresariales).
 - `GET /agents/execution` consulta el último estado de la empresa. `useAgentExecution` actualiza oficina y gabinete cada 3 segundos durante ejecución y cada 8 en reposo. Se elimina el progreso simulado por temporizador.
 - `agent_executions` se crea de forma aditiva al arrancar el backend. `ExecutionProgress` escribe desde sesiones independientes; evita ejecuciones simultáneas por empresa y rechaza publicaciones de un run_id sustituido. Después de 30 minutos sin actualización se informa interrupción y se permite reintento.
 - Señales y episodios deterministas se confirman antes de narrar. Un fallo de API no debe guardar un informe exitoso: `_checked_report` rechaza texto vacío o prefijado por Error. Informe preparado no equivale a informe guardado.

@@ -2,9 +2,11 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.61
+## Estado de ejecución y oficina visual · v1.63
 
-La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. Esta última reutiliza los expedientes y los cuatro agentes existentes. Presenta escritorios y personajes SVG, animación vinculada al estado confirmado, pausa, vista alternativa de tarjetas y temas claro/oscuro. Respeta `prefers-reduced-motion`. María, Lucía y Mattia enlazan a su expediente; CEO al último informe del gabinete.
+La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. Desde v1.63, esta última sustituye el SVG por una escena isométrica PixiJS 8 con placeholders, mapa textual, BFS y máquina de estado por personaje adaptados del módulo `agent-office` proporcionado por el usuario. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. Los paneles conservan la tipografía y tokens de la app; no se incorpora Pixelify.
+
+El estado real del servidor tiene prioridad absoluta y cancela la vida ambiental. Cuando un analista termina, camina a la mesa central, cuenta como informe entregado y vuelve al puesto; el CEO consolida tras los tres. La vida ambiental usa un catálogo fijo de actividades y frases sin clientes, SKU ni importes; reserva baño y sofá. Con la pestaña oculta se detiene el ticker; al volver se restablecen las posiciones ambientales coherentes. `prefers-reduced-motion` elimina desplazamientos y tecleo. La ruta se carga bajo demanda y el estado real permanece legible en tarjetas accesibles. María, Lucía y Mattia enlazan a su expediente; CEO al informe del gabinete. Fase 1 termina con placeholders para validación; las fases 2–4 (ficha, historial/usage/avisos, vistas móvil/pantalla) no se han implementado aún.
 
 `POST /agents/run` sigue siendo síncrono y exclusivo de administradores. `GET /agents/execution`, accesible a usuarios autenticados, devuelve solo el estado de su empresa. Oficina y gabinete usan `useAgentExecution`: consulta cada 3 segundos durante ejecución y cada 8 en reposo; se cancela al desmontar. Sin conexión se oculta la animación de trabajo y se indica que el estado no puede confirmarse.
 
@@ -12,7 +14,7 @@ La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y
 
 Secuencia: preparación → señales y episodios deterministas → María → Lucía → Mattia → CEO → guardado. Las fases desactivadas aparecen como omitidas. Los estados individuales son pendiente, trabajando, preparado, completado, error, interrumpido y omitido. Preparado significa narración obtenida; completado solo se publica después de confirmar el informe en BBDD. Señales y episodios se confirman antes de narrar y se conservan si falla la API. `_checked_report` bloquea respuestas vacías o que comienzan por Error. No representa una validación numérica adicional: el contrato de evidencia de investigaciones permanece separado.
 
-Límites: se conserva la última ejecución, no un historial de eventos ni una cola durable. Cerrar el navegador no equivale a cancelar trabajo. La oficina no paraleliza los agentes, no aumenta llamadas al LLM y no representa actividad ficticia cuando están inactivos. Pruebas de aislamiento, concurrencia, sustitución, publicación y fallo: `tests/test_agent_execution.py`.
+Límites: se conserva la última ejecución, no un historial de eventos ni una cola durable. Cerrar el navegador no equivale a cancelar trabajo. La oficina no paraleliza los agentes ni aumenta llamadas al LLM. La vida ambiental es decorativa y está claramente separada del trabajo real; la UI no presenta esos movimientos como tareas ejecutadas. Pruebas de aislamiento, concurrencia, sustitución, publicación y fallo: `tests/test_agent_execution.py`.
 
 ## 1. Propósito
 

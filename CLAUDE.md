@@ -285,3 +285,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `requirements.txt` incluye `psycopg[binary]>=3.3,<4`. Render utiliza Python 3.14 y SQLAlchemy selecciona el dialecto `psycopg`; `psycopg2-binary` por sí solo no satisface ese import.
 - Conservar `psycopg2-binary` para conexiones que lo seleccionen explícitamente. Tras desplegar, verificar `/openapi.json` en backend y `GET /agents/execution` autenticado antes de considerar operativa la oficina.
+
+## Actualización v1.63 — oficina isométrica, fase 1 con placeholders
+
+- La ruta `/ai-control/oficina` reemplaza el SVG por PixiJS 8 y `@pixi/react` 8, compatibles con React 19. Mantiene el sondeo a `agent_executions`; no inventar SSE ni eventos de negocio. Pixi se carga solo al entrar en la ruta.
+- El mapa textual, BFS, roster de cuatro agentes y máquina de estados viven en `frontend/src/agent-office/`. La actividad ambiental es explícitamente ilustrativa, con catálogo cerrado, baño y puestos reservados. Trabajo real interrumpe la animación ambiental; informes entregados y consolidación del CEO siguen los estados confirmados.
+- Solo se publican placeholders dibujados. No incorporar sprites comerciales, Pixelify, fichas rápidas, historial ni modo pantalla en esta fase; detenerse para validar el comportamiento antes de invertir en gráficos.

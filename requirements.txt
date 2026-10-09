@@ -3,6 +3,7 @@ uvicorn
 sqlalchemy
 pandas
 psycopg2-binary
+psycopg[binary]>=3.3,<4
 python-dotenv
 slowapi
 pydantic

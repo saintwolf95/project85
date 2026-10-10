@@ -307,3 +307,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - Personajes y tarjetas de `/ai-control/oficina` abren una ficha lateral accesible con estado confirmado, etapa, última actualización, tarea genérica y un resumen del último informe autorizado de la empresa.
 - María, Lucía y Mattia enlazan por separado a expediente y chat; CEO enlaza al informe ejecutivo. La ficha atrapa el foco, cierra con Escape y devuelve el foco al control de origen.
 - `Iniciar análisis` solo se muestra al rol administrador y el backend conserva `get_current_active_admin` como autoridad. No se añaden aprobaciones ni acciones automáticas.
+
+## Actualización v1.67 — historial, consumo y avisos
+
+- `agent_execution_runs` y `agent_execution_members` son el historial durable por empresa y `run_id`; `agent_executions` continúa siendo únicamente la foto de estado actual para polling.
+- `llm_usage_events` guarda solo funcionalidad, modelo y contadores de tokens. No añadir prompts, respuestas, SQL ni datos de negocio a esta telemetría.
+- La Oficina presenta duración, estado final y error seguro de cada ejecución y agente. Sonido y notificaciones del navegador permanecen desactivados hasta una acción explícita del usuario.
+- La migración PostgreSQL aditiva de esta fase es `migrations/V1.15__agent_execution_history.sql`. El flujo sigue siendo síncrono; el historial no es una cola de trabajos.

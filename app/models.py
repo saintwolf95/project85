@@ -213,6 +213,57 @@ class AgentExecution(Base):
     informe_id = Column(Integer, nullable=True)
 
 
+class AgentExecutionRun(Base):
+    """Historial durable de cada ejecución del equipo, aislado por empresa."""
+    __tablename__ = "agent_execution_runs"
+    __table_args__ = (UniqueConstraint("empresa_id", "run_id", name="uq_agent_execution_run_company"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    run_id = Column(String(36), nullable=False, index=True)
+    estado = Column(String(24), nullable=False)
+    etapa_final = Column(String(160), nullable=False)
+    inicio = Column(DateTime, nullable=False)
+    fin = Column(DateTime, nullable=True)
+    duracion_ms = Column(Integer, nullable=True)
+    informe_id = Column(Integer, nullable=True)
+    error_code = Column(String(80), nullable=True)
+
+
+class AgentExecutionMember(Base):
+    """Resultado individual de un agente dentro de una ejecución."""
+    __tablename__ = "agent_execution_members"
+    __table_args__ = (UniqueConstraint("empresa_id", "run_id", "agent_name", name="uq_agent_execution_member"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    run_id = Column(String(36), nullable=False, index=True)
+    agent_name = Column(String(40), nullable=False)
+    estado = Column(String(24), nullable=False)
+    etapa_final = Column(String(160), nullable=False)
+    inicio = Column(DateTime, nullable=True)
+    fin = Column(DateTime, nullable=True)
+    duracion_ms = Column(Integer, nullable=True)
+    error_code = Column(String(80), nullable=True)
+
+
+class LlmUsageEvent(Base):
+    """Telemetría de consumo sin prompts, respuestas ni datos empresariales."""
+    __tablename__ = "llm_usage_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    run_id = Column(String(36), nullable=True, index=True)
+    agent_name = Column(String(40), nullable=True)
+    feature = Column(String(80), nullable=False, index=True)
+    model = Column(String(80), nullable=False)
+    input_tokens = Column(Integer, nullable=False, default=0)
+    output_tokens = Column(Integer, nullable=False, default=0)
+    total_tokens = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class AgentInsights(Base):
     __tablename__ = "agent_insights"
     id = Column(Integer, primary_key=True, index=True)

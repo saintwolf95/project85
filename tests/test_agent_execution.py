@@ -7,16 +7,16 @@ from unittest.mock import patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.agent_execution import ExecutionBusy, ExecutionProgress, read_execution
+from app.agent_execution import ExecutionBusy, ExecutionProgress, read_execution, read_execution_history
 from app.agents_service import execute_agents_workflow
-from app.models import AgentExecution, AgentInsights, Empresa
+from app.models import AgentExecution, AgentExecutionMember, AgentExecutionRun, AgentInsights, Empresa
 
 
 class AgentExecutionTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.engine = create_engine(f"sqlite:///{Path(self.directory.name) / 'test.db'}")
-        for model in (Empresa, AgentInsights, AgentExecution):
+        for model in (Empresa, AgentInsights, AgentExecution, AgentExecutionRun, AgentExecutionMember):
             model.__table__.create(self.engine)
         self.db = Session(self.engine)
         self.db.add_all([Empresa(id=1, nombre="Uno"), Empresa(id=2, nombre="Dos")])
@@ -49,6 +49,10 @@ class AgentExecutionTests(unittest.TestCase):
         self.db.commit()
         self.assertEqual(read_execution(self.db, 1)["estado"], "interrumpida")
         new = ExecutionProgress(self.engine, 1, True, False)
+        history = read_execution_history(self.db, 1)
+        self.assertEqual(history[1]["run_id"], old.run_id)
+        self.assertEqual(history[1]["estado"], "interrumpida")
+        self.assertEqual(history[1]["error_code"], "stale_execution")
         with self.assertRaises(ExecutionBusy):
             old.publish("Final antiguo", status="completada", report_id=99)
         self.db.expire_all()
@@ -60,7 +64,7 @@ class AgentExecutionTests(unittest.TestCase):
     def test_workflow_publishes_only_real_agent_transitions_and_saved_report(self, *_):
         observed = []
 
-        def narrate(db, company, agent):
+        def narrate(db, company, agent, run_id=None):
             with Session(self.engine) as observer:
                 state = read_execution(observer, company)
                 observed.append(agent)
@@ -76,6 +80,12 @@ class AgentExecutionTests(unittest.TestCase):
         self.assertEqual(state["estado"], "completada")
         self.assertEqual(state["informe_id"], report.id)
         self.assertEqual(state["agentes"]["mattia"], "completado")
+        history = read_execution_history(self.db, 1)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["estado"], "completada")
+        self.assertIsNotNone(history[0]["duracion_ms"])
+        self.assertEqual({item["agent_name"] for item in history[0]["agentes"]}, {"maria", "lucia", "mattia", "ceo"})
+        self.assertEqual(read_execution_history(self.db, 2), [])
 
     @patch("app.agents_service.get_active_signals", return_value=[])
     @patch("app.agents_service.refresh_agent_episodes", return_value=[])
@@ -88,6 +98,9 @@ class AgentExecutionTests(unittest.TestCase):
         self.assertEqual(state["estado"], "error")
         self.assertEqual(state["agentes"]["maria"], "error")
         self.assertEqual(state["agentes"]["lucia"], "interrumpido")
+        history = read_execution_history(self.db, 1)
+        self.assertEqual(history[0]["estado"], "error")
+        self.assertEqual(history[0]["error_code"], "workflow_error")
         self.assertEqual(self.db.query(AgentInsights).count(), 0)
 
     def test_no_phases_does_not_create_execution(self):

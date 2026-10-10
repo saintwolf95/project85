@@ -529,6 +529,30 @@ export const getAgentExecution = async (signal?: AbortSignal): Promise<AgentExec
   const response = await api.get('/agents/execution', { signal });
   return response.data;
 };
+export interface AgentExecutionHistoryMember {
+  agent_name: 'maria' | 'lucia' | 'mattia' | 'ceo';
+  estado: AgentWorkState;
+  etapa_final: string;
+  inicio: string | null;
+  fin: string | null;
+  duracion_ms: number | null;
+  error_code: string | null;
+}
+export interface AgentExecutionHistory {
+  run_id: string;
+  estado: AgentExecution['estado'];
+  etapa_final: string;
+  inicio: string;
+  fin: string | null;
+  duracion_ms: number | null;
+  informe_id: number | null;
+  error_code: string | null;
+  agentes: AgentExecutionHistoryMember[];
+}
+export const getAgentExecutionHistory = async (limit = 20): Promise<AgentExecutionHistory[]> => {
+  const response = await api.get('/agents/executions/history', { params: { limit } });
+  return response.data;
+};
 
 export const ensureDailyAgentReport = async (): Promise<AgentInsight> => {
   const response = await api.post('/agents/daily/ensure');

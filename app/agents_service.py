@@ -12,6 +12,7 @@ from .agent_signals import build_evidence_bundle, get_active_signals, refresh_ag
 from .agent_correlation import build_episode_bundle, refresh_agent_episodes
 from .copilot_service import get_openai_client
 from .agent_execution import ExecutionProgress
+from .llm_usage import record_llm_usage
 from .models import AgentDecision, AgentEpisode, AgentInsights, AgentSettings, EmpresaConfiguracion, EmpresaEstadisticas
 
 
@@ -55,7 +56,7 @@ def ensure_daily_agent_insight(db: Session, empresa_id: int):
         return execute_agents_workflow(db, empresa_id, run_fase1=True, run_fase2=bool(settings and settings.fase2_active))
 
 
-def _narrate(db: Session, empresa_id: int, agent: str, system_prompt: str) -> str:
+def _narrate(db: Session, empresa_id: int, agent: str, system_prompt: str, run_id: str | None = None) -> str:
     client = get_openai_client()
     if not client:
         return "Error: API Key de OpenAI no configurada."
@@ -70,22 +71,24 @@ def _narrate(db: Session, empresa_id: int, agent: str, system_prompt: str) -> st
         )},
     ]
     try:
-        return client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2).choices[0].message.content
+        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_report", model="gpt-4o", run_id=run_id, agent_name=agent)
+        return response.choices[0].message.content
     except Exception as error:
         logger.error("Error narrando señales de %s: %s", agent, error)
         return f"Error al generar informe de {agent}."
 
 
-def narrate_agent_signals(db: Session, empresa_id: int, agent: str) -> str:
+def narrate_agent_signals(db: Session, empresa_id: int, agent: str, run_id: str | None = None) -> str:
     roles = {
         "maria": "Eres María, responsable de inventario. Explica nivel, cobertura y capital inmovilizado.",
         "lucia": "Eres Lucía, responsable de ventas. Explica variación comercial y concentración.",
         "mattia": "Eres Mattia, responsable financiero. Explica rentabilidad y erosión de MGD.",
     }
-    return _narrate(db, empresa_id, agent, roles[agent] + " Responde sin saludo: hallazgos, lectura, decisiones y límites.")
+    return _narrate(db, empresa_id, agent, roles[agent] + " Responde sin saludo: hallazgos, lectura, decisiones y límites.", run_id)
 
 
-def run_ceo_from_signals(db: Session, empresa_id: int) -> str:
+def run_ceo_from_signals(db: Session, empresa_id: int, run_id: str | None = None) -> str:
     client = get_openai_client()
     if not client:
         return "Error: API Key de OpenAI no configurada."
@@ -95,7 +98,9 @@ def run_ceo_from_signals(db: Session, empresa_id: int) -> str:
         {"role": "user", "content": f"EVIDENCE BUNDLE:\n{json.dumps(evidence, ensure_ascii=False, default=str)}\n\nCONTEXTO:\n{get_business_context(db, empresa_id) or 'No configurado.'}"},
     ]
     try:
-        return client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2).choices[0].message.content
+        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="ceo_report", model="gpt-4o", run_id=run_id, agent_name="ceo")
+        return response.choices[0].message.content
     except Exception as error:
         logger.error("Error narrando episodios CEO: %s", error)
         return "Error al generar informe del CEO."
@@ -170,10 +175,11 @@ def execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_f
         result = _execute_agents_workflow(db, empresa_id, run_fase1, run_fase2, progress)
         progress.publish("Informe guardado", status="completada", report_id=result.id)
         return result
-    except Exception:
+    except Exception as error:
         db.rollback()
         try:
-            progress.publish("No se pudo completar el análisis. Revisa la configuración y vuelve a intentarlo.", status="error")
+            code = "model_error" if "openai" in error.__class__.__module__.lower() else "workflow_error"
+            progress.publish("No se pudo completar el análisis. Revisa la configuración y vuelve a intentarlo.", status="error", error_code=code)
         except Exception:
             logger.exception("No se pudo registrar el fallo de ejecución")
         raise
@@ -198,14 +204,14 @@ def _execute_agents_workflow(db: Session, empresa_id: int, run_fase1: bool, run_
         reports = {}
         for agent, label in (("maria", "María"), ("lucia", "Lucía"), ("mattia", "Mattia")):
             progress.publish(f"{label} redactando su análisis", agent)
-            reports[agent] = _checked_report(narrate_agent_signals(db, empresa_id, agent))
+            reports[agent] = _checked_report(narrate_agent_signals(db, empresa_id, agent, progress.run_id))
             progress.publish(f"Análisis de {label} preparado", agent, "preparado")
         maria_md, lucia_md, mattia_md = (reports[name] for name in ("maria", "lucia", "mattia"))
         alertas_fase1 = [{"agente": item.agente, "detector": item.detector, "entidad": item.entidad_id, "impacto_eur": item.impacto_eur, "impacto_tipo": item.impacto_tipo, "impacto_ponderado_eur": item.impacto_ponderado_eur, "naturaleza": item.naturaleza or "riesgo", "episodio_id": item.episodio_id, "episodio_impacto_ponderado_eur": episode_impact.get(item.episodio_id), "confianza": item.confianza, "estado": item.estado} for item in get_active_signals(db, empresa_id, limit=100)]
     ceo_summary = None
     if run_fase2 and (run_fase1 or get_daily_agent_insight(db, empresa_id)):
         progress.publish("CEO consolidando episodios y decisiones", "ceo")
-        ceo_summary = _checked_report(run_ceo_from_signals(db, empresa_id))
+        ceo_summary = _checked_report(run_ceo_from_signals(db, empresa_id, progress.run_id))
         progress.publish("Consolidación preparada", "ceo", "preparado")
     elif run_fase2:
         raise ValueError("El CEO necesita un informe de los analistas. Activa la fase 1.")
@@ -234,7 +240,9 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
     )
     messages = [{"role": "system", "content": prompt}, *[{"role": item["role"], "content": item["content"]} for item in history[-20:]]]
     try:
-        return client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2).choices[0].message.content
+        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_chat", model="gpt-4o", agent_name=normalized_agent)
+        return response.choices[0].message.content
     except Exception as error:
         logger.error("Error en chat de agente %s: %s", normalized_agent, error)
         return "No se pudo generar la respuesta del agente."

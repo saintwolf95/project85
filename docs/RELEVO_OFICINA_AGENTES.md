@@ -1,6 +1,6 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 10/10/2026, código base v1.66. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 10/10/2026, código base v1.67. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 
@@ -59,11 +59,11 @@ Capturas de la fase 1 con **estado sintético**, no datos empresariales: `docs/s
 - «Iniciar análisis» solo aparece para administrador y el backend mantiene la validación obligatoria. No existen aprobaciones ni órdenes automáticas desde la escena.
 - La ficha tiene diálogo accesible, trampa y restauración de foco, cierre con Escape y alternativa textual independiente del canvas. Fase completada; parar para revisión antes de fase 3.
 
-### 3. Fase 3 — historial, métricas y avisos
+### 3. Fase 3 — historial, métricas y avisos (completada en v1.67)
 
-- Crear una tabla durable de ejecuciones por `run_id`, agente, inicio, fin, estado, etapa final y código de error, aislada por `empresa_id`; diseñar migración aditiva para PostgreSQL y tests. No confundirla con la tabla actual, que solo conserva el último estado.
-- Registrar `usage` **de cada llamada OpenAI** (modelo, tokens de entrada/salida) aunque aún no se muestre. Evitar guardar prompts/datos sensibles innecesarios; revisar ubicación de llamadas antes de instrumentar.
-- Con historial real, mostrar tareas completadas, errores y duración. Avisos de error dentro de la app. Sonido y notificaciones del navegador como preferencias desactivadas por defecto y solicitando permiso solo cuando el usuario las active. Parar para revisión.
+- `agent_execution_runs` y `agent_execution_members` conservan cada ejecución y agente por `run_id`, con inicio, fin, duración, estado, etapa final y código de error, siempre aislados por `empresa_id`. La migración aditiva es `V1.15__agent_execution_history.sql`.
+- `llm_usage_events` registra modelo y tokens de entrada/salida de todas las llamadas OpenAI localizadas, sin prompts, respuestas, SQL ni datos empresariales. La instrumentación nunca debe impedir una respuesta si falla la telemetría.
+- La Oficina muestra las diez ejecuciones recientes, detalle desplegable por agente, duración y errores seguros. Sonido y avisos del navegador son preferencias locales apagadas por defecto; el permiso se pide únicamente al activar los avisos. Fase completada; parar para revisión antes de fase 4.
 
 ### 4. Fase 4 — vistas
 

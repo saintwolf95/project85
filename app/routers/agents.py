@@ -17,7 +17,7 @@ from ..core.rate_limit import limiter
 from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
 from ..business_rules import ensure_no_overlap, validate_rule_payload
-from ..agent_execution import ExecutionBusy, read_execution
+from ..agent_execution import ExecutionBusy, read_execution, read_execution_history
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -293,6 +293,15 @@ def run_agents(request: Request, current_user: Usuario = Depends(get_current_act
 @router.get("/agents/execution")
 def get_execution(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
     return read_execution(db, current_user.empresa_id)
+
+
+@router.get("/agents/executions/history")
+def get_execution_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return read_execution_history(db, current_user.empresa_id, limit)
 
 
 @router.get("/agents/insights", response_model=AgentInsightResponse)

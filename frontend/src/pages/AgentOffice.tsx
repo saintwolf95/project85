@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, ArrowUpRight, CheckCircle2, Circle, FileText, Loader2, MessageSquare, Pause, Play, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CheckCircle2, Circle, FileText, History, Loader2, MessageSquare, Pause, Play, Volume2, WifiOff, X } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
-import { getLatestAgentInsight, runAgentAnalysis } from '../services/api';
-import type { AgentInsight } from '../services/api';
+import { getAgentExecutionHistory, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
+import type { AgentExecutionHistory, AgentInsight } from '../services/api';
 import { OfficeCanvas } from '../agent-office/OfficeCanvas';
 import { ROSTER } from '../agent-office/model';
 import type { AgentId } from '../agent-office/model';
@@ -33,6 +33,21 @@ const findingFor = (insight: AgentInsight | null, id: AgentId) => {
   const value = id === 'ceo' ? insight.fase2_ceo_markdown : insight[`fase1_${id}_md` as keyof AgentInsight];
   return summarizeMarkdown(typeof value === 'string' ? value : undefined);
 };
+const duration = (milliseconds: number | null) => milliseconds == null ? 'En curso' : milliseconds < 60_000 ? `${Math.max(1, Math.round(milliseconds / 1000))} s` : `${Math.floor(milliseconds / 60_000)} min ${Math.round((milliseconds % 60_000) / 1000)} s`;
+const errorLabel = (code: string | null) => code === 'model_error' ? 'No se pudo contactar con el modelo' : code ? 'La ejecución no pudo completarse' : '';
+const playTone = (frequency: number) => {
+  try {
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.08, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.25);
+    oscillator.connect(gain).connect(context.destination);
+    oscillator.onended = () => void context.close();
+    oscillator.start(); oscillator.stop(context.currentTime + 0.25);
+  } catch { /* El historial visible sigue siendo la fuente de verdad si el audio no está disponible. */ }
+};
 
 export const AgentOffice = () => {
   const { execution, error, loading, connected } = useAgentExecution();
@@ -50,9 +65,14 @@ export const AgentOffice = () => {
   const [runResult, setRunResult] = useState('');
   const [selectedAgent, setSelectedAgent] = useState<AgentId | null>(null);
   const [latestInsight, setLatestInsight] = useState<AgentInsight | null>(null);
+  const [history, setHistory] = useState<AgentExecutionHistory[]>([]);
+  const [historyError, setHistoryError] = useState('');
+  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('office-sound') === 'true');
+  const [browserNotifications, setBrowserNotifications] = useState(() => localStorage.getItem('office-browser-notifications') === 'true' && Notification.permission === 'granted');
   const profileRef = useRef<HTMLElement>(null);
   const closeProfileRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const previousRunStateRef = useRef<string | null>(null);
   const busy = connected && execution?.estado === 'ejecutando';
   const userRole = String(session?.user.app_metadata?.rol || session?.user.user_metadata?.rol || 'user').toLowerCase();
   const canRun = userRole === 'admin';
@@ -74,6 +94,19 @@ export const AgentOffice = () => {
     return () => query.removeEventListener('change', update);
   }, []);
   useEffect(() => { getLatestAgentInsight().then(setLatestInsight).catch(() => setLatestInsight(null)); }, []);
+  useEffect(() => {
+    getAgentExecutionHistory(10).then(items => { setHistory(items); setHistoryError(''); }).catch(() => setHistoryError('No se pudo cargar el historial de ejecuciones.'));
+  }, [execution?.run_id, execution?.estado]);
+  useEffect(() => {
+    if (!execution) return;
+    const fingerprint = `${execution.run_id}:${execution.estado}`;
+    const previous = previousRunStateRef.current;
+    previousRunStateRef.current = fingerprint;
+    if (!previous || previous === fingerprint || !['completada', 'error', 'interrumpida'].includes(execution.estado)) return;
+    const message = execution.estado === 'completada' ? 'El análisis del equipo ha finalizado.' : 'El análisis necesita atención.';
+    if (soundEnabled) playTone(execution.estado === 'completada' ? 660 : 330);
+    if (browserNotifications && Notification.permission === 'granted') new Notification('Oficina de analistas', { body: message });
+  }, [browserNotifications, execution, soundEnabled]);
   useEffect(() => {
     if (!selectedAgent) return;
     closeProfileRef.current?.focus();
@@ -113,6 +146,16 @@ export const AgentOffice = () => {
     catch { setRunError('No se pudo confirmar la ejecución. Revisa el estado del equipo y las fases activas en el gabinete antes de reintentar.'); }
     finally { setStarting(false); }
   };
+  const toggleSound = () => {
+    const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem('office-sound', String(next));
+    if (next) playTone(520);
+  };
+  const toggleBrowserNotifications = async () => {
+    if (browserNotifications) { setBrowserNotifications(false); localStorage.setItem('office-browser-notifications', 'false'); return; }
+    const permission = await Notification.requestPermission();
+    const enabled = permission === 'granted'; setBrowserNotifications(enabled); localStorage.setItem('office-browser-notifications', String(enabled));
+    if (!enabled) setHistoryError('El navegador no concedió permiso para mostrar avisos.');
+  };
 
   return <div className="agent-office flex-1 overflow-auto p-4 md:p-8">
     <div className="mx-auto max-w-7xl">
@@ -142,6 +185,14 @@ export const AgentOffice = () => {
           <div><span className="office-agent-role">{agent.role}</span><h3>{agent.name}</h3></div>
           <div className="office-agent-state" data-state={connected ? real[agent.id].status : 'desconectado'}>{connected ? real[agent.id].stage : 'Estado no confirmado'}<ArrowUpRight size={16} aria-hidden="true" /></div>
         </button>)}
+      </section>
+      <section className="office-history" aria-labelledby="office-history-title">
+        <header className="office-history-header"><div><span className="office-scene-eyebrow">Trazabilidad</span><h2 id="office-history-title"><History size={19} /> Historial de ejecuciones</h2></div><div className="office-preferences" aria-label="Preferencias de avisos">
+          <button type="button" onClick={toggleSound} aria-pressed={soundEnabled} title="Aviso sonoro"><Volume2 size={16} />Sonido <span>{soundEnabled ? 'Sí' : 'No'}</span></button>
+          <button type="button" onClick={() => void toggleBrowserNotifications()} aria-pressed={browserNotifications} title="Aviso del navegador"><Bell size={16} />Navegador <span>{browserNotifications ? 'Sí' : 'No'}</span></button>
+        </div></header>
+        {historyError && <p className="office-history-error" role="alert"><AlertTriangle size={16} />{historyError}</p>}
+        {history.length ? <div className="office-history-list">{history.map(run => <details key={run.run_id} className="office-history-run"><summary><span className="office-history-status" data-state={run.estado}>{run.estado}</span><strong>{new Date(run.inicio).toLocaleString('es-ES')}</strong><span>{duration(run.duracion_ms)}</span><span className="office-history-stage">{errorLabel(run.error_code) || run.etapa_final}</span></summary><div className="office-history-members">{run.agentes.map(agent => <div key={agent.agent_name}><strong>{ROSTER.find(item => item.id === agent.agent_name)?.name || agent.agent_name}</strong><span data-state={agent.estado}>{agent.estado}</span><span>{duration(agent.duracion_ms)}</span><small>{errorLabel(agent.error_code) || agent.etapa_final}</small></div>)}</div></details>)}</div> : !historyError && <p className="office-history-empty">Todavía no hay ejecuciones registradas en el historial.</p>}
       </section>
       <footer className="mt-5 flex flex-wrap justify-between gap-2 text-xs text-slate-500 dark:text-slate-400"><span>Estados del servidor · actualización automática · sin llamadas IA por animación</span><span>Los bocadillos ambientales no muestran clientes, SKU ni importes.</span></footer>
     </div>

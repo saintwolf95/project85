@@ -13,6 +13,7 @@ from ..models import LibreriaDocumento, Usuario
 from ..schemas import LibreriaDocumentoResponse, LibreriaChatRequest, LibreriaChatResponse
 from ..copilot_service import get_openai_client
 from ..core.rate_limit import limiter
+from ..llm_usage import record_llm_usage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -167,6 +168,7 @@ async def ask_libreria(
             temperature=0.2,
             max_tokens=800
         )
+        record_llm_usage(db.get_bind(), response, empresa_id=current_user.empresa_id, usuario_id=current_user.id, feature="library_chat", model="gpt-4o-mini")
         answer = response.choices[0].message.content
         return LibreriaChatResponse(answer=answer, context_docs=len(docs))
     except Exception as e:

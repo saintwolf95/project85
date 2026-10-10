@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from fastapi import HTTPException
 from .core.security import SUPABASE_JWT_SECRET
+from .llm_usage import record_llm_usage
 
 # Configuración de Logger de Auditoría
 logger = logging.getLogger(__name__)
@@ -341,7 +342,7 @@ def is_conversational(message: str) -> bool:
         return True
     return False
 
-def handle_conversational(message: str, contexto: str = "") -> str:
+def handle_conversational(message: str, contexto: str = "", usage_context: dict | None = None) -> str:
     """Responde a preguntas conversacionales sin generar SQL."""
     client = get_openai_client()
     if not client:
@@ -358,11 +359,13 @@ Contexto de la empresa: {contexto or 'No disponible'}"""
             max_tokens=300,
             temperature=0.7
         )
+        if usage_context:
+            record_llm_usage(response=response, feature="copilot_conversation", model="gpt-4o", **usage_context)
         return response.choices[0].message.content.strip()
     except Exception:
         return "¡Hola! Soy tu AI Copilot. Puedo analizar tu inventario, ventas, y métricas ABC/XYZ. ¿Qué necesitas saber?"
 
-def generate_sql(history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
+def generate_sql(history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "", usage_context: dict | None = None) -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     if contexto:
         prompt += f"\n\nContexto y Reglas de Negocio de la Empresa:\n{contexto}"
@@ -400,6 +403,8 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL): {str(e)}", exc_info=True)
             return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     
+    if usage_context:
+        record_llm_usage(response=response, feature="copilot_sql_generation", model=model_name, **usage_context)
     sql_query = response.choices[0].message.content.strip()
     
     if sql_query.startswith("```sql"):
@@ -536,6 +541,7 @@ def interpret_results(
     contexto: str = "",
     trusted_query: bool = False,
     export_params: dict[str, Any] | None = None,
+    usage_context: dict | None = None,
 ) -> str:
     if error:
         return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
@@ -659,6 +665,8 @@ Contexto del Negocio: {contexto}
             logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
+    if usage_context:
+        record_llm_usage(response=response, feature="copilot_interpretation", model=model_name, **usage_context)
     reply = response.choices[0].message.content.strip()
     usage = getattr(response, "usage", None)
     if usage:
@@ -686,6 +694,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         return "No hay historial de mensajes."
         
     user_message = history[-1]["content"]
+    usage_context = {"bind": db.get_bind(), "empresa_id": empresa_id}
     
     # Las preguntas agregadas frecuentes se resuelven con SQL parametrizado y exacto.
     from .copilot_orchestrator import analizar_intencion, crear_consulta_semantica
@@ -709,7 +718,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
 
     # Las conversaciones simples no necesitan consultar el resumen empresarial.
     if not intento and is_conversational(user_message):
-        return handle_conversational(user_message, contexto)
+        return handle_conversational(user_message, contexto, usage_context)
 
     from .copilot_context import construir_resumen_operativo
     contexto_analisis = (contexto or "")[:MAX_CONTEXT_PROMPT_CHARS]
@@ -727,11 +736,11 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
                     db, empresa_id, (intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion),
                     (intento.fecha_inicio, intento.fecha_fin), intento.agrupacion or "familia",
                 )
-                return interpret_results(history, "Herramienta determinista descomponer_variacion", bridge, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True)
+                return interpret_results(history, "Herramienta determinista descomponer_variacion", bridge, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True, usage_context=usage_context)
         if any(term in normalized_message for term in ("serie temporal", "tendencia diaria", "evolución diaria", "evolucion diaria")) and intento.fecha_inicio and intento.fecha_fin:
             metric = "mgd" if intento.medida.startswith("mgd") else "unidades" if intento.medida == "ventas_unidades" else "ventas"
             series = serie_temporal(db, empresa_id, metric, intento.fecha_inicio, intento.fecha_fin)
-            return interpret_results(history, "Herramienta determinista serie_temporal", series, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True)
+            return interpret_results(history, "Herramienta determinista serie_temporal", series, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True, usage_context=usage_context)
         if intento.tipo == "inventario" or intento.medida in {
             "matriz_productos",
             "productos_alerta",
@@ -788,6 +797,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
                         empresa_id,
                         consulta.parametros,
                         trusted_query=True,
+                        usage_context=usage_context,
                     )
                     if error:
                         logger.warning("No se pudo ejecutar el bloque analitico %s: %s", consulta.nombre, error)
@@ -832,6 +842,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             contexto_analisis,
             trusted_query=True,
             export_params=query_params,
+            usage_context=usage_context,
         )
         followups = build_followups_marker(intento) if not error else ""
         return f"{reply}\n\n{followups}" if followups else reply
@@ -842,7 +853,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     
     for attempt in range(max_retries + 1):
         # 1. Generar SQL
-        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto_analisis)
+        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto_analisis, usage_context)
         
         # 2. Ejecutar SQL en la conexión RO
         raw_data, error = execute_sql(db, sql_query, empresa_id)
@@ -862,7 +873,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
             continue
         
         # 4. Interpretar (ya sea con datos o con error final)
-        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis)
+        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis, usage_context=usage_context)
         return final_response
     
     return """⚠️ **No pude obtener datos para responder tu pregunta** tras varios intentos.

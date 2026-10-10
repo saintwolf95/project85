@@ -212,6 +212,9 @@ def ensure_agent_signals_schema() -> None:
 async def lifespan(app: FastAPI):
     # Tabla aditiva necesaria también cuando producción omite create_all.
     models.AgentExecution.__table__.create(bind=engine, checkfirst=True)
+    models.AgentExecutionRun.__table__.create(bind=engine, checkfirst=True)
+    models.AgentExecutionMember.__table__.create(bind=engine, checkfirst=True)
+    models.LlmUsageEvent.__table__.create(bind=engine, checkfirst=True)
     daily_task = None
     if ENABLE_DAILY_AGENT_REPORTS:
         from .daily_agents import daily_reports_loop
@@ -305,7 +308,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.66.0",
+    version="1.67.0",
     lifespan=lifespan
 )
 

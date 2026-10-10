@@ -1,6 +1,6 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 10/10/2026, código base v1.65. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 10/10/2026, código base v1.66. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 
@@ -53,11 +53,11 @@ Capturas de la fase 1 con **estado sintético**, no datos empresariales: `docs/s
 - La pérdida de conexión quedó resuelta en v1.65: el HUD conserva la fecha del último estado confirmado, pero la escena neutraliza monitores, entregas y trabajo hasta reconectar. El polling reintenta cada tres segundos y reconstruye el estado confirmado sin animar hechos pasados.
 - Aceptar ajustes de placeholders/maquetación. **Pausar y pedir validación del usuario** antes de comprar/generar sprites.
 
-### 2. Fase 2 — ficha rápida y control
+### 2. Fase 2 — ficha rápida y control (completada en v1.66)
 
-- Clic o selección de agente: ficha con estado real, etapa, última actualización, última tarea **genérica** y hallazgo principal solo si el rol permite verlo. Accesos: «Ver expediente», «Abrir chat»; en CEO, «Ver informe ejecutivo».
-- «Iniciar análisis» solo para administrador, con validación en frontend y backend; dirección en solo lectura. Sin aprobaciones ni órdenes ejecutadas automáticamente desde la escena.
-- Navegación por teclado, foco visible, Escape para cerrar, etiqueta accesible y lectura sin depender del canvas. Parar para revisión.
+- Clic o selección de agente abre una ficha con estado real, etapa, última actualización, tarea **genérica** y hallazgo resumido del último informe autorizado. Accesos: «Ver expediente», «Abrir chat»; en CEO, «Ver informe ejecutivo».
+- «Iniciar análisis» solo aparece para administrador y el backend mantiene la validación obligatoria. No existen aprobaciones ni órdenes automáticas desde la escena.
+- La ficha tiene diálogo accesible, trampa y restauración de foco, cierre con Escape y alternativa textual independiente del canvas. Fase completada; parar para revisión antes de fase 3.
 
 ### 3. Fase 3 — historial, métricas y avisos
 

@@ -143,6 +143,11 @@ export const AiControlPanel = () => {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [agentChatHistory]);
+  useEffect(() => {
+    if (!selectedAgent || window.location.hash !== '#chat-agente') return;
+    const frame = window.requestAnimationFrame(() => document.getElementById('chat-agente')?.scrollIntoView({ block: 'start' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedAgent]);
 
   const handleSendAgentMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -832,7 +837,7 @@ export const AiControlPanel = () => {
               </div>
 
               {/* Chat */}
-              <div className="order-3 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-900 lg:col-start-1 lg:row-start-2 lg:min-h-0">
+              <div id="chat-agente" className="order-3 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-900 lg:col-start-1 lg:row-start-2 lg:min-h-0">
                 <div className="flex shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                   <MessageSquare size={16} className="text-[#0071e3] dark:text-brand-cyan" />
                   <span className="text-[14px] font-medium text-[#1d1d1f] dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>

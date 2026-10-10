@@ -1,9 +1,10 @@
 # Control IA
 
-## Estado verificado · 10/10/2026 · v1.65
+## Estado verificado · 10/10/2026 · v1.66
 
-- Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. La fase 1 sigue pendiente de validación estética del usuario.
+- Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
+- Cada personaje y tarjeta abre una ficha rápida con estado, etapa, fecha, tarea genérica y hallazgo resumido del último informe. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
 - `/ai-control/oficina` usa la escena isométrica PixiJS 8 con placeholders pixel dibujados, mapa textual y BFS del módulo `agent-office` adaptados al proyecto. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.

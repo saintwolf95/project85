@@ -301,3 +301,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Si falla el polling de `GET /agents/execution`, la oficina neutraliza monitores, movimientos de trabajo e informes entregados; el último estado se conserva únicamente como referencia fechada en el HUD.
 - Durante una desconexión se reintenta cada tres segundos. Al recuperar conexión, la escena reconstruye el estado confirmado del servidor sin representar entregas pasadas.
+
+## Actualización v1.66 — ficha rápida de agentes
+
+- Personajes y tarjetas de `/ai-control/oficina` abren una ficha lateral accesible con estado confirmado, etapa, última actualización, tarea genérica y un resumen del último informe autorizado de la empresa.
+- María, Lucía y Mattia enlazan por separado a expediente y chat; CEO enlaza al informe ejecutivo. La ficha atrapa el foco, cierra con Escape y devuelve el foco al control de origen.
+- `Iniciar análisis` solo se muestra al rol administrador y el backend conserva `get_current_active_admin` como autoridad. No se añaden aprobaciones ni acciones automáticas.

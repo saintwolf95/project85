@@ -1,6 +1,6 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 09/10/2026, código base v1.63, commit `8f8e6a7` en `main`. Este documento acompaña la actualización documental v1.64. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 10/10/2026, código base v1.65. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 
@@ -50,7 +50,7 @@ Capturas de la fase 1 con **estado sintético**, no datos empresariales: `docs/s
 - Comprobar que v1.63/v1.64 terminó de desplegarse en Vercel y Render. La publicación a GitHub se verificó para v1.63; **el redeploy de producción no se confirmó en esa sesión**. Verificar versión visible, ruta `/ai-control/oficina` y salud del backend antes de afirmar que está en producción.
 - Revisar con el usuario la sala en claro/oscuro, legibilidad a tamaños habituales, movimiento, café, baño, charla y flujo 0–3 informes. Probar con una ejecución real autorizada **solo si el usuario lo solicita o aprueba**, porque genera trabajo y coste de API; para QA usar estados sintéticos.
 - Revisar estados con fase 1 desactivada, CEO-only, error, interrupción, reconexión y entrada tardía a una ejecución. No representar entrega que no conste en el estado confirmado.
-- Revisar específicamente pérdida de conexión: el HUD indica error, pero la escena puede conservar el último estado recibido y dejar un monitor azul encendido. Es una discrepancia pendiente; decidir si se atenúa como «último estado conocido» o se neutraliza hasta reconectar. No presentarlo como trabajo confirmado en tiempo real.
+- La pérdida de conexión quedó resuelta en v1.65: el HUD conserva la fecha del último estado confirmado, pero la escena neutraliza monitores, entregas y trabajo hasta reconectar. El polling reintenta cada tres segundos y reconstruye el estado confirmado sin animar hechos pasados.
 - Aceptar ajustes de placeholders/maquetación. **Pausar y pedir validación del usuario** antes de comprar/generar sprites.
 
 ### 2. Fase 2 — ficha rápida y control

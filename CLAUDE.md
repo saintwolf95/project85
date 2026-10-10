@@ -296,3 +296,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `docs/RELEVO_OFICINA_AGENTES.md` reúne estado verificado, decisiones, fases pendientes, archivos clave, riesgos, validación y un primer prompt para retomar el trabajo en otro equipo. Leerlo antes de continuar la oficina.
 - Esta versión solo añade documentación y sincroniza las cuatro marcas de versión; no implementa la fase 2 ni confirma un despliegue de producción.
+
+## Actualización v1.65 — estado fiable de la oficina
+
+- Si falla el polling de `GET /agents/execution`, la oficina neutraliza monitores, movimientos de trabajo e informes entregados; el último estado se conserva únicamente como referencia fechada en el HUD.
+- Durante una desconexión se reintenta cada tres segundos. Al recuperar conexión, la escena reconstruye el estado confirmado del servidor sin representar entregas pasadas.

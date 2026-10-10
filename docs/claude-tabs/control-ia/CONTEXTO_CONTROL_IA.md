@@ -4,7 +4,7 @@
 
 ## Estado de ejecución y oficina visual · v1.63
 
-Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.64). No altera el contrato de ejecución descrito aquí.
+Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.65). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. Desde v1.63, esta última sustituye el SVG por una escena isométrica PixiJS 8 con placeholders, mapa textual, BFS y máquina de estado por personaje adaptados del módulo `agent-office` proporcionado por el usuario. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. Los paneles conservan la tipografía y tokens de la app; no se incorpora Pixelify.
 

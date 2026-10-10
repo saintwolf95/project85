@@ -17,6 +17,8 @@
 .office-scene-eyebrow { display: block; margin-bottom: 3px; color: #64748b; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .14em; }
 .office-scene-key { display: inline-flex; align-items: center; gap: 7px; color: #64748b; font-size: 11px; }
 .office-scene-key i { display: block; height: 8px; width: 8px; border-radius: 50%; background: #0071e3; }
+.office-scene-key-offline { color: #b45309; }
+.office-scene-key-offline i { background: #d97706; }
 .office-canvas { width: 100%; height: min(65vw, 680px); min-height: 470px; overflow: hidden; }
 .office-canvas canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 .office-roster { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
@@ -29,6 +31,7 @@
 .office-agent-state[data-state="trabajando"] { color: #0071e3; }
 .office-agent-state[data-state="error"], .office-agent-state[data-state="interrumpido"] { color: #dc2626; }
 .office-agent-state[data-state="completado"], .office-agent-state[data-state="preparado"] { color: #16814b; }
+.office-agent-state[data-state="desconectado"] { color: #b45309; }
 @media (max-width: 900px) { .office-roster { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .office-roster { grid-template-columns: 1fr; } .office-canvas { min-height: 400px; height: 430px; } .office-scene-heading { padding: 15px; } }
 @media (prefers-reduced-motion: reduce) { .agent-office *, .agent-office *::before, .agent-office *::after { animation: none !important; transition: none !important; } }

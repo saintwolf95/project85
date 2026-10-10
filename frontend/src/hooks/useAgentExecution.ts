@@ -13,6 +13,7 @@ export const useAgentExecution = () => {
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       let active = false;
+      let failed = false;
       try {
         const result = await getAgentExecution(controller.signal);
         if (controller.signal.aborted) return;
@@ -21,16 +22,17 @@ export const useAgentExecution = () => {
         active = result?.estado === 'ejecutando';
       } catch {
         if (controller.signal.aborted) return;
+        failed = true;
         setError('No se puede confirmar el estado del equipo. Reintentando conexión…');
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
-          timer = setTimeout(poll, active ? 3000 : 8000);
+          timer = setTimeout(poll, failed || active ? 3000 : 8000);
         }
       }
     };
     void poll();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [session?.user.id]);
-  return { execution, error, loading };
+  return { execution, error, loading, connected: !loading && !error };
 };

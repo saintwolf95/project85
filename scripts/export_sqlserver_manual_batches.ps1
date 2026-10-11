@@ -63,8 +63,13 @@ ORDER BY $DateColumn, articulo_pk;
             if ($rows.Count -gt 150000) {
                 Write-Warning "$fileName supera 150.000 filas. Reduce el período de este lote antes de subirlo."
             }
-            # Export-Csv entrecomilla textos con comas y conserva Unicode con BOM.
-            $rows | Export-Csv -LiteralPath $target -NoTypeInformation -Encoding UTF8 -Delimiter ','
+            # Export-Csv depende de la cultura de Windows al serializar DateTime.
+            # Normalizamos la fecha a ISO para que la importación sea idéntica en
+            # cualquier equipo y no incluya la hora 00:00:00.
+            $rows | ForEach-Object {
+                $_.$DateColumn = ([datetime]$_.$DateColumn).ToString('yyyy-MM-dd')
+                $_
+            } | Export-Csv -LiteralPath $target -NoTypeInformation -Encoding UTF8 -Delimiter ','
             Write-Host "  $($rows.Count) filas -> $target" -ForegroundColor Green
         }
         $current = $next

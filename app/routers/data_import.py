@@ -362,18 +362,49 @@ def _margin_percentage(margen_eur: float, ventas_eur: float, *, absolute_sales: 
     return margen_eur / denominator * 100 if denominator else 0.0
 
 
-def _parse_date(value: Any, field: str = "fecha") -> date:
+def _parse_date(
+    value: Any,
+    field: str = "fecha",
+    expected_date_min: date | None = None,
+    expected_date_max: date | None = None,
+) -> date:
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
         return value
     raw = str(value or "").strip()
-    for date_format in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d"):
+    candidates: list[date] = []
+    # Export-Csv serializa DateTime con hora. El orden de día/mes depende de
+    # la configuración regional del equipo SQL; el nombre del lote resuelve
+    # los pocos casos que son ambiguos.
+    for date_format in (
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%d/%m/%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%d-%m-%Y",
+        "%d-%m-%Y %H:%M:%S",
+        "%Y/%m/%d",
+        "%m/%d/%Y",
+        "%m/%d/%Y %H:%M:%S",
+    ):
         try:
-            return datetime.strptime(raw, date_format).date()
+            parsed = datetime.strptime(raw, date_format).date()
+            if parsed not in candidates:
+                candidates.append(parsed)
         except ValueError:
             continue
-    raise ValueError(f"{field} debe usar YYYY-MM-DD o DD/MM/YYYY")
+    if expected_date_min and expected_date_max:
+        dates_in_file_period = [
+            candidate for candidate in candidates
+            if expected_date_min <= candidate <= expected_date_max
+        ]
+        if len(dates_in_file_period) == 1:
+            return dates_in_file_period[0]
+    if candidates:
+        return candidates[0]
+    raise ValueError(f"{field} debe usar YYYY-MM-DD, DD/MM/YYYY o incluir una hora válida")
 
 
 def _required_text(value: Any, field: str, max_length: int = 255) -> str:
@@ -581,12 +612,24 @@ async def _read_tabular_file(file: UploadFile, dataset: str) -> tuple[list[dict[
     content = await file.read(MAX_IMPORT_FILE_SIZE + 1)
     if len(content) > MAX_IMPORT_FILE_SIZE:
         raise HTTPException(status_code=400, detail="El archivo supera el límite de 50 MB.")
-    return _read_xlsx(content, dataset) if extension == "xlsx" else _read_csv(content, dataset)
+    rows, metadata = _read_xlsx(content, dataset) if extension == "xlsx" else _read_csv(content, dataset)
+    filename = file.filename or ""
+    filename_match = re.fullmatch(
+        rf"fivemin_{'ventas' if dataset == 'sales' else 'inventario'}_(\d{{4}}-\d{{2}}-\d{{2}})_(\d{{4}}-\d{{2}}-\d{{2}})\.(?:csv|xlsx)",
+        filename,
+        flags=re.IGNORECASE,
+    )
+    if filename_match:
+        metadata["filename_date_min"] = datetime.strptime(filename_match.group(1), "%Y-%m-%d").date()
+        metadata["filename_date_max"] = datetime.strptime(filename_match.group(2), "%Y-%m-%d").date()
+    return rows, metadata
 
 
 def _validate_rows(
     dataset: str,
     rows: list[dict[str, Any]],
+    expected_date_min: date | None = None,
+    expected_date_max: date | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     valid_rows: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
@@ -631,7 +674,9 @@ def _validate_rows(
                     "seccion": str(row.get("seccion") or "").strip() or None,
                 })
             elif dataset == "inventory":
-                fecha_inventario = _parse_date(row.get("fecha_inventario"), "Fecha")
+                fecha_inventario = _parse_date(
+                    row.get("fecha_inventario"), "Fecha", expected_date_min, expected_date_max
+                )
                 inventory_key = (sku.casefold(), fecha_inventario)
                 if inventory_key in seen_keys:
                     raise ValueError("la combinación Fecha + ArticuloPK está duplicada dentro del archivo")
@@ -678,16 +723,18 @@ def _validate_rows(
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
                 if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
                     margen_destino_pct = _margin_percentage(margen_destino_eur, float(ingreso), absolute_sales=True)
-                # El margen puesto en destino descuenta costes posteriores al margen bruto.
-                # Aceptar lo contrario ocultaría un error de origen en la exportación de PBI.
+                # Es una señal de calidad, pero no invalida una fila real de
+                # origen: existen ajustes y operaciones con coste negativo.
                 if (
                     margen_bruto_eur is not None
                     and margen_destino_eur is not None
                     and margen_destino_eur > margen_bruto_eur + 0.01
                 ):
-                    raise ValueError(
-                        "MGD no puede ser superior al MG: revisa gastos financieros, transporte y logística de almacén"
-                    )
+                    if len(warnings) < MAX_REPORTED_WARNINGS:
+                        warnings.append({
+                            "line": index,
+                            "message": "MGD es superior al MG; se conserva como valor de origen para revisión",
+                        })
                 cliente_pk = _optional_text(row.get("cliente_pk"), "ClientePK", 120)
                 nombre_cliente = _optional_text(row.get("nombre_cliente"), "Nombre Cliente", 255)
                 if not cliente_pk:
@@ -698,7 +745,9 @@ def _validate_rows(
                 valid_rows.append({
                     "sku": sku,
                     "nombre": _required_text(row.get("nombre"), "Nombre Articulo", 255),
-                    "fecha_venta": _parse_date(row.get("fecha_venta")),
+                    "fecha_venta": _parse_date(
+                        row.get("fecha_venta"), "Fecha", expected_date_min, expected_date_max
+                    ),
                     "cantidad_vendida": cantidad or 0,
                     "precio_unitario": precio,
                     "ingreso_total": ingreso,
@@ -889,7 +938,12 @@ async def validate_import(
 ):
     source_rows, metadata = await _read_tabular_file(file, dataset)
     _ensure_source_empresa_matches(source_rows, current_user.empresa_id)
-    valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
+    valid_rows, errors, warnings = _validate_rows(
+        dataset,
+        source_rows,
+        metadata.get("filename_date_min"),
+        metadata.get("filename_date_max"),
+    )
     return _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
 
 
@@ -909,7 +963,12 @@ async def load_import(
 
     source_rows, metadata = await _read_tabular_file(file, dataset)
     _ensure_source_empresa_matches(source_rows, current_user.empresa_id)
-    valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
+    valid_rows, errors, warnings = _validate_rows(
+        dataset,
+        source_rows,
+        metadata.get("filename_date_min"),
+        metadata.get("filename_date_max"),
+    )
     validation = _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
     if errors:
         raise HTTPException(status_code=400, detail=validation)

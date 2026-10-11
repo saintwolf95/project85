@@ -1,6 +1,6 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 10/10/2026, código base v1.67. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 11/10/2026, código base v1.68. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 

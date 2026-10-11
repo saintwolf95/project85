@@ -1,6 +1,6 @@
 # Control IA
 
-## Estado verificado · 10/10/2026 · v1.67
+## Estado verificado · 11/10/2026 · v1.68
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
@@ -69,6 +69,10 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - La Oficina consulta `/agents/executions/history`, limitado y aislado por la empresa autenticada, para mostrar ejecuciones y tiempos reales.
 - Los errores públicos usan códigos acotados (`model_error`, `workflow_error`, `stale_execution`); no exponer excepciones internas.
 - Los avisos son preferencias locales desactivadas por defecto. `Notification.requestPermission()` solo se invoca tras activar manualmente el aviso del navegador.
+
+## Actualización v1.68
+
+- Los globos ambientales mantienen texto oscuro sobre su fondo claro en tema claro y oscuro. Los globos azules de trabajo real conservan texto blanco.
 
 ## Actualización v1.43
 

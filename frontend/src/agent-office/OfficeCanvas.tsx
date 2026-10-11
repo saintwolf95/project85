@@ -50,7 +50,8 @@ function drawProp(g: Graphics, kind: string, x: number, y: number, palette: Pale
   else if (kind === 'P') { box(g, x + .3, y + .3, .4, .4, 17, palette.woodSide); const p = iso(x + .5, y + .5); g.circle(p.x, p.y - 35, 15).fill(0x73917b); }
 }
 function Bubble({ text, y, palette, status = false }: { text: string; y: number; palette: Palette; status?: boolean }) {
-  const style = useMemo(() => new TextStyle({ fontFamily: 'Arial, sans-serif', fontSize: 11, fontWeight: status ? 'bold' : 'normal', fill: status ? palette.paper : palette.ink }), [palette, status]);
+  // El globo ambiental es claro en ambos temas; su texto debe conservar contraste en oscuro.
+  const style = useMemo(() => new TextStyle({ fontFamily: 'Arial, sans-serif', fontSize: 11, fontWeight: status ? 'bold' : 'normal', fill: status ? palette.paper : 0x162337 }), [palette, status]);
   const width = Math.min(185, Math.max(52, text.length * 6.4 + 15));
   const draw = useCallback((g: Graphics) => { g.clear(); g.roundRect(-width / 2, -18, width, 18, 4).fill(status ? palette.blue : palette.paper).stroke({ width: 1, color: palette.trim }); }, [palette, status, width]);
   return <pixiContainer y={y}><pixiGraphics draw={draw} /><pixiText text={text} style={style} anchor={.5} y={-9} /></pixiContainer>;

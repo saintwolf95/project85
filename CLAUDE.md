@@ -314,3 +314,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - `llm_usage_events` guarda solo funcionalidad, modelo y contadores de tokens. No añadir prompts, respuestas, SQL ni datos de negocio a esta telemetría.
 - La Oficina presenta duración, estado final y error seguro de cada ejecución y agente. Sonido y notificaciones del navegador permanecen desactivados hasta una acción explícita del usuario.
 - La migración PostgreSQL aditiva de esta fase es `migrations/V1.15__agent_execution_history.sql`. El flujo sigue siendo síncrono; el historial no es una cola de trabajos.
+
+## Actualización v1.68 — legibilidad de los globos
+
+- `Bubble` de la oficina usa texto oscuro para los mensajes ambientales porque su fondo es claro en ambos temas. Los mensajes de trabajo real continúan en blanco sobre azul.

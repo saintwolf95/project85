@@ -43,6 +43,7 @@ Cada pestaña visible tiene su contexto en `docs/claude-tabs/<pestaña>/CLAUDE.m
 8. Guía de Importación
 9. LibrerIA
 10. Power BI Services
+11. Ventas
 
 Índice navegable y mapa de rutas verificado: `docs/claude-tabs/README.md`. Leer el contexto de la pestaña afectada antes de trabajar en ella; estos archivos son memoria de referencia y el código sigue siendo la fuente de verdad.
 
@@ -346,3 +347,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Si una venta llega sin `Nombre Articulo`, se conserva con el nombre técnico `SIN_NOMBRE_ARTICULO` y una advertencia de calidad, igual que ocurre con el SKU técnico `SIN_SKU`.
 - Esta normalización protege los totales de ventas y margen sin atribuir falsamente la operación a un producto conocido. Catálogo e inventario mantienen el nombre obligatorio.
+
+## Actualización v1.80 — explorador operativo de ventas
+
+- La pestaña `/sales` ofrece detalle comercial paginado por fecha, artículo, cliente, familia, marca, sección, Product Manager, tipo de cliente, KD y comerciales. Todas las consultas filtran obligatoriamente por `empresa_id`.
+- Los KPI de ventas, unidades, margen, MGD, SKU y clientes se calculan sobre todo el universo filtrado en backend, nunca sobre la página visible. Los porcentajes se recalculan con las sumas: margen / ventas y MGD / ABS(ventas).
+- Artículos y clientes se localizan mediante búsqueda de texto; los desplegables se reservan para dimensiones de cardinalidad razonable. La API limita el detalle a 200 filas por página y permite solamente las ordenaciones declaradas.

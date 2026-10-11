@@ -20,6 +20,7 @@ import { PowerBiMock } from './pages/PowerBiMock';
 import { Libreria } from './pages/Libreria';
 import { Marginality } from './pages/Marginality';
 import { MarginEntity } from './pages/MarginEntity';
+import { Sales } from './pages/Sales';
 
 const AgentOffice = lazy(() => import('./pages/AgentOffice').then(module => ({ default: module.AgentOffice })));
 
@@ -40,6 +41,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Home />} />
+            <Route path="sales" element={<Sales />} />
             <Route path="inventory" element={<Intelligence />} />
             <Route path="forecast" element={<DemandForecasting />} />
             <Route path="alerts" element={<ActionableInsights />} />

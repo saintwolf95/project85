@@ -1,0 +1,8 @@
+.sales-input, .sales-select { width: 100%; min-height: 44px; border: 1px solid rgba(0,0,0,.12); border-radius: 10px; background: #fff; padding: 0 .8rem; color: #1d1d1f; font-size: 13px; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+.sales-input:focus, .sales-select:focus { border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,.12); }
+.sales-tnum { font-variant-numeric: tabular-nums; }
+.sales-page-button { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border: 1px solid rgba(0,0,0,.1); border-radius: 9px; color: #0071e3; transition: background .15s ease; }
+.sales-page-button:hover:not(:disabled) { background: rgba(0,113,227,.06); }
+.sales-page-button:disabled { opacity: .4; cursor: not-allowed; }
+.dark .sales-input, .dark .sales-select { border-color: #334155; background: #0f172a; color: #f1f5f9; }
+.dark .sales-page-button { border-color: #334155; color: #67e8f9; }

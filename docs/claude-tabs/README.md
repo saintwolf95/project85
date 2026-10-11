@@ -6,6 +6,7 @@ Contrastado con `frontend/src/components/Sidebar.tsx`, `frontend/src/App.tsx`, p
 | Pestaña visible | Ruta | Contexto | Componente principal |
 | --- | --- | --- | --- |
 | Dashboard | `/` | [CLAUDE.md](dashboard/CLAUDE.md) | `Home.tsx` |
+| Ventas | `/sales` | [CLAUDE.md](ventas/CLAUDE.md) | `Sales.tsx` |
 | Intelligence ABCXYZ | `/inventory` | [CLAUDE.md](intelligence-abcxyz/CLAUDE.md) | `Intelligence.tsx` |
 | Predicción Demanda | `/forecast` | [CLAUDE.md](prediccion-demanda/CLAUDE.md) | `DemandForecasting.tsx` |
 | AI Copilot | `/copilot` | [CLAUDE.md](ai-copilot/CLAUDE.md) | `AiCopilot.tsx` |
@@ -16,7 +17,7 @@ Contrastado con `frontend/src/components/Sidebar.tsx`, `frontend/src/App.tsx`, p
 | LibrerIA | `/libreria` | [CLAUDE.md](libreria/CLAUDE.md) | `Libreria.tsx` |
 | Power BI Services | `/powerbi` | [CLAUDE.md](power-bi-services/CLAUDE.md) | `PowerBiMock.tsx` |
 
-Las diez pestañas tienen contexto propio. Las reglas comunes están en el `CLAUDE.md` raíz. Los apartados históricos de cada documento explican versiones previas; las correcciones posteriores y el estado verificado prevalecen.
+Las once pestañas tienen contexto propio. Las reglas comunes están en el `CLAUDE.md` raíz. Los apartados históricos de cada documento explican versiones previas; las correcciones posteriores y el estado verificado prevalecen.
 
 ## Rutas relacionadas
 

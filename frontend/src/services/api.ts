@@ -158,6 +158,73 @@ export interface DashboardBreakdownRow {
   skus: number;
 }
 
+export interface SalesExplorerRow {
+  fecha: string;
+  sku: string;
+  articulo: string;
+  familia: string;
+  marca: string;
+  seccion: string;
+  product_manager: string;
+  cliente_pk: string;
+  cliente: string;
+  tipo_cliente: string;
+  comercial_cliente: string;
+  kd: string;
+  comercial_factura: string;
+  ventas_eur: number;
+  unidades: number;
+  margen_eur: number;
+  mgd_eur: number;
+}
+
+export interface SalesExplorerResponse {
+  rows: SalesExplorerRow[];
+  total_records: number;
+  page: number;
+  total_pages: number;
+  totals: { ventas_eur: number; unidades: number; margen_eur: number; margen_pct: number | null; mgd_eur: number; mgd_pct: number; skus: number; clientes: number };
+}
+
+export interface SalesExplorerOptions {
+  familias: string[];
+  marcas: string[];
+  secciones: string[];
+  product_managers: string[];
+  tipos_cliente: string[];
+  kd: string[];
+  comerciales_cliente: string[];
+  comerciales_factura: string[];
+  fecha_min: string | null;
+  fecha_max: string | null;
+}
+
+export interface SalesExplorerFilters {
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  busqueda?: string;
+  familia?: string;
+  marca?: string;
+  seccion?: string;
+  product_manager?: string;
+  tipo_cliente?: string;
+  kd?: string;
+  comercial_cliente?: string;
+  comercial_factura?: string;
+}
+
+export const getSalesExplorer = async (page = 1, filters: SalesExplorerFilters = {}, sort = 'fecha_desc'): Promise<SalesExplorerResponse> => {
+  const params: Record<string, string | number> = { page, limit: 50, sort };
+  Object.entries(filters).forEach(([key, value]) => { if (value) params[key] = value; });
+  const response = await api.get('/analytics/sales-explorer', { params });
+  return response.data;
+};
+
+export const getSalesExplorerOptions = async (): Promise<SalesExplorerOptions> => {
+  const response = await api.get('/analytics/sales-explorer/options');
+  return response.data;
+};
+
 export interface AIInsight {
   icono: string;
   titulo: string;

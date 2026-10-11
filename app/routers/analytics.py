@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 import pandas as pd
 from typing import Optional, List
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import schemas, services
@@ -11,6 +12,131 @@ from ..api.deps import get_current_user
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 MAX_INVENTORY_ANALYTICS_LIMIT = 20_000
+MAX_SALES_EXPLORER_LIMIT = 200
+
+SALES_EXPLORER_WHERE = """
+    p.empresa_id = :empresa_id
+    AND (:fecha_desde IS NULL OR v.fecha_venta >= :fecha_desde)
+    AND (:fecha_hasta IS NULL OR v.fecha_venta <= :fecha_hasta)
+    AND (:busqueda IS NULL OR (
+        LOWER(COALESCE(p.sku, '')) LIKE :busqueda
+        OR LOWER(COALESCE(p.nombre, '')) LIKE :busqueda
+        OR LOWER(COALESCE(c.cliente_pk, '')) LIKE :busqueda
+        OR LOWER(COALESCE(c.nombre, '')) LIKE :busqueda
+    ))
+    AND (:familia IS NULL OR LOWER(COALESCE(p.familia, '')) = LOWER(:familia))
+    AND (:marca IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(:marca))
+    AND (:seccion IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(:seccion))
+    AND (:product_manager IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(:product_manager))
+    AND (:tipo_cliente IS NULL OR LOWER(COALESCE(c.tipo_cliente, '')) = LOWER(:tipo_cliente))
+    AND (:kd IS NULL OR LOWER(COALESCE(v.kd, '')) = LOWER(:kd))
+    AND (:comercial_cliente IS NULL OR LOWER(COALESCE(c.comercial_cliente, '')) = LOWER(:comercial_cliente))
+    AND (:comercial_factura IS NULL OR LOWER(COALESCE(v.comercial_factura, '')) = LOWER(:comercial_factura))
+"""
+
+
+def _clean_filter(value: Optional[str]) -> Optional[str]:
+    return value.strip() if value and value.strip() else None
+
+
+def _sales_explorer_params(empresa_id: int, fecha_desde: Optional[str], fecha_hasta: Optional[str],
+                           busqueda: Optional[str], familia: Optional[str], marca: Optional[str],
+                           seccion: Optional[str], product_manager: Optional[str], tipo_cliente: Optional[str],
+                           kd: Optional[str], comercial_cliente: Optional[str], comercial_factura: Optional[str]) -> dict:
+    search = _clean_filter(busqueda)
+    return {
+        "empresa_id": empresa_id,
+        "fecha_desde": _clean_filter(fecha_desde),
+        "fecha_hasta": _clean_filter(fecha_hasta),
+        "busqueda": f"%{search.casefold()}%" if search else None,
+        "familia": _clean_filter(familia), "marca": _clean_filter(marca), "seccion": _clean_filter(seccion),
+        "product_manager": _clean_filter(product_manager), "tipo_cliente": _clean_filter(tipo_cliente),
+        "kd": _clean_filter(kd), "comercial_cliente": _clean_filter(comercial_cliente),
+        "comercial_factura": _clean_filter(comercial_factura),
+    }
+
+
+@router.get("/sales-explorer")
+def get_sales_explorer(
+    page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=MAX_SALES_EXPLORER_LIMIT),
+    fecha_desde: Optional[str] = Query(None), fecha_hasta: Optional[str] = Query(None),
+    busqueda: Optional[str] = Query(None), familia: Optional[str] = Query(None), marca: Optional[str] = Query(None),
+    seccion: Optional[str] = Query(None), product_manager: Optional[str] = Query(None),
+    tipo_cliente: Optional[str] = Query(None), kd: Optional[str] = Query(None),
+    comercial_cliente: Optional[str] = Query(None), comercial_factura: Optional[str] = Query(None),
+    sort: str = Query("fecha_desc", pattern="^(fecha_desc|ventas_desc|margen_desc)$"),
+    current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    """Detalle de ventas agrupado por fecha, producto y cliente para exploración operativa."""
+    params = _sales_explorer_params(current_user.empresa_id, fecha_desde, fecha_hasta, busqueda, familia, marca,
+                                    seccion, product_manager, tipo_cliente, kd, comercial_cliente, comercial_factura)
+    joins = "FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id LEFT JOIN clientes c ON c.id = v.cliente_id"
+    totals = db.execute(text(f"""
+        SELECT COALESCE(SUM(v.ingreso_total), 0) ventas_eur, COALESCE(SUM(v.cantidad_vendida), 0) unidades,
+               COALESCE(SUM(v.margen_bruto_eur), 0) margen_eur, COALESCE(SUM(v.margen_destino_eur), 0) mgd_eur,
+               COUNT(DISTINCT v.producto_id) skus, COUNT(DISTINCT v.cliente_id) clientes
+        {joins} WHERE {SALES_EXPLORER_WHERE}
+    """), params).mappings().one()
+    group_by = """v.fecha_venta, p.sku, p.nombre, p.familia, p.marca, p.seccion, p.product_manager,
+                  c.cliente_pk, c.nombre, c.tipo_cliente, c.comercial_cliente, v.kd, v.comercial_factura"""
+    total_records = db.execute(text(f"""
+        SELECT COUNT(*) FROM (SELECT 1 {joins} WHERE {SALES_EXPLORER_WHERE} GROUP BY {group_by}) lineas
+    """), params).scalar_one()
+    order_by = {
+        "ventas_desc": "ventas_eur DESC, fecha DESC",
+        "margen_desc": "margen_eur DESC, fecha DESC",
+        "fecha_desc": "fecha DESC, ventas_eur DESC",
+    }[sort]
+    rows = db.execute(text(f"""
+        SELECT v.fecha_venta fecha, COALESCE(p.sku, 'SIN_SKU') sku, COALESCE(p.nombre, 'SIN_NOMBRE_ARTICULO') articulo,
+               COALESCE(p.familia, 'Sin familia') familia, COALESCE(p.marca, 'Sin marca') marca,
+               COALESCE(p.seccion, 'Sin sección') seccion, COALESCE(p.product_manager, 'Sin PM') product_manager,
+               COALESCE(c.cliente_pk, 'SIN-CLIENTE') cliente_pk, COALESCE(c.nombre, 'Sin nombre cliente') cliente,
+               COALESCE(c.tipo_cliente, 'Sin tipo') tipo_cliente, COALESCE(c.comercial_cliente, 'Sin comercial') comercial_cliente,
+               COALESCE(v.kd, 'Sin KD') kd, COALESCE(v.comercial_factura, 'Sin comercial') comercial_factura,
+               COALESCE(SUM(v.ingreso_total), 0) ventas_eur, COALESCE(SUM(v.cantidad_vendida), 0) unidades,
+               COALESCE(SUM(v.margen_bruto_eur), 0) margen_eur, COALESCE(SUM(v.margen_destino_eur), 0) mgd_eur
+        {joins} WHERE {SALES_EXPLORER_WHERE}
+        GROUP BY {group_by} ORDER BY {order_by} LIMIT :limit OFFSET :offset
+    """), {**params, "limit": limit, "offset": (page - 1) * limit}).mappings().all()
+
+    def number(value) -> float:
+        return float(value or 0)
+
+    sales, margin, mgd = number(totals["ventas_eur"]), number(totals["margen_eur"]), number(totals["mgd_eur"])
+    return {
+        "rows": [{**dict(row), "fecha": str(row["fecha"]), "ventas_eur": number(row["ventas_eur"]),
+                  "margen_eur": number(row["margen_eur"]), "mgd_eur": number(row["mgd_eur"]),
+                  "unidades": int(row["unidades"] or 0)} for row in rows],
+        "total_records": int(total_records), "page": page, "total_pages": max(1, (int(total_records) + limit - 1) // limit),
+        "totals": {"ventas_eur": sales, "unidades": int(totals["unidades"] or 0), "margen_eur": margin,
+                   "margen_pct": round(margin / sales * 100, 2) if sales else None, "mgd_eur": mgd,
+                   "mgd_pct": round(mgd / abs(sales) * 100, 2) if sales else 0, "skus": int(totals["skus"] or 0),
+                   "clientes": int(totals["clientes"] or 0)},
+    }
+
+
+@router.get("/sales-explorer/options")
+def get_sales_explorer_options(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Opciones de filtros de baja cardinalidad; artículo y cliente se buscan por texto."""
+    options = {}
+    dimensions = {
+        "familias": "p.familia", "marcas": "p.marca", "secciones": "p.seccion", "product_managers": "p.product_manager",
+        "tipos_cliente": "c.tipo_cliente", "kd": "v.kd", "comerciales_cliente": "c.comercial_cliente",
+        "comerciales_factura": "v.comercial_factura",
+    }
+    for key, column in dimensions.items():
+        options[key] = [row[0] for row in db.execute(text(f"""
+            SELECT DISTINCT TRIM({column}) FROM ventas_historicas v
+            JOIN productos p ON p.id = v.producto_id LEFT JOIN clientes c ON c.id = v.cliente_id
+            WHERE p.empresa_id = :empresa_id AND NULLIF(TRIM({column}), '') IS NOT NULL ORDER BY TRIM({column})
+        """), {"empresa_id": current_user.empresa_id}).all()]
+    coverage = db.execute(text("""
+        SELECT MIN(v.fecha_venta) fecha_min, MAX(v.fecha_venta) fecha_max FROM ventas_historicas v
+        JOIN productos p ON p.id = v.producto_id WHERE p.empresa_id = :empresa_id
+    """), {"empresa_id": current_user.empresa_id}).mappings().one()
+    return {**options, "fecha_min": str(coverage["fecha_min"]) if coverage["fecha_min"] else None,
+            "fecha_max": str(coverage["fecha_max"]) if coverage["fecha_max"] else None}
 
 
 @router.get("/dashboard-executive")

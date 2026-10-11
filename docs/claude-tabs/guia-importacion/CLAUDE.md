@@ -30,6 +30,8 @@ La guía debe explicar que las columnas `ClientePK` y `Nombre Cliente` deben exi
 
 La columna `ArticuloPK` debe existir. En ventas, una celda vacía se conserva bajo `SIN_SKU`, con advertencia; en inventario y catálogo no se permite porque no existe una referencia segura que normalizar.
 
+La columna `Nombre Articulo` debe existir. En ventas, una celda vacía se conserva como `SIN_NOMBRE_ARTICULO`, con advertencia; catálogo e inventario mantienen ese valor obligatorio.
+
 ## Actualización v1.69-v1.72 — importación desde SQL Server
 
 - La guía debe identificar la Carga Manual SQL como vía temporal: el script de PowerShell genera CSV UTF-8 desde las dos vistas de SQL Server; no requiere una exportación manual desde Power BI.

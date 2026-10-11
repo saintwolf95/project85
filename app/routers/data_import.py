@@ -50,6 +50,7 @@ POWER_BI_TRAILER_PREFIXES = ("total", "subtotal", "filtros_aplicados", "filters_
 MISSING_CLIENT_PK = "SIN-CLIENTE"
 MISSING_CLIENT_NAME = "Sin nombre cliente"
 MISSING_SKU = "SIN_SKU"
+MISSING_ARTICLE_NAME = "SIN_NOMBRE_ARTICULO"
 
 DATASET_CONFIG = {
     "products": {
@@ -755,9 +756,19 @@ def _validate_rows(
                     nombre_cliente = MISSING_CLIENT_NAME
                 elif not nombre_cliente:
                     nombre_cliente = MISSING_CLIENT_NAME
+                raw_article_name = str(row.get("nombre") or "").strip()
+                if not raw_article_name:
+                    article_name = MISSING_ARTICLE_NAME
+                    if len(warnings) < MAX_REPORTED_WARNINGS:
+                        warnings.append({
+                            "line": index,
+                            "message": "Nombre Articulo vacío: se asigna SIN_NOMBRE_ARTICULO para conservar la venta",
+                        })
+                else:
+                    article_name = _required_text(raw_article_name, "Nombre Articulo", 255)
                 valid_rows.append({
                     "sku": sku,
-                    "nombre": _required_text(row.get("nombre"), "Nombre Articulo", 255),
+                    "nombre": article_name,
                     "fecha_venta": _parse_date(
                         row.get("fecha_venta"), "Fecha", expected_date_min, expected_date_max
                     ),

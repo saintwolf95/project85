@@ -41,6 +41,8 @@ Las ventas con celdas de cliente vacías son válidas: sin `ClientePK` se asigna
 
 Las ventas con `ArticuloPK` vacío también son válidas: se conservan bajo el SKU técnico único `SIN_SKU` y se muestra una advertencia. Esta excepción no aplica a inventario ni a catálogo, donde el SKU sigue siendo obligatorio.
 
+Las ventas sin `Nombre Articulo` se conservan con `SIN_NOMBRE_ARTICULO` y advertencia. No aplicar esta normalización al catálogo ni al inventario.
+
 ## Actualización v1.35
 
 La sustitución de ventas se limita al intervalo entre la primera y la última fecha del archivo. Debe conservar ventas de otros ejercicios y no borrar clientes; la interfaz tiene que explicar este alcance antes de cargar.

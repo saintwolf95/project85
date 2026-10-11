@@ -341,3 +341,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Si una fila de **ventas** llega con `ArticuloPK` vacío, la aplicación conserva sus importes bajo el SKU técnico único `SIN_SKU` y presenta una advertencia de calidad. No inventar referencias ni eliminar esas ventas de los totales financieros.
 - Catálogo e inventario conservan `sku` como dato obligatorio: una existencia sin artículo identificado no se puede normalizar de la misma forma.
+
+## Actualización v1.77 — ventas sin nombre de artículo
+
+- Si una venta llega sin `Nombre Articulo`, se conserva con el nombre técnico `SIN_NOMBRE_ARTICULO` y una advertencia de calidad, igual que ocurre con el SKU técnico `SIN_SKU`.
+- Esta normalización protege los totales de ventas y margen sin atribuir falsamente la operación a un producto conocido. Catálogo e inventario mantienen el nombre obligatorio.

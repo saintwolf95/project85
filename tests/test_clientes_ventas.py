@@ -96,6 +96,18 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(len(warnings), 1)
         self.assertIn("ArticuloPK vacío", warnings[0]["message"])
 
+    def test_asigna_nombre_tecnico_a_ventas_sin_nombre_de_articulo(self):
+        headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
+        row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))
+        row["nombre"] = ""
+
+        valid, errors, warnings = _validate_rows("sales", [row])
+
+        self.assertEqual(errors, [])
+        self.assertEqual(valid[0]["nombre"], "SIN_NOMBRE_ARTICULO")
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("Nombre Articulo vacío", warnings[0]["message"])
+
     def test_conserva_cliente_pk_si_solo_falta_el_nombre(self):
         headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
         row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))

@@ -9,7 +9,7 @@ from .agent_signals import get_active_signals
 
 
 METRIC_DICTIONARY = [
-    {"terms": ("mgd", "margen destino"), "definition": "MGD es margen puesto en destino. Se calcula como suma de margen_destino_eur / suma de ventas, nunca como promedio de porcentajes."},
+    {"terms": ("mgd", "margen destino"), "definition": "MGD es margen puesto en destino. Su porcentaje se calcula como SUM(margen_destino_eur) / ABS(SUM(ventas)); nunca como promedio de porcentajes."},
     {"terms": ("mg", "margen bruto"), "definition": "MG es margen bruto: suma de margen_bruto_eur / suma de ventas."},
     {"terms": ("abc",), "definition": "ABC clasifica artículos por ventas EUR de los últimos 90 días; A concentra la mayor contribución comercial."},
     {"terms": ("xyz",), "definition": "XYZ usa valor de inventario actual. No es fiable sin inventario real e histórico suficiente."},

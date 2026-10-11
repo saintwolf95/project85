@@ -130,11 +130,11 @@ def construir_resumen_operativo(db: Session, empresa_id: int) -> str:
             if ventas_cargadas else 0
         )
         resumen["margen_destino_pct_cargado"] = (
-            float(resumen.get("margen_destino_cargado") or 0) / ventas_cargadas * 100
+            float(resumen.get("margen_destino_cargado") or 0) / abs(ventas_cargadas) * 100
             if ventas_cargadas else 0
         )
         resumen["margen_pct_90d"] = (margen_90d / ventas_90d * 100) if ventas_90d else 0
-        resumen["margen_destino_pct_90d"] = (margen_destino_90d / ventas_90d * 100) if ventas_90d else 0
+        resumen["margen_destino_pct_90d"] = (margen_destino_90d / abs(ventas_90d) * 100) if ventas_90d else 0
         resumen["variacion_ventas_30d_pct"] = (
             (ventas_30d - ventas_30d_anterior) / abs(ventas_30d_anterior) * 100
             if ventas_30d_anterior

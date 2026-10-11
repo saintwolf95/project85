@@ -130,7 +130,7 @@ def _sales_totals(db: Session, empresa_id: int, start: date, end: date, filters:
     return {
         "ventas_eur": sales, "unidades": int(row["unidades"] or 0),
         "margen_eur": margin, "margen_pct": round(margin / sales * 100, 2) if sales else None,
-        "mgd_eur": mgd, "mgd_pct": round(mgd / sales * 100, 2) if sales else None,
+        "mgd_eur": mgd, "mgd_pct": round(mgd / abs(sales) * 100, 2) if sales else 0,
         "skus_con_venta": int(row["skus_con_venta"] or 0),
         "clientes_con_venta": int(row["clientes_con_venta"] or 0),
     }

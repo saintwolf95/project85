@@ -118,14 +118,14 @@ def build_agent_dossier(db: Session, empresa_id: int, agent_name: str) -> dict[s
     units = float(sales.get("unidades_30d") or 0)
     previous_units = float(sales.get("unidades_30d_anteriores") or 0)
     previous_mg_pct = float(sales.get("mg_30d_anterior") or 0) / previous * 100 if previous else None
-    previous_mgd_pct = float(sales.get("mgd_30d_anterior") or 0) / previous * 100 if previous else None
+    previous_mgd_pct = float(sales.get("mgd_30d_anterior") or 0) / abs(previous) * 100 if previous else 0
     sales["variacion_ventas_30d_pct"] = ((ventas_30d - previous) / previous * 100) if previous else None
     sales["variacion_ventas_30d_eur"] = ventas_30d - previous
     sales["variacion_unidades_30d_pct"] = ((units - previous_units) / previous_units * 100) if previous_units else None
     sales["variacion_ventas_7d_pct"] = ((ventas_7d - ventas_7d_previous) / ventas_7d_previous * 100) if ventas_7d_previous else None
     sales["precio_medio_unidad_30d"] = ventas_30d / units if units else None
     sales["mg_pct_30d"] = (float(sales.get("mg_30d") or 0) / ventas_30d * 100) if ventas_30d else None
-    sales["mgd_pct_30d"] = (float(sales.get("mgd_30d") or 0) / ventas_30d * 100) if ventas_30d else None
+    sales["mgd_pct_30d"] = (float(sales.get("mgd_30d") or 0) / abs(ventas_30d) * 100) if ventas_30d else 0
     sales["mg_pct_30d_anterior"] = previous_mg_pct
     sales["mgd_pct_30d_anterior"] = previous_mgd_pct
     sales["variacion_mg_puntos"] = sales["mg_pct_30d"] - previous_mg_pct if previous_mg_pct is not None and sales["mg_pct_30d"] is not None else None

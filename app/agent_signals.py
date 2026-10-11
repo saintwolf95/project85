@@ -609,12 +609,12 @@ def _finance_signals(db: Session, empresa_id: int) -> list[dict]:
     for row in rows:
         sales, mgd = _number(row["ventas_actuales"]), _number(row["mgd_actual"])
         target = resolve_rule(db, empresa_id, "margen_objetivo_pct", familia=row["entidad"], default=None, on_date=ce)
-        if target.value is None or sales <= 0:
+        if target.value is None or sales == 0:
             continue
-        actual_pct = mgd / sales * 100
+        actual_pct = mgd / abs(sales) * 100
         gap = _number(target.value) - actual_pct
         if gap >= 3:
-            signals.append(_signal("mattia", "margen_bajo_objetivo", "familia", row["entidad"], cs, ce, 4 if gap >= 6 else 3, gap * sales / 100, confidence, actual_pct, _number(target.value),
+                signals.append(_signal("mattia", "margen_bajo_objetivo", "familia", row["entidad"], cs, ce, 4 if gap >= 6 else 3, gap * abs(sales) / 100, confidence, actual_pct, _number(target.value),
                 {"metodo": "MGD frente a objetivo configurado", "ventas_actuales_eur": sales, "mgd_actual_pct": actual_pct, "margen_objetivo_pct": _number(target.value), "brecha_pp": gap, "reglas_aplicadas": rule_evidence(margen_objetivo_pct=target)}))
 
     concentration = db.execute(text("""

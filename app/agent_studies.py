@@ -172,7 +172,7 @@ def build_agent_studies(db: Session, empresa_id: int, agent_name: str) -> dict[s
         previous = _number(row["ventas_anterior"])
         row["impacto_eur"] = current - previous
         row["variacion_pct"] = (current - previous) / previous * 100 if previous else None
-        row["mgd_pct"] = _number(row["mgd_actual"]) / current * 100 if current else None
+        row["mgd_pct"] = _number(row["mgd_actual"]) / abs(current) * 100 if current else 0
 
     clients = _rows(db, """
         SELECT c.cliente_pk, c.nombre AS cliente, COALESCE(c.tipo_cliente, 'Sin tipo') AS tipo_cliente,
@@ -192,7 +192,7 @@ def build_agent_studies(db: Session, empresa_id: int, agent_name: str) -> dict[s
     for row in clients:
         sales = _number(row["ventas_eur"])
         row["share_pct"] = sales / total_client_sales * 100 if total_client_sales else None
-        row["mgd_pct"] = _number(row["mgd_eur"]) / sales * 100 if sales else None
+        row["mgd_pct"] = _number(row["mgd_eur"]) / abs(sales) * 100 if sales else 0
 
     managers = _rows(db, """
         SELECT COALESCE(p.product_manager, 'Sin PM') AS product_manager,
@@ -211,7 +211,7 @@ def build_agent_studies(db: Session, empresa_id: int, agent_name: str) -> dict[s
     for row in managers:
         sales = _number(row["ventas_eur"])
         row["share_pct"] = sales / total_manager_sales * 100 if total_manager_sales else None
-        row["mgd_pct"] = _number(row["mgd_eur"]) / sales * 100 if sales else None
+        row["mgd_pct"] = _number(row["mgd_eur"]) / abs(sales) * 100 if sales else 0
 
     focus = {
         "maria": "Demanda, estabilidad del artículo, cobertura y responsabilidad del portfolio.",

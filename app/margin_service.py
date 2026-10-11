@@ -22,8 +22,9 @@ def _number(value: Any) -> float:
     return float(value or 0)
 
 
-def _pct(margin: float, sales: float) -> float | None:
-    return margin / sales * 100 if sales > 0 else None
+def _pct(margin: float, sales: float, *, absolute_sales: bool = False) -> float:
+    denominator = abs(sales) if absolute_sales else sales
+    return margin / denominator * 100 if denominator else 0.0
 
 
 def resolve_period(db: Session, empresa_id: int, window: str, start: date | None = None, end: date | None = None) -> tuple[date, date, date, date]:
@@ -66,7 +67,7 @@ def _summary(db: Session, empresa_id: int, start: date, end: date) -> dict[str, 
         WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :start AND :end
     """), {"empresa_id": empresa_id, "start": start, "end": end}).mappings().one()
     sales, mg, mgd = _number(row["ventas"]), _number(row["mg"]), _number(row["mgd"])
-    return {"ventas_eur": sales, "mg_eur": mg, "mg_pct": _pct(mg, sales), "mgd_eur": mgd, "mgd_pct": _pct(mgd, sales), "diferencia_eur": mg - mgd, "diferencia_pp": (_pct(mg, sales) - _pct(mgd, sales)) if sales > 0 else None, "sku_negativos": int(row["sku_negativos"] or 0), "margen_negativo_eur": _number(row["margen_negativo"]), "lineas_mgd_superior_mg": int(row["lineas_mgd_superior_mg"] or 0), "exceso_mgd_sobre_mg_eur": _number(row["exceso_mgd_sobre_mg_eur"])}
+    return {"ventas_eur": sales, "mg_eur": mg, "mg_pct": _pct(mg, sales), "mgd_eur": mgd, "mgd_pct": _pct(mgd, sales, absolute_sales=True), "diferencia_eur": mg - mgd, "diferencia_pp": _pct(mg, sales) - _pct(mgd, sales, absolute_sales=True) if sales else 0.0, "sku_negativos": int(row["sku_negativos"] or 0), "margen_negativo_eur": _number(row["margen_negativo"]), "lineas_mgd_superior_mg": int(row["lineas_mgd_superior_mg"] or 0), "exceso_mgd_sobre_mg_eur": _number(row["exceso_mgd_sobre_mg_eur"])}
 
 
 def overview(db: Session, empresa_id: int, window: str, start: date | None = None, end: date | None = None) -> dict:
@@ -82,7 +83,7 @@ def overview(db: Session, empresa_id: int, window: str, start: date | None = Non
     concentration = _concentration_rows(db, empresa_id, cs, ce, "mgd")
     total = sum(max(0, _number(row["margen_eur"])) for row in concentration)
     top10 = sum(max(0, _number(row["margen_eur"])) for row in concentration[:10])
-    return {"periodo": {"inicio": str(cs), "fin": str(ce), "anterior_inicio": str(ps), "anterior_fin": str(pe)}, "actual": current, "anterior": previous, "variacion": {key: (_number(current[key]) - _number(previous[key])) if current[key] is not None and previous[key] is not None else None for key in current}, "top10_mgd_positivo_pct": top10 / total * 100 if total > 0 else None, "serie_diaria": [{**dict(row), "mg_pct": _pct(_number(row["mg_eur"]), _number(row["ventas_eur"])), "mgd_pct": _pct(_number(row["mgd_eur"]), _number(row["ventas_eur"]))} for row in daily]}
+    return {"periodo": {"inicio": str(cs), "fin": str(ce), "anterior_inicio": str(ps), "anterior_fin": str(pe)}, "actual": current, "anterior": previous, "variacion": {key: (_number(current[key]) - _number(previous[key])) if current[key] is not None and previous[key] is not None else None for key in current}, "top10_mgd_positivo_pct": top10 / total * 100 if total > 0 else None, "serie_diaria": [{**dict(row), "mg_pct": _pct(_number(row["mg_eur"]), _number(row["ventas_eur"])), "mgd_pct": _pct(_number(row["mgd_eur"]), _number(row["ventas_eur"]), absolute_sales=True)} for row in daily]}
 
 
 def _concentration_rows(db: Session, empresa_id: int, start: date, end: date, metric: str) -> list[dict]:
@@ -106,7 +107,7 @@ def concentration(db: Session, empresa_id: int, metric: str, window: str, start:
         weight = margin / total * 100 if total else None
         positive_weight = max(0, margin) / positive_total * 100 if positive_total else None
         if positive_weight is not None: hhi += positive_weight ** 2
-        enriched.append({**row, "tasa_margen_pct": _pct(margin, _number(row["ventas_eur"])), "peso_total_pct": weight, "peso_acumulado_pct": running / total * 100 if total else None, "peso_sobre_positivos_pct": positive_weight})
+        enriched.append({**row, "tasa_margen_pct": _pct(margin, _number(row["ventas_eur"]), absolute_sales=metric == "mgd"), "peso_total_pct": weight, "peso_acumulado_pct": running / total * 100 if total else None, "peso_sobre_positivos_pct": positive_weight})
     top10 = sum(_number(row["margen_eur"]) for row in enriched[:10])
     def reaches(target: float) -> int | None:
         current = 0.0
@@ -145,7 +146,7 @@ def margin_detail(db: Session, empresa_id: int, dimension: str, metric: str, win
     """), params).mappings().all()
     result = []
     for row in rows:
-        item = dict(row); item["mg_pct"] = _pct(_number(item["mg_eur"]), _number(item["ventas_eur"])); item["mgd_pct"] = _pct(_number(item["mgd_eur"]), _number(item["ventas_eur"])); item["diferencia_mg_mgd_pp"] = item["mg_pct"] - item["mgd_pct"] if item["mg_pct"] is not None and item["mgd_pct"] is not None else None; item["variacion_eur"] = _number(item["mg_eur"] if metric == "mg" else item["mgd_eur"]) - _number(item["margen_anterior_eur"]); result.append(item)
+        item = dict(row); item["mg_pct"] = _pct(_number(item["mg_eur"]), _number(item["ventas_eur"])); item["mgd_pct"] = _pct(_number(item["mgd_eur"]), _number(item["ventas_eur"]), absolute_sales=True); item["diferencia_mg_mgd_pp"] = item["mg_pct"] - item["mgd_pct"]; item["variacion_eur"] = _number(item["mg_eur"] if metric == "mg" else item["mgd_eur"]) - _number(item["margen_anterior_eur"]); result.append(item)
     return {"periodo": {"inicio": str(cs), "fin": str(ce)}, "dimension": dimension, "metrica_destacada": metric, "page": page, "limit": limit, "filas": result}
 
 
@@ -186,4 +187,4 @@ def entity_series(db: Session, empresa_id: int, entity_type: str, entity_id: str
     for row in rows:
         key = str(row["fecha"])[:7]; bucket = months.setdefault(key, {"ventas_eur": 0.0, "mg_eur": 0.0, "mgd_eur": 0.0})
         for value in bucket: bucket[value] += _number(row[value])
-    return {"entidad_tipo": entity_type, "entidad_id": entity_id, "periodo": {"inicio": str(cs), "fin": str(ce)}, "serie_mensual": [{"mes": key, **values, "mg_pct": _pct(values["mg_eur"], values["ventas_eur"]), "mgd_pct": _pct(values["mgd_eur"], values["ventas_eur"])} for key, values in months.items()]}
+    return {"entidad_tipo": entity_type, "entidad_id": entity_id, "periodo": {"inicio": str(cs), "fin": str(ce)}, "serie_mensual": [{"mes": key, **values, "mg_pct": _pct(values["mg_eur"], values["ventas_eur"]), "mgd_pct": _pct(values["mgd_eur"], values["ventas_eur"], absolute_sales=True)} for key, values in months.items()]}

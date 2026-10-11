@@ -117,7 +117,12 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     )
 
     # XYZ: inventario actual en euros al último día disponible.
-    df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
+    # El inventario de origen ya incluye coste medio y stock Decoexsa. Usar su
+    # importe evita alterar XYZ cuando el coste unitario comercial no coincide.
+    df["valor_inv"] = [
+        snapshot.inventario_eur if snapshot else 0.0
+        for _, snapshot in productos
+    ]
     df["xyz"] = "N/D"
     inventario_conocido = df["inventario_disponible"]
     if inventario_conocido.any():
@@ -214,7 +219,11 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     df["marca"] = df["marca"]
     df["precio_unit"] = df["precio_venta"]
     df["unidades"] = df["stock_disponible"]
-    df["valor_inv"] = df["costo_unitario"] * df["stock_disponible"]
+    # Mantener el valor observado del último snapshot, no una reconstrucción.
+    df["valor_inv"] = [
+        snapshot.inventario_eur if snapshot else 0.0
+        for _, snapshot in productos
+    ]
     
     df["product_manager"] = df["product_manager"]
     df["seccion"] = df["seccion"]

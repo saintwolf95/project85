@@ -735,12 +735,14 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             """
             return sql, dict(intento.parametros)
         es_porcentaje = intento.medida in ("margen_pct", "mgd_pct")
-        expresion_agregada = (
-            "CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0 "
-            f"ELSE COALESCE(SUM({expresion}), 0) / NULLIF(SUM(vh.ingreso_total), 0) * 100 END"
-            if es_porcentaje
-            else f"COALESCE(SUM({expresion}), 0)"
-        )
+        if es_porcentaje:
+            denominador = "ABS(SUM(vh.ingreso_total))" if intento.medida == "mgd_pct" else "SUM(vh.ingreso_total)"
+            expresion_agregada = (
+                f"CASE WHEN COALESCE({denominador}, 0) = 0 THEN 0 "
+                f"ELSE COALESCE(SUM({expresion}), 0) / NULLIF({denominador}, 0) * 100 END"
+            )
+        else:
+            expresion_agregada = f"COALESCE(SUM({expresion}), 0)"
         alias_agregado = intento.medida if es_porcentaje else alias
         if intento.agrupacion == "familia":
             agrupacion = "COALESCE(p.familia, 'Sin familia')"

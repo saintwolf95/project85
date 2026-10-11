@@ -87,6 +87,7 @@ class InventarioSnapshot(Base):
     __tablename__ = "inventario_snapshot"
     producto_id = Column(Integer, ForeignKey("productos.id"), primary_key=True)
     stock_disponible = Column(Integer, nullable=False, default=0)
+    inventario_eur = Column(Float, nullable=False, default=0.0)
     
     producto = relationship("Producto", back_populates="inventario")
 

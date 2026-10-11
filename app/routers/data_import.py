@@ -47,7 +47,6 @@ MAX_REPORTED_ERRORS = 100
 MAX_REPORTED_WARNINGS = 100
 SUPPORTED_DATASETS = {"products", "inventory", "sales"}
 POWER_BI_TRAILER_PREFIXES = ("total", "subtotal", "filtros_aplicados", "filters_applied")
-PERCENTAGE_LOSS_FLOOR = -200.0
 MISSING_CLIENT_PK = "SIN-CLIENTE"
 MISSING_CLIENT_NAME = "Sin nombre cliente"
 
@@ -112,7 +111,7 @@ DATASET_CONFIG = {
         "required": {"fecha_inventario", "nombre", "sku", "marca", "familia_marca", "familia", "seccion", "ean", "product_manager", "inventario_eur", "stock_disponible"},
         "headers": ["Fecha", "Nombre Articulo", "ArticuloPK", "Nombre Marca", "Familia/Marca", "Nombre Familia", "Nombre Seccion", "EAN", "Product Manager", "Inventario", "Unidades Inv"],
         "sample": ["06/08/2026", "Producto de ejemplo", "SKU-001", "Marca A", "Moviles/Marca A", "Moviles", "Telefonia", "8430000000001", "Responsable", "1.250,50 €", "150"],
-        "canonical_headers": {"fecha_inventario", "nombre", "sku", "marca", "familia_marca", "familia", "seccion", "ean", "product_manager", "inventario_eur", "stock_disponible"},
+        "canonical_headers": {"empresa_id", "fecha_inventario", "nombre", "sku", "marca", "familia_marca", "familia", "seccion", "ean", "product_manager", "inventario_eur", "stock_disponible"},
         "aliases": {
             "fecha": "fecha_inventario",
             "fecha_inventario": "fecha_inventario",
@@ -121,6 +120,7 @@ DATASET_CONFIG = {
             "cod_art": "sku",
             "articulo": "sku",
             "articulopk": "sku",
+            "articulo_pk": "sku",
             "nombre_articulo": "nombre",
             "nombre_art": "nombre",
             "nombre_marca": "marca",
@@ -134,6 +134,7 @@ DATASET_CONFIG = {
             "unidades": "stock_disponible",
             "unidades_inv": "stock_disponible",
             "inventario_unidades": "stock_disponible",
+            "unidades_inventario": "stock_disponible",
         },
     },
     "sales": {
@@ -141,9 +142,7 @@ DATASET_CONFIG = {
             "fecha_venta",
             "ingreso_total",
             "cantidad_vendida",
-            "margen_bruto_pct",
             "margen_bruto_eur",
-            "margen_destino_pct",
             "margen_destino_eur",
             "nombre",
             "sku",
@@ -207,6 +206,7 @@ DATASET_CONFIG = {
             "Comercial de la venta",
         ],
         "canonical_headers": {
+            "empresa_id",
             "fecha_venta",
             "ingreso_total",
             "cantidad_vendida",
@@ -246,6 +246,7 @@ DATASET_CONFIG = {
             "cod_art": "sku",
             "articulo": "sku",
             "articulopk": "sku",
+            "articulo_pk": "sku",
             "cantidad": "cantidad_vendida",
             "unidades": "cantidad_vendida",
             "unidades_vendidas": "cantidad_vendida",
@@ -353,15 +354,12 @@ def _parse_percentage(value: Any, field: str, required: bool = False) -> float |
         return None
     if not has_percent_sign and abs(parsed) <= 1:
         parsed *= 100
-    return max(parsed, PERCENTAGE_LOSS_FLOOR)
+    return parsed
 
 
-def _margin_percentage_with_loss_floor(margen_eur: float, ventas_eur: float) -> float | None:
-    """Evita porcentajes infinitos y conserva una señal visible para pérdidas sin venta."""
-    if abs(ventas_eur) < 0.01:
-        return PERCENTAGE_LOSS_FLOOR if margen_eur < 0 else None
-    percentage = margen_eur / ventas_eur * 100
-    return max(percentage, PERCENTAGE_LOSS_FLOOR)
+def _margin_percentage(margen_eur: float, ventas_eur: float, *, absolute_sales: bool = False) -> float:
+    denominator = abs(ventas_eur) if absolute_sales else ventas_eur
+    return margen_eur / denominator * 100 if denominator else 0.0
 
 
 def _parse_date(value: Any, field: str = "fecha") -> date:
@@ -679,7 +677,7 @@ def _validate_rows(
                 if margen_destino_eur is None and margen_destino_pct is not None:
                     margen_destino_eur = float(ingreso) * margen_destino_pct / 100
                 if margen_destino_pct is None and ingreso and margen_destino_eur is not None:
-                    margen_destino_pct = margen_destino_eur / float(ingreso) * 100
+                    margen_destino_pct = _margin_percentage(margen_destino_eur, float(ingreso), absolute_sales=True)
                 # El margen puesto en destino descuenta costes posteriores al margen bruto.
                 # Aceptar lo contrario ocultaría un error de origen en la exportación de PBI.
                 if (
@@ -754,6 +752,25 @@ def _validation_response(
         response["date_min"] = min(dates).isoformat()
         response["date_max"] = max(dates).isoformat()
     return response
+
+
+def _ensure_source_empresa_matches(rows: list[dict[str, Any]], empresa_id: int) -> None:
+    """Evita que una exportación SQL de otra empresa se cargue por error."""
+    source_ids: set[int] = set()
+    for row in rows:
+        raw_company = row.get("empresa_id")
+        if raw_company in (None, ""):
+            continue
+        try:
+            source_ids.add(_parse_integer(raw_company, "empresa_id"))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="empresa_id debe ser un número entero.") from exc
+    if source_ids and source_ids != {empresa_id}:
+        received = ", ".join(str(value) for value in sorted(source_ids))
+        raise HTTPException(
+            status_code=400,
+            detail=f"El archivo pertenece a empresa_id {received}; la empresa activa es {empresa_id}.",
+        )
 
 
 def _company_products(db: Session, empresa_id: int) -> dict[str, Producto]:
@@ -871,6 +888,7 @@ async def validate_import(
     current_user: Usuario = Depends(get_current_active_admin),
 ):
     source_rows, metadata = await _read_tabular_file(file, dataset)
+    _ensure_source_empresa_matches(source_rows, current_user.empresa_id)
     valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
     return _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
 
@@ -889,6 +907,7 @@ async def load_import(
     sales_mode = _resolve_sales_mode(sales_mode, replace_existing if dataset == "sales" else False)
 
     source_rows, metadata = await _read_tabular_file(file, dataset)
+    _ensure_source_empresa_matches(source_rows, current_user.empresa_id)
     valid_rows, errors, warnings = _validate_rows(dataset, source_rows)
     validation = _validation_response(dataset, source_rows, valid_rows, errors, warnings, metadata)
     if errors:
@@ -988,9 +1007,14 @@ async def load_import(
             for product_id, item in latest_inventory.items():
                 snapshot = snapshots.get(product_id)
                 if snapshot is None:
-                    db.add(InventarioSnapshot(producto_id=product_id, stock_disponible=item.unidades_inventario))
+                    db.add(InventarioSnapshot(
+                        producto_id=product_id,
+                        stock_disponible=item.unidades_inventario,
+                        inventario_eur=item.inventario_eur,
+                    ))
                 else:
                     snapshot.stock_disponible = item.unidades_inventario
+                    snapshot.inventario_eur = item.inventario_eur
             affected = len(records)
             created = max(0, len(records) - updated)
 
@@ -1161,11 +1185,11 @@ async def load_import(
                 quantity = item["cantidad_vendida"]
                 if quantity:
                     item["precio_unitario"] = item["ingreso_total"] / quantity
-                item["margen_bruto_pct"] = _margin_percentage_with_loss_floor(
+                item["margen_bruto_pct"] = _margin_percentage(
                     item["margen_bruto_eur"], item["ingreso_total"]
                 )
-                item["margen_destino_pct"] = _margin_percentage_with_loss_floor(
-                    item["margen_destino_eur"], item["ingreso_total"]
+                item["margen_destino_pct"] = _margin_percentage(
+                    item["margen_destino_eur"], item["ingreso_total"], absolute_sales=True
                 )
                 item["stock_disponible"] = (
                     item["stock_disponible"]

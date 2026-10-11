@@ -353,3 +353,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La pestaña `/sales` ofrece detalle comercial paginado por fecha, artículo, cliente, familia, marca, sección, Product Manager, tipo de cliente, KD y comerciales. Todas las consultas filtran obligatoriamente por `empresa_id`.
 - Los KPI de ventas, unidades, margen, MGD, SKU y clientes se calculan sobre todo el universo filtrado en backend, nunca sobre la página visible. Los porcentajes se recalculan con las sumas: margen / ventas y MGD / ABS(ventas).
 - Artículos y clientes se localizan mediante búsqueda de texto; los desplegables se reservan para dimensiones de cardinalidad razonable. La API limita el detalle a 200 filas por página y permite solamente las ordenaciones declaradas.
+
+## Actualización v1.81 — filtros de fecha tipados en Ventas
+
+- Los parámetros opcionales de fecha de `/analytics/sales-explorer` se vinculan explícitamente como `DATE`. PostgreSQL debe poder ejecutar la consulta completa con ambos filtros vacíos, además de los intervalos introducidos por el usuario.
+- No sustituir esta vinculación por comparaciones con parámetros sin tipo: con `None`, el driver `psycopg` devuelve `AmbiguousParameter` antes de leer cualquier venta.

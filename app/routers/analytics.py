@@ -1,8 +1,10 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 import pandas as pd
 from typing import Optional, List
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import Date, bindparam, text
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import schemas, services
@@ -34,20 +36,30 @@ SALES_EXPLORER_WHERE = """
     AND (:comercial_factura IS NULL OR LOWER(COALESCE(v.comercial_factura, '')) = LOWER(:comercial_factura))
 """
 
+SALES_EXPLORER_DATE_BINDS = (
+    bindparam("fecha_desde", type_=Date),
+    bindparam("fecha_hasta", type_=Date),
+)
+
+
+def _sales_explorer_query(query: str):
+    """Conserva el tipo DATE incluso cuando un filtro llega vacío en PostgreSQL."""
+    return text(query).bindparams(*SALES_EXPLORER_DATE_BINDS)
+
 
 def _clean_filter(value: Optional[str]) -> Optional[str]:
     return value.strip() if value and value.strip() else None
 
 
-def _sales_explorer_params(empresa_id: int, fecha_desde: Optional[str], fecha_hasta: Optional[str],
+def _sales_explorer_params(empresa_id: int, fecha_desde: Optional[date], fecha_hasta: Optional[date],
                            busqueda: Optional[str], familia: Optional[str], marca: Optional[str],
                            seccion: Optional[str], product_manager: Optional[str], tipo_cliente: Optional[str],
                            kd: Optional[str], comercial_cliente: Optional[str], comercial_factura: Optional[str]) -> dict:
     search = _clean_filter(busqueda)
     return {
         "empresa_id": empresa_id,
-        "fecha_desde": _clean_filter(fecha_desde),
-        "fecha_hasta": _clean_filter(fecha_hasta),
+        "fecha_desde": fecha_desde,
+        "fecha_hasta": fecha_hasta,
         "busqueda": f"%{search.casefold()}%" if search else None,
         "familia": _clean_filter(familia), "marca": _clean_filter(marca), "seccion": _clean_filter(seccion),
         "product_manager": _clean_filter(product_manager), "tipo_cliente": _clean_filter(tipo_cliente),
@@ -59,7 +71,7 @@ def _sales_explorer_params(empresa_id: int, fecha_desde: Optional[str], fecha_ha
 @router.get("/sales-explorer")
 def get_sales_explorer(
     page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=MAX_SALES_EXPLORER_LIMIT),
-    fecha_desde: Optional[str] = Query(None), fecha_hasta: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None), fecha_hasta: Optional[date] = Query(None),
     busqueda: Optional[str] = Query(None), familia: Optional[str] = Query(None), marca: Optional[str] = Query(None),
     seccion: Optional[str] = Query(None), product_manager: Optional[str] = Query(None),
     tipo_cliente: Optional[str] = Query(None), kd: Optional[str] = Query(None),
@@ -71,7 +83,7 @@ def get_sales_explorer(
     params = _sales_explorer_params(current_user.empresa_id, fecha_desde, fecha_hasta, busqueda, familia, marca,
                                     seccion, product_manager, tipo_cliente, kd, comercial_cliente, comercial_factura)
     joins = "FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id LEFT JOIN clientes c ON c.id = v.cliente_id"
-    totals = db.execute(text(f"""
+    totals = db.execute(_sales_explorer_query(f"""
         SELECT COALESCE(SUM(v.ingreso_total), 0) ventas_eur, COALESCE(SUM(v.cantidad_vendida), 0) unidades,
                COALESCE(SUM(v.margen_bruto_eur), 0) margen_eur, COALESCE(SUM(v.margen_destino_eur), 0) mgd_eur,
                COUNT(DISTINCT v.producto_id) skus, COUNT(DISTINCT v.cliente_id) clientes
@@ -79,7 +91,7 @@ def get_sales_explorer(
     """), params).mappings().one()
     group_by = """v.fecha_venta, p.sku, p.nombre, p.familia, p.marca, p.seccion, p.product_manager,
                   c.cliente_pk, c.nombre, c.tipo_cliente, c.comercial_cliente, v.kd, v.comercial_factura"""
-    total_records = db.execute(text(f"""
+    total_records = db.execute(_sales_explorer_query(f"""
         SELECT COUNT(*) FROM (SELECT 1 {joins} WHERE {SALES_EXPLORER_WHERE} GROUP BY {group_by}) lineas
     """), params).scalar_one()
     order_by = {
@@ -87,7 +99,7 @@ def get_sales_explorer(
         "margen_desc": "margen_eur DESC, fecha DESC",
         "fecha_desc": "fecha DESC, ventas_eur DESC",
     }[sort]
-    rows = db.execute(text(f"""
+    rows = db.execute(_sales_explorer_query(f"""
         SELECT v.fecha_venta fecha, COALESCE(p.sku, 'SIN_SKU') sku, COALESCE(p.nombre, 'SIN_NOMBRE_ARTICULO') articulo,
                COALESCE(p.familia, 'Sin familia') familia, COALESCE(p.marca, 'Sin marca') marca,
                COALESCE(p.seccion, 'Sin sección') seccion, COALESCE(p.product_manager, 'Sin PM') product_manager,

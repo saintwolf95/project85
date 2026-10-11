@@ -1,24 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CheckCircle2, Circle, FileText, History, Loader2, MessageSquare, Moon, Play, Sun, Volume2, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CheckCircle2, Circle, FileText, History, Loader2, MessageSquare, Moon, Play, Sun, Users, Volume2, WifiOff, X } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { getAgentExecutionHistory, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
 import type { AgentExecutionHistory, AgentInsight } from '../services/api';
 import { OfficeVivaCanvas } from '../agent-office-viva/OfficeVivaCanvas';
+import type { OfficeVivaCanvasHandle } from '../agent-office-viva/OfficeVivaCanvas';
 import { ROSTER } from '../agent-office/model';
 import type { AgentId } from '../agent-office/model';
 import { deliveredCount, useOffice } from '../agent-office/store';
 import './AgentOffice.css';
 
-const agentUrl = (id: AgentId) => id === 'ceo' ? '/ai-control/analistas#informe-ceo' : `/ai-control/analistas?agent=${id}`;
-const agentChatUrl = (id: Exclude<AgentId, 'ceo'>) => `/ai-control/analistas?agent=${id}#chat-agente`;
+const agentUrl = (id: AgentId) => id === 'ceo' ? '/ai-control/analistas#informe-ceo' : `/ai-control/analistas?agent=${id}&view=expediente`;
+const agentChatUrl = (id: Exclude<AgentId, 'ceo'>) => `/ai-control/analistas?agent=${id}&view=chat`;
 const GENERIC_TASKS: Record<AgentId, string> = {
   maria: 'Revisión de disponibilidad, cobertura y capital inmovilizado',
   lucia: 'Revisión de ventas, clientes y oportunidades comerciales',
   mattia: 'Revisión de MG, MGD y exposición económica',
   ceo: 'Consolidación de los informes verificados del equipo',
 };
+type MeetingState = { type: 'executive' } | { type: 'agent'; agentId: Exclude<AgentId, 'ceo'> } | null;
 
 const summarizeMarkdown = (markdown?: string) => {
   if (!markdown) return '';
@@ -65,6 +67,8 @@ export const AgentOffice = () => {
   const [historyError, setHistoryError] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('office-sound') === 'true');
   const [browserNotifications, setBrowserNotifications] = useState(() => localStorage.getItem('office-browser-notifications') === 'true' && Notification.permission === 'granted');
+  const [meeting, setMeeting] = useState<MeetingState>(null);
+  const officeCanvasRef = useRef<OfficeVivaCanvasHandle>(null);
   const profileRef = useRef<HTMLElement>(null);
   const closeProfileRef = useRef<HTMLButtonElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -98,6 +102,8 @@ export const AgentOffice = () => {
       if (event.key === 'Escape') {
         event.preventDefault();
         setSelectedAgent(null);
+        officeCanvasRef.current?.endMeeting();
+        setMeeting(current => current?.type === 'agent' ? null : current);
         return;
       }
       if (event.key !== 'Tab' || !profileRef.current) return;
@@ -118,6 +124,25 @@ export const AgentOffice = () => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSelectedAgent(id);
   }, []);
+
+  const endMeeting = useCallback(() => {
+    officeCanvasRef.current?.endMeeting();
+    setMeeting(null);
+  }, []);
+  const closeProfile = useCallback(() => {
+    setSelectedAgent(null);
+    if (meeting?.type === 'agent') endMeeting();
+  }, [endMeeting, meeting]);
+  const startExecutiveMeeting = () => {
+    officeCanvasRef.current?.startExecutiveMeeting();
+    setMeeting({ type: 'executive' });
+    setSelectedAgent(null);
+  };
+  const startAgentMeeting = (agentId: Exclude<AgentId, 'ceo'>) => {
+    officeCanvasRef.current?.startAgentMeeting(agentId);
+    setMeeting({ type: 'agent', agentId });
+    openProfile(agentId);
+  };
 
   const start = async () => {
     setStarting(true); setRunError(''); setRunResult('');
@@ -166,8 +191,20 @@ export const AgentOffice = () => {
       {(runError || runResult) && <p className={`mb-4 rounded-xl p-3 text-sm ${runError ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'}`} role="status">{runError || runResult}</p>}
       <section className="office-scene-panel" aria-label="Oficina isométrica de agentes">
         <div className="office-scene-heading"><div><span className="office-scene-eyebrow">Sala de trabajo</span><h2>{connected ? 'Equipo en directo' : 'Estado no confirmado'}</h2></div><span className={`office-scene-key ${connected ? '' : 'office-scene-key-offline'}`}><i />{connected ? 'Trabajo real = monitor azul' : 'Monitores neutralizados hasta reconectar'}</span></div>
-        <OfficeVivaCanvas dayNight={dayNight} connected={connected} execution={execution} onAgentClick={openProfile} />
+        <div className="office-meeting-actions" aria-label="Reuniones de la oficina">
+          <button type="button" onClick={startExecutiveMeeting} className="office-control office-meeting-primary"><Users size={16} />Reunión ejecutiva</button>
+          {ROSTER.filter(agent => agent.id !== 'ceo').map(agent => <button key={agent.id} type="button" onClick={() => startAgentMeeting(agent.id as Exclude<AgentId, 'ceo'>)} className="office-control"><MessageSquare size={15} />Reunión con {agent.name}</button>)}
+          {meeting && <button type="button" onClick={endMeeting} className="office-control office-meeting-end">Volver a la oficina</button>}
+        </div>
+        <OfficeVivaCanvas ref={officeCanvasRef} dayNight={dayNight} connected={connected} execution={execution} onAgentClick={openProfile} />
       </section>
+      {meeting?.type === 'executive' && <section className="office-meeting-summary" aria-live="polite" aria-labelledby="executive-meeting-title">
+        <header><div><span className="office-scene-eyebrow">Reunión en curso</span><h2 id="executive-meeting-title">Reunión ejecutiva</h2><p>El equipo comparte sus conclusiones; el CEO consolida las prioridades para decisión.</p></div><button type="button" onClick={endMeeting} className="office-profile-close" aria-label="Cerrar reunión ejecutiva"><X size={18} /></button></header>
+        <div className="office-meeting-findings">
+          {ROSTER.filter(agent => agent.id !== 'ceo').map(agent => <article key={agent.id}><span>{agent.name} · {agent.role}</span><p>{canViewFindings ? findingFor(latestInsight, agent.id) || 'Sin hallazgo publicado todavía.' : 'Hallazgo disponible para los roles autorizados.'}</p></article>)}
+          <article className="office-meeting-ceo"><span>CEO · Conclusión ejecutiva</span><p>{canViewFindings ? findingFor(latestInsight, 'ceo') || 'El CEO preparará la consolidación cuando existan informes del equipo.' : 'Conclusión disponible para los roles autorizados.'}</p></article>
+        </div>
+      </section>}
       <section className="office-roster" aria-label="Estados reales de los agentes">
         {ROSTER.map(agent => <button key={agent.id} type="button" onClick={() => openProfile(agent.id)} aria-haspopup="dialog" aria-label={`Abrir ficha rápida de ${agent.name}`} className="office-agent-card">
           <div><span className="office-agent-role">{agent.role}</span><h3>{agent.name}</h3></div>
@@ -185,14 +222,14 @@ export const AgentOffice = () => {
       <footer className="mt-5 flex flex-wrap justify-between gap-2 text-xs text-slate-500 dark:text-slate-400"><span>Estados del servidor · actualización automática · sin llamadas IA por animación</span><span>Los bocadillos ambientales no muestran clientes, SKU ni importes.</span></footer>
     </div>
     {selectedAgent && selectedProfile && <div className="office-profile-backdrop">
-      <button type="button" className="office-profile-dismiss-layer" onClick={() => setSelectedAgent(null)} aria-label={`Cerrar ficha de ${selectedProfile.name}`} />
+      <button type="button" className="office-profile-dismiss-layer" onClick={closeProfile} aria-label={`Cerrar ficha de ${selectedProfile.name}`} />
       <aside ref={profileRef} className="office-profile" role="dialog" aria-modal="true" aria-labelledby="office-profile-title" aria-describedby="office-profile-description">
         <header className="office-profile-header">
-          <div><span className="office-scene-eyebrow">Ficha rápida</span><h2 id="office-profile-title">{selectedProfile.name} · {selectedProfile.role}</h2></div>
-          <button ref={closeProfileRef} type="button" onClick={() => setSelectedAgent(null)} className="office-profile-close" aria-label={`Cerrar ficha de ${selectedProfile.name}`}><X size={19} /></button>
+          <div><span className="office-scene-eyebrow">{meeting?.type === 'agent' && meeting.agentId === selectedProfile.id ? 'Reunión individual' : 'Ficha rápida'}</span><h2 id="office-profile-title">{selectedProfile.name} · {selectedProfile.role}</h2></div>
+          <button ref={closeProfileRef} type="button" onClick={closeProfile} className="office-profile-close" aria-label={`Cerrar ficha de ${selectedProfile.name}`}><X size={19} /></button>
         </header>
         <div className="office-profile-body">
-          <p id="office-profile-description" className="office-profile-intro">Estado confirmado por el servidor y contexto del último informe disponible.</p>
+          <p id="office-profile-description" className="office-profile-intro">{meeting?.type === 'agent' && meeting.agentId === selectedProfile.id ? 'El agente comparte su hallazgo principal en la mesa central. Esta conversación visual no altera sus análisis ni el estado del servidor.' : 'Estado confirmado por el servidor y contexto del último informe disponible.'}</p>
           <dl className="office-profile-facts">
             <div><dt>Estado</dt><dd data-state={connected ? real[selectedAgent].status : 'desconectado'}>{connected ? real[selectedAgent].stage : 'No confirmado'}</dd></div>
             <div><dt>Etapa de ejecución</dt><dd>{connected ? execution?.etapa || 'Sin ejecución registrada' : 'Esperando reconexión'}</dd></div>

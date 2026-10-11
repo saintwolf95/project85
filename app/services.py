@@ -219,11 +219,9 @@ def calculate_inventory_metrics(db: Session, empresa_id: int):
     df["marca"] = df["marca"]
     df["precio_unit"] = df["precio_venta"]
     df["unidades"] = df["stock_disponible"]
-    # Mantener el valor observado del último snapshot, no una reconstrucción.
-    df["valor_inv"] = [
-        snapshot.inventario_eur if snapshot else 0.0
-        for _, snapshot in productos
-    ]
+    # ``valor_inv`` ya quedó alineado con el SKU antes de las ordenaciones ABC/XYZ.
+    # No volver a asignarlo desde ``productos``: esa colección conserva el orden de
+    # consulta, distinto del DataFrame ya ordenado, y cruzaría importes entre SKU.
     
     df["product_manager"] = df["product_manager"]
     df["seccion"] = df["seccion"]

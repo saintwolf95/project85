@@ -55,6 +55,7 @@ export const AiControlPanel = () => {
   const [searchParams] = useSearchParams();
   const agentFromUrl = searchParams.get('agent')?.toLowerCase().replace('í', 'i');
   const signalFromUrl = searchParams.get('signal');
+  const agentView = searchParams.get('view') === 'chat' ? 'chat' : 'expediente';
   const [settings, setSettings] = useState<AgentSettings>({ fase1_active: false, fase2_active: false });
   const [insightsHistory, setInsightsHistory] = useState<AgentInsight[]>([]);
   const [dataReadiness, setDataReadiness] = useState<AgentDataReadiness | null>(null);
@@ -82,6 +83,7 @@ export const AiControlPanel = () => {
   const [isInvestigating, setIsInvestigating] = useState(false);
   const [investigationError, setInvestigationError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Cerebro del Negocio
   const [isContextModalOpen, setIsContextModalOpen] = useState(false);
@@ -144,10 +146,17 @@ export const AiControlPanel = () => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [agentChatHistory]);
   useEffect(() => {
-    if (!selectedAgent || window.location.hash !== '#chat-agente') return;
-    const frame = window.requestAnimationFrame(() => document.getElementById('chat-agente')?.scrollIntoView({ block: 'start' }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedAgent]);
+    if (!selectedAgent || agentView !== 'chat') return;
+    let focusTimer: number | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById('chat-agente')?.scrollIntoView({ block: 'start' });
+      focusTimer = window.setTimeout(() => chatInputRef.current?.focus(), 50);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (focusTimer) window.clearTimeout(focusTimer);
+    };
+  }, [selectedAgent, agentView]);
 
   const handleSendAgentMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -724,20 +733,27 @@ export const AiControlPanel = () => {
             <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#fbfbfd] px-6 py-5 dark:border-white/[0.1] dark:bg-[#2c2c2e]">
               <div>
                 <h2 className="flex items-center gap-2 text-[22px] font-semibold tracking-[-0.02em] text-[#1d1d1f] dark:text-white">
-                  Expediente: {AGENTS_INFO[selectedAgent].name}
+                  {agentView === 'chat' ? `Chat con ${AGENTS_INFO[selectedAgent].name}` : `Expediente: ${AGENTS_INFO[selectedAgent].name}`}
                 </h2>
                 <p className="mt-1 text-[12px] text-[#6e6e73]">
-                  Área: {AGENTS_INFO[selectedAgent].role} · Informe diario · Memoria analítica: 7 días
+                  Área: {AGENTS_INFO[selectedAgent].role} · {agentView === 'chat' ? 'Conversación contextual con memoria analítica de 7 días' : 'Informe diario y estudios verificables'}
                 </p>
               </div>
-              <button title="Cerrar expediente" aria-label="Cerrar expediente" onClick={() => setSelectedAgent(null)} className="rounded-full bg-[#e8e8ed] p-2 text-[#6e6e73] transition-colors hover:text-[#1d1d1f] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-white">
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-[10px] bg-[#e8e8ed] p-1 dark:bg-slate-700" aria-label="Vista del agente">
+                  <Link to={`/ai-control/analistas?agent=${selectedAgent}&view=expediente`} className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-colors ${agentView === 'expediente' ? 'bg-white text-[#0071e3] shadow-sm dark:bg-slate-600 dark:text-[#64d2ff]' : 'text-[#6e6e73] dark:text-slate-300'}`}>Expediente</Link>
+                  <Link to={`/ai-control/analistas?agent=${selectedAgent}&view=chat`} className={`rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-colors ${agentView === 'chat' ? 'bg-white text-[#0071e3] shadow-sm dark:bg-slate-600 dark:text-[#64d2ff]' : 'text-[#6e6e73] dark:text-slate-300'}`}>Chat</Link>
+                </div>
+                <button title="Cerrar agente" aria-label="Cerrar agente" onClick={() => setSelectedAgent(null)} className="rounded-full bg-[#e8e8ed] p-2 text-[#6e6e73] transition-colors hover:text-[#1d1d1f] dark:bg-slate-700 dark:text-slate-300 dark:hover:text-white">
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
-            <div className="p-3 md:p-5 overflow-y-auto lg:overflow-hidden flex-1 grid grid-cols-1 lg:grid-cols-[minmax(360px,0.85fr)_minmax(560px,1.15fr)] lg:grid-rows-[auto_minmax(0,1fr)] gap-4 min-h-0">
+            <div className={`p-3 md:p-5 overflow-y-auto flex-1 min-h-0 ${agentView === 'chat' ? 'flex' : 'grid grid-cols-1 lg:grid-cols-[minmax(360px,0.85fr)_minmax(560px,1.15fr)] lg:grid-rows-[auto_minmax(0,1fr)] gap-4 lg:overflow-hidden'}`}>
+              {agentView === 'expediente' && <>
               {/* Vista previa del informe diario */}
-              <section className="order-1 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white dark:border-slate-700 dark:bg-slate-900 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+              <section id="agent-expediente" className="order-1 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-white dark:border-slate-700 dark:bg-slate-900 lg:col-start-2 lg:row-span-2 lg:row-start-1">
                 <div className="flex items-center justify-between gap-3 border-b border-black/[0.08] bg-[#fbfbfd] px-5 py-4 dark:border-slate-700 dark:bg-slate-800">
                   <div className="flex items-center gap-2">
                     <PanelRight size={17} className="text-brand-blue dark:text-brand-cyan" />
@@ -835,9 +851,10 @@ export const AiControlPanel = () => {
                   </div>
                 </div>
               </div>
+              </>}
 
               {/* Chat */}
-              <div id="chat-agente" className="order-3 flex min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-900 lg:col-start-1 lg:row-start-2 lg:min-h-0">
+              {agentView === 'chat' && <div id="chat-agente" className="flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-900 lg:min-h-0">
                 <div className="flex shrink-0 items-center gap-2 border-b border-black/[0.08] bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                   <MessageSquare size={16} className="text-[#0071e3] dark:text-brand-cyan" />
                   <span className="text-[14px] font-medium text-[#1d1d1f] dark:text-slate-200">Chat con {AGENTS_INFO[selectedAgent].name}</span>
@@ -881,6 +898,7 @@ export const AiControlPanel = () => {
 
                 <form onSubmit={handleSendAgentMessage} className="flex shrink-0 gap-2 border-t border-black/[0.08] bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
                   <textarea
+                    ref={chatInputRef}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -899,7 +917,7 @@ export const AiControlPanel = () => {
                     <Send size={18} />
                   </button>
                 </form>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

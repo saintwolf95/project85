@@ -1160,6 +1160,7 @@ initCat();
 let dpr = 1, vw = 0, vh = 0, scale = 2, zoom = 2, autoFit = true;
 const cam = { x: LW / 2, y: LH / 2 + 4 }, camGoal = { x: cam.x, y: cam.y };
 let selected = null, hovered = null;
+let meetingRevision = 0;
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
@@ -1514,6 +1515,63 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
     }
   }
 
+  function resumeFromMeeting(a) {
+    interrupt(a);
+    if (a.real.status === 'working') {
+      if (a.id === 'ceo') {
+        const spot = { x: 9, y: 5 };
+        reserve(a, spot);
+        a.queue = [S.go(spot, TABLE_CENTER), S.anim('type', Infinity)];
+      } else a.queue = [S.go(seatOf(a), deskFace(a)), S.anim('type', Infinity)];
+      return;
+    }
+    a.queue = [S.go(seatOf(a), deskFace(a)), S.anim('sit', 2)];
+  }
+
+  function endMeeting() {
+    meetingRevision += 1;
+    for (const attendee of AG_LIST) resumeFromMeeting(attendee);
+  }
+
+  function meeting(type, agentId) {
+    endMeeting();
+    const revision = meetingRevision;
+    const attendees = type === 'executive'
+      ? AG_LIST
+      : [AG[agentId], AG.ceo].filter(Boolean);
+    const lines = type === 'executive'
+      ? {
+          maria: 'Inventario: hallazgo listo para revisar',
+          lucia: 'Ventas: conclusión preparada',
+          mattia: 'Finanzas: conclusión preparada',
+          ceo: 'CEO: priorizo las decisiones del equipo',
+        }
+      : {
+          maria: 'María comparte su hallazgo principal',
+          lucia: 'Lucía comparte su hallazgo principal',
+          mattia: 'Mattia comparte su hallazgo principal',
+          ceo: 'CEO: revisamos la conclusión juntos',
+        };
+    attendees.forEach((attendee, index) => {
+      const spot = TABLE_SEATS[index % TABLE_SEATS.length];
+      reserve(attendee, spot);
+      attendee.ambient = 'En reunión';
+      attendee.queue = [
+        S.go(spot, TABLE_CENTER),
+        S.say(lines[attendee.id], 1),
+        S.anim(attendee.id === 'ceo' ? 'sitTalk' : 'sitTalk', Infinity),
+      ];
+      attendee.queue.forEach((step) => { step.important = true; });
+    });
+    if (type === 'executive') {
+      schedule(() => {
+        if (meetingRevision !== revision) return;
+        const ceo = AG.ceo;
+        if (ceo) say(ceo, 'CEO: consolido lo esencial para decidir', true);
+      }, 4200);
+    }
+  }
+
   resize();
   cam.x = camGoal.x; cam.y = camGoal.y;
   view.addEventListener('pointerdown', onPointerDown);
@@ -1529,6 +1587,8 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
     apply,
     select: (agentId) => select(AG[agentId] || null, true),
     hydrate,
+    meeting,
+    endMeeting,
     destroy() {
       if (destroyed) return;
       destroyed = true;

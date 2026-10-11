@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { mountOffice } from './api';
 import type { AgentExecution } from '../services/api';
 import type { OfficeAgentId, OfficeHandle } from './api';
@@ -11,8 +11,14 @@ type OfficeVivaCanvasProps = {
   onAgentClick: (agentId: OfficeAgentId) => void;
 };
 
+export type OfficeVivaCanvasHandle = {
+  startExecutiveMeeting: () => void;
+  startAgentMeeting: (agentId: OfficeAgentId) => void;
+  endMeeting: () => void;
+};
+
 /** React boundary for the Canvas-only office. All HUD remains outside the canvas. */
-export function OfficeVivaCanvas({ dayNight, connected, execution, onAgentClick }: OfficeVivaCanvasProps) {
+export const OfficeVivaCanvas = forwardRef<OfficeVivaCanvasHandle, OfficeVivaCanvasProps>(function OfficeVivaCanvas({ dayNight, connected, execution, onAgentClick }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onAgentClickRef = useRef(onAgentClick);
   const officeRef = useRef<OfficeHandle | null>(null);
@@ -64,7 +70,13 @@ export function OfficeVivaCanvas({ dayNight, connected, execution, onAgentClick 
     };
   }, [dayNight]);
 
+  useImperativeHandle(ref, () => ({
+    startExecutiveMeeting: () => officeRef.current?.meeting('executive'),
+    startAgentMeeting: (agentId) => officeRef.current?.meeting('agent', agentId),
+    endMeeting: () => officeRef.current?.endMeeting(),
+  }), []);
+
   return <div className="office-viva-canvas">
     <canvas ref={canvasRef} aria-label="Oficina viva de agentes" />
   </div>;
-}
+});

@@ -30,6 +30,10 @@ export interface OfficeHandle {
   select(agentId: OfficeAgentId | null): void;
   /** Rebuilds an already-running office without replaying historical animations. */
   hydrate(snapshot: OfficeSnapshot): void;
+  /** Starts a presentation-only meeting; it never changes server execution state. */
+  meeting(type: 'executive' | 'agent', agentId?: OfficeAgentId): void;
+  /** Returns attendees to their server-confirmed working or resting positions. */
+  endMeeting(): void;
   destroy(): void;
 }
 

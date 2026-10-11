@@ -1,6 +1,6 @@
 # Intelligence ABCXYZ
 
-## Estado verificado · 08/10/2026 · v1.60
+## Estado verificado · 11/10/2026 · v1.79
 
 - Verificado `Intelligence.tsx`: vista general, catálogo y alertas; matriz y guía visible compartida con Dashboard desde v1.59.
 - Fuentes de clasificación: `app/services.py` y `app/semantic_metrics.py`; cortes acumulados 0,80 y 0,95. Filas ABC por ventas, columnas XYZ por valor de inventario.
@@ -16,6 +16,12 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - La página necesita el catálogo completo para matriz y filtros; solicita hasta 20.000 SKU. No rebajar el límite de la API por debajo de las cargas reales.
 - ABC representa ventas EUR de 90 días; XYZ usa inventario EUR actual. Explicar la falta de XYZ si no existe inventario cargado, sin simularlo.
 - Mantener sin animación los gráficos de chat y evitar recargas visuales al escribir en el Copilot; los avisos de tamaño de Recharts no son un error de datos.
+
+## Actualización v1.79 — integridad del catálogo
+
+- El catálogo consume el universo real de `GET /analytics/inventory-abc`: `productos`, último `inventario_snapshot` y ventas de los últimos 90 días, siempre filtrados por empresa.
+- Tras ordenar para ABCXYZ, `valor_inv` debe conservar su asociación con el SKU. No reinyectar importes desde la consulta original después de ordenar el DataFrame, ya que cruzaría valores entre artículos.
+- La vista de alertas y su gráfico por familia incluyen tanto `Riesgo Rotura` como `Alerta Rotura`; esta última representa stock cero o crítico y no puede quedar fuera del triage.
 
 ## Actualización v1.43
 

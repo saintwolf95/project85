@@ -33,6 +33,8 @@ const EXPORT_COLUMNS: ReadonlyArray<{ id: keyof ProductMetrics; label: string }>
   { id: 'riesgos_categorizados', label: 'Riesgos' }
 ];
 
+const hasStockRisk = (product: ProductMetrics) => product.riesgos_categorizados?.some(risk => risk === 'Riesgo Rotura' || risk === 'Alerta Rotura') ?? false;
+
 export const Intelligence = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export const Intelligence = () => {
     }
 
     if (activeTab === 'risks') {
-      result = result.filter(p => p.riesgos_categorizados?.includes('Riesgo Rotura'));
+      result = result.filter(hasStockRisk);
     }
 
     if (selectedRisk) {
@@ -138,7 +140,7 @@ export const Intelligence = () => {
   }, [filteredData, currentPage]);
 
   const riskFamilyData = useMemo(() => {
-    const counts = inventoryData.reduce<Record<string, { name: string; value: number }>>((acc, product) => {
+    const counts = inventoryData.filter(hasStockRisk).reduce<Record<string, { name: string; value: number }>>((acc, product) => {
       const family = product.familia || 'Sin familia';
       const entry = acc[family] ?? { name: family, value: 0 };
       acc[family] = { ...entry, value: entry.value + 1 };
@@ -371,6 +373,7 @@ export const Intelligence = () => {
                 >
                   <option value="">Todos los Riesgos</option>
                   <option value="Sano">Sano</option>
+                  <option value="Alerta Rotura">Alerta Rotura</option>
                   <option value="Riesgo Rotura">Riesgo Rotura</option>
                   <option value="Riesgo Financiero">Riesgo Financiero</option>
                   <option value="Riesgo Comercial">Riesgo Comercial</option>
@@ -450,7 +453,7 @@ export const Intelligence = () => {
             <div className="flex justify-center items-center h-64">
                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
             </div>
-          ) : inventoryData.length === 0 ? (
+          ) : filteredData.length === 0 ? (
             <div className="bg-green-500/10 border border-green-500/30 text-green-400 p-8 rounded-xl text-center">
               <p className="text-lg font-medium">¡Todo en orden! No hay productos en riesgo de ruptura de stock.</p>
             </div>

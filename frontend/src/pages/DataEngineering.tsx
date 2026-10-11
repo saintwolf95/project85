@@ -21,6 +21,7 @@ import {
 } from '../services/api';
 import type {
   DataImportDataset,
+  DataImportError,
   DataImportResult,
   DataImportStatus,
   DataImportValidation,
@@ -34,6 +35,7 @@ interface BatchFileItem {
   file: File;
   state: BatchFileState;
   message?: string;
+  errors?: DataImportError[];
 }
 
 const importStartDate = (file: File) => file.name.match(/_(\d{4}-\d{2}-\d{2})_/)?.[1] || '';
@@ -82,6 +84,13 @@ const apiErrorMessage = (error: unknown) => {
   if (typeof detail === 'string') return detail;
   if (detail?.errors?.length) return `La carga contiene ${detail.errors.length} errores. Revisa el archivo antes de continuar.`;
   return 'No se pudo procesar el archivo. Comprueba el formato e inténtalo de nuevo.';
+};
+
+const apiValidationErrors = (error: unknown): DataImportError[] => {
+  const candidate = error as {
+    response?: { data?: { detail?: { errors?: DataImportError[] } } };
+  };
+  return candidate.response?.data?.detail?.errors || [];
 };
 
 export const DataEngineering = () => {
@@ -253,7 +262,7 @@ export const DataEngineering = () => {
         } catch (batchError) {
           const message = apiErrorMessage(batchError);
           setBatchItems(items => items.map((item, itemIndex) => itemIndex === index
-            ? { ...item, state: 'failed', message }
+            ? { ...item, state: 'failed', message, errors: apiValidationErrors(batchError) }
             : item,
           ));
           setError(`El lote se detuvo en "${nextFile.name}". Los archivos anteriores ya están guardados; corrige este archivo y vuelve a seleccionar los pendientes. ${message}`);
@@ -703,7 +712,7 @@ export const DataEngineering = () => {
             </div>
           )}
 
-          {isBatch && !isLoading && batchCompleted > 0 && (
+          {isBatch && !isLoading && (batchCompleted > 0 || batchFailed) && (
             <div className={`mt-5 border-l-2 px-4 py-3 ${batchFailed ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-500/5' : 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/5'}`}>
               <div className="flex items-center gap-2">
                 {batchFailed ? <AlertCircle size={19} className="text-amber-600" /> : <CheckCircle2 size={19} className="text-emerald-600" />}
@@ -715,6 +724,17 @@ export const DataEngineering = () => {
                 {batchCompleted} de {batchFiles.length} archivos cargados. Los cálculos y paneles se han actualizado una vez al finalizar.
               </p>
               {batchFailed && <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Revisa el archivo marcado y vuelve a seleccionar únicamente ese archivo y los pendientes.</p>}
+              {!!batchFailed?.errors?.length && (
+                <div className="mt-3 max-h-56 overflow-y-auto border-t border-amber-200 pt-2 dark:border-amber-500/20">
+                  <p className="mb-1 text-xs font-medium text-amber-800 dark:text-amber-300">Primeras incidencias detectadas</p>
+                  {batchFailed.errors.slice(0, 15).map((item, index) => (
+                    <p key={`${item.line}-${index}`} className="py-1 text-xs text-amber-800 dark:text-amber-300">
+                      Fila {item.line}: {item.message}
+                    </p>
+                  ))}
+                  {batchFailed.errors.length > 15 && <p className="pt-1 text-xs text-amber-800 dark:text-amber-300">Se muestran 15 de {batchFailed.errors.length} incidencias.</p>}
+                </div>
+              )}
             </div>
           )}
         </main>

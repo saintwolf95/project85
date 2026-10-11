@@ -785,6 +785,12 @@ def _validation_response(
     warnings: list[dict[str, Any]],
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
+    # El rango extraído del nombre se mantiene como ``date`` mientras se valida
+    # cada fila, pero la respuesta HTTP solo puede contener valores JSON.
+    response_metadata = {
+        key: value.isoformat() if isinstance(value, (date, datetime)) else value
+        for key, value in metadata.items()
+    }
     response = {
         "dataset": dataset,
         "valid": not errors,
@@ -793,7 +799,7 @@ def _validation_response(
         "rows_invalid": len(source_rows) - len(valid_rows),
         "errors": errors,
         "warnings": warnings,
-        **metadata,
+        **response_metadata,
     }
     if dataset in {"sales", "inventory"} and valid_rows:
         date_field = "fecha_venta" if dataset == "sales" else "fecha_inventario"

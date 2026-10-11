@@ -3,11 +3,12 @@ import hashlib
 import io
 import unittest
 import zipfile
+from datetime import date
 
 from fastapi import HTTPException
 from openpyxl import Workbook
 
-from app.routers.data_import import DATASET_CONFIG, MAX_IMPORT_ROWS, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _read_xlsx, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive
+from app.routers.data_import import DATASET_CONFIG, MAX_IMPORT_ROWS, _canonicalize_headers, _margin_percentage_with_loss_floor, _parse_number, _parse_percentage, _read_csv, _read_xlsx, _resolve_sales_mode, _validate_rows, _validate_xlsx_archive, _validation_response
 
 
 class ClientesVentasTests(unittest.TestCase):
@@ -96,17 +97,34 @@ class ClientesVentasTests(unittest.TestCase):
         self.assertEqual(valid[0]["cliente_pk"], "CLI-SIN-NOMBRE")
         self.assertEqual(valid[0]["nombre_cliente"], "Sin nombre cliente")
 
-    def test_rechaza_mgd_superior_a_mg(self):
+    def test_advierte_si_mgd_supera_mg_sin_bloquear_la_fila(self):
         headers = _canonicalize_headers(DATASET_CONFIG["sales"]["headers"], "sales")
         row = dict(zip(headers, DATASET_CONFIG["sales"]["sample"]))
         row["margen_bruto_eur"] = "10"
         row["margen_destino_eur"] = "10,02"
 
-        valid, errors, _warnings = _validate_rows("sales", [row])
+        valid, errors, warnings = _validate_rows("sales", [row])
 
-        self.assertEqual(valid, [])
-        self.assertEqual(len(errors), 1)
-        self.assertIn("MGD no puede ser superior al MG", errors[0]["message"])
+        self.assertEqual(errors, [])
+        self.assertEqual(len(valid), 1)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("MGD es superior al MG", warnings[0]["message"])
+
+    def test_serializa_las_fechas_del_nombre_de_archivo_en_respuesta_de_validacion(self):
+        response = _validation_response(
+            "sales",
+            [],
+            [],
+            [{"line": 2, "message": "Fecha inválida"}],
+            [],
+            {
+                "filename_date_min": date(2026, 5, 1),
+                "filename_date_max": date(2026, 5, 31),
+            },
+        )
+
+        self.assertEqual(response["filename_date_min"], "2026-05-01")
+        self.assertEqual(response["filename_date_max"], "2026-05-31")
 
     def test_conserva_decimales_de_una_celda_numerica_xlsx(self):
         self.assertEqual(_parse_number(792.785, "MGD"), 792.785)

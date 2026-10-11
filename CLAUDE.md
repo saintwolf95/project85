@@ -331,3 +331,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - La aplicación usa las URL del pooler de Supabase y `psycopg` como dialecto PostgreSQL. En `app/database.py`, tanto el motor de escritura como el de solo lectura deben incluir `prepare_threshold=None` en `connect_args`.
 - El pooler por transacción puede asignar una conexión física distinta a cada operación. No reactivar las sentencias preparadas automáticas: provocan `psycopg.errors.DuplicatePreparedStatement` y pueden interrumpir una carga o un proceso de agentes aunque los datos sean válidos.
+
+## Actualización v1.75 — respuesta segura de validación por lote
+
+- Los límites de fecha extraídos del nombre estándar del archivo se usan internamente como fechas para resolver formatos ambiguos de SQL Server. Antes de incluirlos en una respuesta HTTP de validación deben serializarse como `YYYY-MM-DD`.
+- Un error de calidad de un archivo nunca debe provocar un `TypeError` de serialización ni ocultar al usuario las filas concretas que debe revisar. El cambio de ejercicio fiscal no requiere ningún tratamiento especial: es un rango de fechas más.

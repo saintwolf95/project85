@@ -19,7 +19,7 @@ const SALES_COLUMNS: ColumnDefinition[] = [
   { name: '% MGD', type: 'porcentaje', required: true, destination: 'margen_destino_pct', description: 'Porcentaje de margen puesto en destino.' },
   { name: 'MGD', type: 'EUR', required: true, destination: 'margen_destino_eur', description: 'Margen puesto en destino en euros.' },
   { name: 'Nombre Articulo', type: 'texto', required: true, destination: 'nombre', description: 'Nombre del producto.' },
-  { name: 'ArticuloPK', type: 'texto', required: true, destination: 'sku', description: 'Referencia interna estable del artículo.' },
+  { name: 'ArticuloPK', type: 'texto', required: true, destination: 'sku', description: 'Referencia interna estable del artículo. Si una venta no lo incluye, se agrupa como SIN_SKU.' },
   { name: 'Nombre Marca', type: 'texto', required: true, destination: 'marca', description: 'Marca del producto.' },
   { name: 'Familia/Marca', type: 'texto', required: true, destination: 'familia_marca', description: 'Agrupación combinada, por ejemplo Moviles/Apple.' },
   { name: 'Nombre Familia', type: 'texto', required: true, destination: 'familia', description: 'Familia del producto.' },

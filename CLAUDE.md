@@ -336,3 +336,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Los límites de fecha extraídos del nombre estándar del archivo se usan internamente como fechas para resolver formatos ambiguos de SQL Server. Antes de incluirlos en una respuesta HTTP de validación deben serializarse como `YYYY-MM-DD`.
 - Un error de calidad de un archivo nunca debe provocar un `TypeError` de serialización ni ocultar al usuario las filas concretas que debe revisar. El cambio de ejercicio fiscal no requiere ningún tratamiento especial: es un rango de fechas más.
+
+## Actualización v1.76 — ventas sin referencia de artículo
+
+- Si una fila de **ventas** llega con `ArticuloPK` vacío, la aplicación conserva sus importes bajo el SKU técnico único `SIN_SKU` y presenta una advertencia de calidad. No inventar referencias ni eliminar esas ventas de los totales financieros.
+- Catálogo e inventario conservan `sku` como dato obligatorio: una existencia sin artículo identificado no se puede normalizar de la misma forma.

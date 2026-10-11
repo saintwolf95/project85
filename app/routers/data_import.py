@@ -49,6 +49,7 @@ SUPPORTED_DATASETS = {"products", "inventory", "sales"}
 POWER_BI_TRAILER_PREFIXES = ("total", "subtotal", "filtros_aplicados", "filters_applied")
 MISSING_CLIENT_PK = "SIN-CLIENTE"
 MISSING_CLIENT_NAME = "Sin nombre cliente"
+MISSING_SKU = "SIN_SKU"
 
 DATASET_CONFIG = {
     "products": {
@@ -638,7 +639,19 @@ def _validate_rows(
 
     for index, row in enumerate(rows, start=2):
         try:
-            sku = _required_text(row.get("sku"), "sku", 120)
+            raw_sku = str(row.get("sku") or "").strip()
+            # Una venta sin artículo no puede atribuirse a un SKU real, pero sí
+            # debe conservarse en los totales financieros bajo una referencia
+            # técnica única. Inventario y catálogo mantienen el SKU obligatorio.
+            if dataset == "sales" and not raw_sku:
+                sku = MISSING_SKU
+                if len(warnings) < MAX_REPORTED_WARNINGS:
+                    warnings.append({
+                        "line": index,
+                        "message": "ArticuloPK vacío: se asigna SIN_SKU para conservar la venta",
+                    })
+            else:
+                sku = _required_text(raw_sku, "sku", 120)
             if dataset == "products":
                 normalized_sku = sku.casefold()
                 if normalized_sku in seen_keys:

@@ -28,6 +28,8 @@ Los CSV pueden contener nombres con comas y medidas en pulgadas siempre que est�
 
 La guía debe explicar que las columnas `ClientePK` y `Nombre Cliente` deben existir, aunque sus celdas pueden estar vacías. La importación asigna `SIN-CLIENTE` y `Sin nombre cliente` cuando no hay identificación disponible.
 
+La columna `ArticuloPK` debe existir. En ventas, una celda vacía se conserva bajo `SIN_SKU`, con advertencia; en inventario y catálogo no se permite porque no existe una referencia segura que normalizar.
+
 ## Actualización v1.69-v1.72 — importación desde SQL Server
 
 - La guía debe identificar la Carga Manual SQL como vía temporal: el script de PowerShell genera CSV UTF-8 desde las dos vistas de SQL Server; no requiere una exportación manual desde Power BI.

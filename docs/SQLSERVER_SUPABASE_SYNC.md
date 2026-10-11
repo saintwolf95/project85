@@ -56,3 +56,42 @@ Mientras se tramita la Conexión Oficial SQL, ejecutar
 `DATA01`. Genera automáticamente CSV UTF-8: ventas por mes e inventario por
 semana, listos para validar y cargar en Data Engineering. El script necesita el
 módulo PowerShell `SqlServer` y usa `SQLSERVER_CONNECTION_STRING` como secreto.
+
+### Procedimiento vigente
+
+1. En el equipo de empresa, instalar una sola vez el módulo con
+   `Install-Module SqlServer -Scope CurrentUser`.
+2. Definir en la sesión de PowerShell la cadena integrada de solo lectura:
+
+```powershell
+$env:SQLSERVER_CONNECTION_STRING = "Server=DATA01;Database=DMI_DATOS;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;ApplicationIntent=ReadOnly"
+```
+
+3. Ejecutar el script. Sus resultados se guardan en `C:\exports-sql\ventas`
+   y `C:\exports-sql\inventario` cuando el script se descarga en
+   `C:\FiveMinutes`.
+4. En Data Engineering, seleccionar todos los CSV de una misma fuente:
+   primero `fivemin_ventas_YYYY-MM-DD_YYYY-MM-DD.csv` y, cuando terminen,
+   `fivemin_inventario_YYYY-MM-DD_YYYY-MM-DD.csv`.
+
+La aplicación ordena automáticamente el lote por la primera fecha del nombre,
+carga un archivo cada vez, conserva los ya confirmados si uno falla y permite
+reanudar desde el que requiere revisión. No usar “Sustituir las ventas del
+periodo” en una carga por lote: se desactiva para proteger el histórico.
+
+Cada archivo mantiene el límite de 50 MB y 200.000 filas. Las métricas,
+ABCXYZ, cachés, dashboard, Copilot y agentes se recalculan una sola vez al
+terminar el lote completo, no tras cada CSV.
+
+### Formato de fechas y márgenes
+
+Desde v1.72, Data Engineering acepta fechas ISO, españolas o las fechas con
+hora que serializa `Export-Csv`, por ejemplo `01/05/2025 00:00:00`. Cuando el
+día y el mes son ambiguos, utiliza el intervalo del nombre del archivo para
+resolverlos. Las futuras exportaciones del script se normalizan como
+`YYYY-MM-DD` directamente.
+
+Si `MGD` es superior a `MG`, la fila se conserva como valor de origen y se
+informa como advertencia de calidad; no bloquea una carga real. Los porcentajes
+agregados se recalculan siempre desde las sumas, no promediando porcentajes de
+línea.

@@ -1,9 +1,9 @@
 # Data Engineering
 
-## Estado verificado · 08/10/2026 · v1.60
+## Estado verificado · 11/10/2026 · v1.72
 
-- Verificados `/data-import/template/{dataset}`, `/validate`, `/load`, `/status`. La carga es manual de archivos; la propuesta SharePoint no está implementada.
-- Mantener 200.000 filas, decimales XLSX nativos y sustitución acotada por fechas. MGD > MG + 0,01 € rechaza la línea según la regla de negocio actual, aunque proceda de Power BI; el límite -200 % solo afecta a porcentajes.
+- Verificados `/data-import/template/{dataset}`, `/validate`, `/load`, `/refresh-metrics` y `/status`. La carga es manual de archivos; la propuesta SharePoint no está implementada.
+- Mantener 200.000 filas y 50 MB por archivo, decimales XLSX nativos y sustitución acotada por fechas. `MGD > MG` es una advertencia de calidad, no un bloqueo; los porcentajes agregados se recalculan desde importes EUR.
 
 Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
 
@@ -16,6 +16,15 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Las filas de totales/filtros de Power BI se ignoran y se informa cuántas. No convertirlas en errores de campos obligatorios.
 - Tras una carga correcta, invalidar caché y sincronizar métricas para Dashboard, ABCXYZ, previsión, Copilot y agentes. No dejar una carga que solo actualice una pestaña.
 - El porcentaje MG/MGD fuera de rango negativo se ancla a `-200%`; no se descarta la línea ni se borra el margen EUR subyacente.
+
+## Actualización v1.69-v1.72 — carga manual SQL y lotes
+
+- La ruta interina oficial es **Carga Manual SQL**: el equipo con acceso a `DATA01` ejecuta `scripts/export_sqlserver_manual_batches.ps1`, que lee exclusivamente `dbo.vw_ventas_supabase` y `dbo.vw_inventario_supabase`. La Conexión Oficial SQL sigue pendiente de trámite.
+- El script crea ventas mensuales e inventario semanal con nombres `fivemin_ventas_YYYY-MM-DD_YYYY-MM-DD.csv` y `fivemin_inventario_YYYY-MM-DD_YYYY-MM-DD.csv`. Desde v1.72 normaliza la fecha exportada como ISO `YYYY-MM-DD`.
+- `DataEngineering.tsx` admite varios CSV/XLSX. Ordena por la fecha inicial del nombre y llama a `/data-import/load` de forma secuencial. Cada archivo se confirma por separado; al terminar se llama una vez a `/data-import/refresh-metrics` para reconstruir métricas, cachés y superficies analíticas.
+- Si falla un archivo, el lote se detiene sin borrar los anteriores, muestra las primeras incidencias y permite reanudar desde ese punto. La sustitución por periodo se desactiva para lotes; solo es válida en carga individual deliberada.
+- El parser acepta fechas Excel, ISO, `DD/MM/YYYY`, `MM/DD/YYYY` y variantes con hora de `Export-Csv`. Para nombres estándar de lote, el rango del nombre resuelve fecha ambigua. No exigir al usuario regenerar un CSV histórico solo porque incluya `00:00:00`.
+- `MGD > MG` se conserva y genera advertencia de calidad. Nunca recortar el valor de origen ni convertir esta advertencia en error bloqueante sin una decisión explícita de negocio.
 
 ## Actualización v1.32
 

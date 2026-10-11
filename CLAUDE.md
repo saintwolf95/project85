@@ -223,7 +223,7 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - `MG` es el margen bruto registrado en `ventas_historicas.margen_bruto_eur`.
 - `MGD` es el margen puesto en destino registrado en `ventas_historicas.margen_destino_eur`: a diferencia del MG incorpora gastos financieros, de transporte y de logística de almacén.
-- Por definición de negocio, cada línea debe cumplir `MGD <= MG`. La importación de ventas debe rechazar un MGD superior al MG (tolerancia técnica de 0,01 €); no ocultar el error recortando el MGD en la interfaz o en consultas agregadas. Los datos históricos afectados se corrigen en PBI y se recargan por período.
+- Por regla analítica habitual `MGD <= MG`, pero las operaciones reales pueden incorporar ajustes o costes negativos. La importación conserva un `MGD` superior al `MG` como valor de origen y lo registra como advertencia de calidad; no recortar ni inventar una corrección. Las agregaciones siguen recalculando ambos porcentajes desde las sumas EUR.
 - Cualquier porcentaje agregado de MG o MGD se calcula ponderado sobre las ventas netas del mismo conjunto de líneas; nunca se promedian porcentajes de línea.
 
 ## Actualización v1.52 — Marginalidad
@@ -318,3 +318,11 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 ## Actualización v1.68 — legibilidad de los globos
 
 - `Bubble` de la oficina usa texto oscuro para los mensajes ambientales porque su fondo es claro en ambos temas. Los mensajes de trabajo real continúan en blanco sobre azul.
+
+## Actualización v1.69-v1.72 — sincronización manual SQL e importación por lotes
+
+- La vía temporal de datos reales es **Carga Manual SQL**: `scripts/export_sqlserver_manual_batches.ps1` se ejecuta en el equipo de empresa con acceso de lectura a `DATA01`. Genera ventas mensuales e inventario semanal desde las vistas `dbo.vw_ventas_supabase` y `dbo.vw_inventario_supabase`; la Conexión Oficial SQL sigue pendiente.
+- Data Engineering permite seleccionar varios CSV/XLSX de la misma fuente. Los ordena por fecha del nombre, los importa uno a uno, conserva los confirmados si hay un fallo y reanuda desde el pendiente. Al final ejecuta una única actualización de métricas y cachés para no recalcular ABCXYZ, Dashboard, Copilot y agentes por cada archivo.
+- La carga por lote desactiva la sustitución por período. La sustitución sigue disponible solo para una corrección deliberada mediante carga individual.
+- Las fechas procedentes de SQL Server pueden incluir hora y configuración regional. El importador acepta variantes ISO, españolas y estadounidenses con hora; para nombres estándar `fivemin_ventas_YYYY-MM-DD_YYYY-MM-DD.csv` y `fivemin_inventario_YYYY-MM-DD_YYYY-MM-DD.csv`, el rango del nombre resuelve la ambigüedad. El exportador nuevo genera fecha ISO.
+- Si un lote falla, mostrar en la interfaz las primeras filas y mensajes de validación. No reducir el diagnóstico a un contador de errores.

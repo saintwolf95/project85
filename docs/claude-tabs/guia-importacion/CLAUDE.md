@@ -1,9 +1,9 @@
 # Guía de Importación
 
-## Estado verificado · 08/10/2026 · v1.60
+## Estado verificado · 11/10/2026 · v1.72
 
 - Verificado `DataImportGuide.tsx`: guía visual independiente de la ejecución de cargas. Su contrato debe coincidir con plantillas y validadores de Data Engineering.
-- Antes de cambiar cabeceras o ejemplos, contrastar `DATASET_CONFIG` en `app/routers/data_import.py`. Diferenciar error bloqueante (incluido MGD superior a MG) de advertencias de calidad y filas de pie ignoradas.
+- Antes de cambiar cabeceras o ejemplos, contrastar `DATASET_CONFIG` en `app/routers/data_import.py`. Diferenciar error bloqueante de advertencias de calidad, incluido `MGD > MG`, y filas de pie ignoradas.
 
 Índice común: [pestañas del sidebar](../README.md). Las notas siguientes conservan el historial de decisiones del módulo.
 
@@ -27,3 +27,11 @@ Los CSV pueden contener nombres con comas y medidas en pulgadas siempre que est�
 ## Actualización v1.34
 
 La guía debe explicar que las columnas `ClientePK` y `Nombre Cliente` deben existir, aunque sus celdas pueden estar vacías. La importación asigna `SIN-CLIENTE` y `Sin nombre cliente` cuando no hay identificación disponible.
+
+## Actualización v1.69-v1.72 — importación desde SQL Server
+
+- La guía debe identificar la Carga Manual SQL como vía temporal: el script de PowerShell genera CSV UTF-8 desde las dos vistas de SQL Server; no requiere una exportación manual desde Power BI.
+- Se pueden seleccionar varios CSV de ventas o inventario. La plataforma los ordena por fecha del nombre, los carga secuencialmente y actualiza los cálculos al final. Primero se carga ventas y después inventario.
+- El límite es por archivo: 50 MB y 200.000 filas. La carga por lote no usa sustitución de periodo y se puede reanudar desde el archivo fallido.
+- Aceptar y documentar fechas `YYYY-MM-DD`, `DD/MM/YYYY` y variantes con hora de SQL Server como `DD/MM/YYYY 00:00:00`. Las exportaciones nuevas ya salen como ISO.
+- Si MGD supera MG, se conserva la fila y se muestra advertencia. No decir que hay que corregir necesariamente el origen antes de cargar.

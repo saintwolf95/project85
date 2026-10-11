@@ -326,3 +326,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La carga por lote desactiva la sustitución por período. La sustitución sigue disponible solo para una corrección deliberada mediante carga individual.
 - Las fechas procedentes de SQL Server pueden incluir hora y configuración regional. El importador acepta variantes ISO, españolas y estadounidenses con hora; para nombres estándar `fivemin_ventas_YYYY-MM-DD_YYYY-MM-DD.csv` y `fivemin_inventario_YYYY-MM-DD_YYYY-MM-DD.csv`, el rango del nombre resuelve la ambigüedad. El exportador nuevo genera fecha ISO.
 - Si un lote falla, mostrar en la interfaz las primeras filas y mensajes de validación. No reducir el diagnóstico a un contador de errores.
+
+## Actualización v1.74 — pooler de Supabase y psycopg
+
+- La aplicación usa las URL del pooler de Supabase y `psycopg` como dialecto PostgreSQL. En `app/database.py`, tanto el motor de escritura como el de solo lectura deben incluir `prepare_threshold=None` en `connect_args`.
+- El pooler por transacción puede asignar una conexión física distinta a cada operación. No reactivar las sentencias preparadas automáticas: provocan `psycopg.errors.DuplicatePreparedStatement` y pueden interrumpir una carga o un proceso de agentes aunque los datos sean válidos.

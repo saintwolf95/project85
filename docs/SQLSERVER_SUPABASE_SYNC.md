@@ -26,6 +26,13 @@ certificado interno. El usuario
 que materializa la app; la cuenta de la aplicación solo requiere `SELECT` en
 `app_sync` y su acceso habitual a las tablas de aplicación.
 
+Las URL de Supabase usan el pooler por transacción en el puerto `6543`.
+`app/database.py` desactiva las sentencias preparadas automáticas de `psycopg`
+para las conexiones de lectura y escritura (`prepare_threshold=None`). Es
+obligatorio conservar este ajuste: sin él, el pooler puede devolver
+`DuplicatePreparedStatement` durante una carga, un cálculo o una ejecución de
+agentes.
+
 ## Programación
 
 Programar una ejecución diaria a las 08:15 hora de Madrid, nunca durante la

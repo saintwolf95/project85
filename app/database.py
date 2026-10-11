@@ -31,13 +31,21 @@ if IS_POSTGRES:
         raise RuntimeError("DATABASE_RO_URL es obligatoria en PostgreSQL para ejecutar consultas IA en modo solo lectura.")
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"options": "-c statement_timeout=30000"},
+        # Supabase pooler usa pooling por transacción. psycopg no puede
+        # reutilizar sus prepared statements entre conexiones físicas.
+        connect_args={
+            "options": "-c statement_timeout=30000",
+            "prepare_threshold": None,
+        },
         pool_pre_ping=True,
         pool_recycle=1800,
     )
     engine_ro = create_engine(
         DATABASE_RO_URL,
-        connect_args={"options": "-c default_transaction_read_only=on -c statement_timeout=30000"},
+        connect_args={
+            "options": "-c default_transaction_read_only=on -c statement_timeout=30000",
+            "prepare_threshold": None,
+        },
         pool_pre_ping=True,
         pool_recycle=1800,
     )

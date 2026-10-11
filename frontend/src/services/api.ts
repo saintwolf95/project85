@@ -271,17 +271,23 @@ export const loadDataImport = async (
   file: File,
   replaceExisting: boolean,
   onProgress?: UploadProgressHandler,
+  refreshMetrics = true,
 ): Promise<DataImportResult> => {
   const formData = new FormData();
   formData.append('dataset', dataset);
   formData.append('file', file);
   formData.append('replace_existing', String(replaceExisting));
   formData.append('sales_mode', 'upsert_keys');
+  formData.append('refresh_metrics', String(refreshMetrics));
   const response = await api.post('/data-import/load', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: event => reportUploadProgress(event.loaded, event.total, onProgress),
   });
   return response.data;
+};
+
+export const refreshDataImportMetrics = async (): Promise<void> => {
+  await api.post('/data-import/refresh-metrics');
 };
 
 export const downloadDataImportTemplate = async (dataset: DataImportDataset): Promise<void> => {

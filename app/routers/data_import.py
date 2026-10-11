@@ -894,12 +894,13 @@ async def validate_import(
 
 
 @router.post("/load")
-@limiter.limit("5/minute")
+@limiter.limit("60/minute")
 async def load_import(
     request: Request,
     dataset: str = Form(...),
     replace_existing: bool = Form(False),
     sales_mode: str = Form("upsert_keys"),
+    refresh_metrics: bool = Form(True),
     file: UploadFile = File(...),
     current_user: Usuario = Depends(get_current_active_admin),
     db: Session = Depends(get_db),
@@ -1202,7 +1203,13 @@ async def load_import(
             created = max(0, len(records) - updated)
 
         db.flush()
-        _refresh_metrics(db, empresa_id)
+        if refresh_metrics:
+            _refresh_metrics(db, empresa_id)
+        else:
+            # Las cargas por lote confirman cada archivo para que un fallo no
+            # deshaga los anteriores. Las métricas se recalculan una sola vez
+            # al terminar el lote.
+            db.commit()
         return {
             "success": True,
             "dataset": dataset,
@@ -1224,6 +1231,23 @@ async def load_import(
         db.rollback()
         logger.exception("Error cargando %s para empresa_id=%s", dataset, empresa_id)
         raise HTTPException(status_code=500, detail="No se pudo completar la carga de datos.") from exc
+
+
+@router.post("/refresh-metrics")
+@limiter.limit("10/minute")
+def refresh_import_metrics(
+    request: Request,
+    current_user: Usuario = Depends(get_current_active_admin),
+    db: Session = Depends(get_db),
+):
+    """Actualiza las métricas derivadas después de una carga secuencial."""
+    try:
+        _refresh_metrics(db, current_user.empresa_id)
+        return {"success": True}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Error actualizando métricas de importación para empresa_id=%s", current_user.empresa_id)
+        raise HTTPException(status_code=500, detail="Los archivos se cargaron, pero no se pudieron actualizar las métricas.") from exc
 
 
 @router.get("/status")

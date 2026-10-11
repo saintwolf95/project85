@@ -16,6 +16,7 @@ import {
   downloadDataImportTemplate,
   getDataImportStatus,
   loadDataImport,
+  refreshDataImportMetrics,
   validateDataImport,
 } from '../services/api';
 import type {
@@ -26,6 +27,20 @@ import type {
 } from '../services/api';
 
 const MAX_IMPORT_FILE_SIZE_MB = 50;
+
+type BatchFileState = 'pending' | 'uploading' | 'completed' | 'failed';
+
+interface BatchFileItem {
+  file: File;
+  state: BatchFileState;
+  message?: string;
+}
+
+const importStartDate = (file: File) => file.name.match(/_(\d{4}-\d{2}-\d{2})_/)?.[1] || '';
+
+const orderImportFiles = (files: File[]) => [...files].sort((left, right) =>
+  importStartDate(left).localeCompare(importStartDate(right)) || left.name.localeCompare(right.name),
+);
 
 const DATASETS: Array<{
   id: DataImportDataset;
@@ -74,6 +89,9 @@ export const DataEngineering = () => {
   const [salesImportScope, setSalesImportScope] = useState<'operativa' | 'fiscal_anterior'>('operativa');
   const [status, setStatus] = useState<DataImportStatus | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [batchFiles, setBatchFiles] = useState<File[]>([]);
+  const [batchItems, setBatchItems] = useState<BatchFileItem[]>([]);
+  const [batchCurrentFile, setBatchCurrentFile] = useState<string | null>(null);
   const [validation, setValidation] = useState<DataImportValidation | null>(null);
   const [result, setResult] = useState<DataImportResult | null>(null);
   const [replaceExisting, setReplaceExisting] = useState(false);
@@ -122,6 +140,9 @@ export const DataEngineering = () => {
 
   const resetFile = () => {
     setFile(null);
+    setBatchFiles([]);
+    setBatchItems([]);
+    setBatchCurrentFile(null);
     setValidation(null);
     setResult(null);
     setError(null);
@@ -137,17 +158,23 @@ export const DataEngineering = () => {
     resetFile();
   };
 
-  const selectFile = (selectedFile?: File) => {
-    if (!selectedFile) return;
-    if (!/\.(csv|xlsx)$/i.test(selectedFile.name)) {
-      setError('Selecciona un archivo CSV o XLSX.');
+  const selectFiles = (selected?: FileList | File[]) => {
+    const selectedFiles = selected ? Array.from(selected) : [];
+    if (!selectedFiles.length) return;
+    const invalidFile = selectedFiles.find(candidate => !/\.(csv|xlsx)$/i.test(candidate.name));
+    if (invalidFile) {
+      setError(`"${invalidFile.name}" no es un CSV ni un XLSX.`);
       return;
     }
-    if (selectedFile.size > MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024) {
-      setError(`El archivo supera el límite de ${MAX_IMPORT_FILE_SIZE_MB} MB.`);
+    const oversizedFile = selectedFiles.find(candidate => candidate.size > MAX_IMPORT_FILE_SIZE_MB * 1024 * 1024);
+    if (oversizedFile) {
+      setError(`"${oversizedFile.name}" supera el límite de ${MAX_IMPORT_FILE_SIZE_MB} MB.`);
       return;
     }
-    setFile(selectedFile);
+    const orderedFiles = orderImportFiles(selectedFiles);
+    setFile(orderedFiles.length === 1 ? orderedFiles[0] : null);
+    setBatchFiles(orderedFiles.length > 1 ? orderedFiles : []);
+    setBatchItems(orderedFiles.length > 1 ? orderedFiles.map(candidate => ({ file: candidate, state: 'pending' })) : []);
     setValidation(null);
     setResult(null);
     setError(null);
@@ -195,6 +222,66 @@ export const DataEngineering = () => {
       setUploadStage(null);
     }
   };
+
+  const importBatch = async () => {
+    if (!batchFiles.length) return;
+
+    let completedAnyFile = false;
+    const startIndex = Math.max(0, batchItems.findIndex(item => item.state !== 'completed'));
+    try {
+      setIsLoading(true);
+      setUploadStage('load');
+      setUploadProgress(0);
+      setError(null);
+      setResult(null);
+
+      for (let index = startIndex; index < batchFiles.length; index += 1) {
+        const nextFile = batchFiles[index];
+        setBatchCurrentFile(nextFile.name);
+        setUploadProgress(0);
+        setBatchItems(items => items.map((item, itemIndex) => itemIndex === index
+          ? { ...item, state: 'uploading', message: undefined }
+          : item,
+        ));
+        try {
+          await loadDataImport(dataset, nextFile, false, setUploadProgress, false);
+          completedAnyFile = true;
+          setBatchItems(items => items.map((item, itemIndex) => itemIndex === index
+            ? { ...item, state: 'completed', message: 'Cargado' }
+            : item,
+          ));
+        } catch (batchError) {
+          const message = apiErrorMessage(batchError);
+          setBatchItems(items => items.map((item, itemIndex) => itemIndex === index
+            ? { ...item, state: 'failed', message }
+            : item,
+          ));
+          setError(`El lote se detuvo en "${nextFile.name}". Los archivos anteriores ya están guardados; corrige este archivo y vuelve a seleccionar los pendientes. ${message}`);
+          break;
+        }
+      }
+    } finally {
+      if (completedAnyFile) {
+        try {
+          setBatchCurrentFile('Actualizando métricas y paneles');
+          setUploadProgress(100);
+          await refreshDataImportMetrics();
+        } catch (metricsError) {
+          setError(`Los CSV se cargaron, pero no se pudieron actualizar los cálculos finales. ${apiErrorMessage(metricsError)}`);
+        }
+        await refreshStatus();
+      }
+      setIsLoading(false);
+      setUploadProgress(null);
+      setUploadStage(null);
+      setBatchCurrentFile(null);
+    }
+  };
+
+  const isBatch = batchFiles.length > 1;
+  const batchCompleted = batchItems.filter(item => item.state === 'completed').length;
+  const batchFailed = batchItems.find(item => item.state === 'failed');
+  const batchFinished = isBatch && batchCompleted === batchFiles.length;
 
   return (
     <div className="flex flex-col gap-5 pb-10 animate-in fade-in duration-300">
@@ -384,17 +471,48 @@ export const DataEngineering = () => {
             onDragOver={event => event.preventDefault()}
             onDrop={event => {
               event.preventDefault();
-              selectFile(event.dataTransfer.files?.[0]);
+              selectFiles(event.dataTransfer.files ?? undefined);
             }}
           >
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="hidden"
-              onChange={event => selectFile(event.target.files?.[0])}
+              onChange={event => selectFiles(event.target.files ?? undefined)}
             />
-            {file ? (
+            {isBatch ? (
+              <div className="mx-auto max-w-2xl text-left">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <FileSpreadsheet size={28} className="shrink-0 text-brand-blue dark:text-brand-cyan" />
+                    <div>
+                      <p className="text-sm font-medium text-slate-900 dark:text-white">{batchFiles.length} archivos preparados como lote</p>
+                      <p className="text-xs text-slate-500">Ordenados por la primera fecha incluida en el nombre.</p>
+                    </div>
+                  </div>
+                  <button onClick={resetFile} disabled={isLoading} className="p-1.5 text-slate-400 hover:text-red-500 disabled:opacity-50" title="Quitar lote" aria-label="Quitar lote">
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="mt-4 max-h-52 overflow-y-auto border-y border-slate-200 py-2 text-xs dark:border-slate-700">
+                  {batchItems.map(item => (
+                    <div key={`${item.file.name}-${item.file.lastModified}`} className="flex items-center justify-between gap-3 py-1.5 text-slate-600 dark:text-slate-300">
+                      <span className="min-w-0 truncate">{item.file.name}</span>
+                      <span className={`shrink-0 font-medium ${
+                        item.state === 'completed' ? 'text-emerald-600 dark:text-emerald-400'
+                          : item.state === 'failed' ? 'text-red-600 dark:text-red-400'
+                            : item.state === 'uploading' ? 'text-brand-blue dark:text-brand-cyan'
+                              : 'text-slate-400'
+                      }`}>
+                        {item.state === 'completed' ? 'Cargado' : item.state === 'failed' ? 'Revisar' : item.state === 'uploading' ? 'En curso' : 'Pendiente'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : file ? (
               <div className="flex items-center justify-center gap-3">
                 <FileSpreadsheet size={28} className="text-brand-blue dark:text-brand-cyan" />
                 <div className="text-left">
@@ -408,14 +526,14 @@ export const DataEngineering = () => {
             ) : (
               <>
                 <UploadCloud size={32} className="mx-auto text-slate-400" />
-                <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-200">Arrastra aquí tu CSV o XLSX</p>
+                <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-200">Arrastra aquí uno o varios CSV o XLSX</p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="mt-3 rounded-lg bg-brand-blue dark:bg-brand-cyan px-4 py-2 text-sm font-medium text-white dark:text-brand-dark"
                 >
                   Seleccionar archivo
                 </button>
-                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo {MAX_IMPORT_FILE_SIZE_MB} MB / 200.000 filas</p>
+                <p className="mt-2 text-xs text-slate-400">Excel .xlsx o CSV UTF-8 · máximo {MAX_IMPORT_FILE_SIZE_MB} MB / 200.000 filas por archivo</p>
               </>
             )}
           </div>
@@ -428,7 +546,8 @@ export const DataEngineering = () => {
                 checked={replaceExisting}
                 onChange={event => setReplaceExisting(event.target.checked)}
                 aria-describedby="replace-existing-description"
-                className="mt-0.5 accent-amber-500"
+                disabled={isBatch || isLoading}
+                className="mt-0.5 accent-amber-500 disabled:opacity-50"
               />
               <span>
                 <label
@@ -439,27 +558,32 @@ export const DataEngineering = () => {
                 </label>
                 <span id="replace-existing-description" className="block text-xs text-amber-700 dark:text-amber-400">
                   Reemplaza únicamente las ventas comprendidas entre la primera y la última fecha del fichero. Conserva cualquier otro período, además de clientes, catálogo e inventario.
+                  {isBatch && ' En un lote esta opción se desactiva para conservar todos los periodos existentes.'}
                 </span>
               </span>
             </div>
           )}
 
           <div className="mt-5 flex flex-wrap gap-3">
+            {!isBatch && (
+              <button
+                onClick={validateFile}
+                disabled={!file || isValidating || isLoading}
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 px-4 py-2 text-sm font-medium text-brand-blue dark:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isValidating ? <Loader2 size={17} className="animate-spin" /> : <FileCheck2 size={17} />}
+                Validar archivo
+              </button>
+            )}
             <button
-              onClick={validateFile}
-              disabled={!file || isValidating || isLoading}
-              className="inline-flex items-center gap-2 rounded-lg border border-brand-blue/30 dark:border-brand-cyan/30 px-4 py-2 text-sm font-medium text-brand-blue dark:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isValidating ? <Loader2 size={17} className="animate-spin" /> : <FileCheck2 size={17} />}
-              Validar archivo
-            </button>
-            <button
-              onClick={importFile}
-              disabled={!validation?.valid || isLoading || Boolean(result)}
+              onClick={isBatch ? importBatch : importFile}
+              disabled={isBatch ? isLoading || batchFinished : (!validation?.valid || isLoading || Boolean(result))}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-blue dark:bg-brand-cyan px-4 py-2 text-sm font-medium text-white dark:text-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? <Loader2 size={17} className="animate-spin" /> : <Database size={17} />}
-              {dataset === 'sales' && salesImportScope === 'fiscal_anterior' ? 'Incorporar histórico FY anterior' : 'Cargar en producción'}
+              {isBatch
+                ? batchFailed ? 'Reanudar carga del lote' : `Cargar lote de ${batchFiles.length} archivos`
+                : dataset === 'sales' && salesImportScope === 'fiscal_anterior' ? 'Incorporar histórico FY anterior' : 'Cargar en producción'}
             </button>
           </div>
 
@@ -467,7 +591,9 @@ export const DataEngineering = () => {
             <div className="mt-4" role="status" aria-live="polite">
               <div className="flex items-center justify-between text-xs font-medium text-slate-600 dark:text-slate-300">
                 <span>
-                  {uploadProgress < 100
+                  {batchCurrentFile
+                    ? `${batchCurrentFile}${batchCurrentFile !== 'Actualizando métricas y paneles' ? ` · Archivo ${batchCompleted + 1} de ${batchFiles.length}` : ''}`
+                    : uploadProgress < 100
                     ? uploadStage === 'validation' ? 'Subiendo archivo para validar' : 'Subiendo archivo para cargar'
                     : uploadStage === 'validation' ? 'Validando archivo en el servidor' : 'Procesando la carga en el servidor'}
                 </span>
@@ -574,6 +700,21 @@ export const DataEngineering = () => {
               <button onClick={resetFile} className="mt-3 text-sm font-medium text-brand-blue dark:text-brand-cyan hover:underline">
                 Preparar otra carga
               </button>
+            </div>
+          )}
+
+          {isBatch && !isLoading && batchCompleted > 0 && (
+            <div className={`mt-5 border-l-2 px-4 py-3 ${batchFailed ? 'border-amber-500 bg-amber-50/60 dark:bg-amber-500/5' : 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-500/5'}`}>
+              <div className="flex items-center gap-2">
+                {batchFailed ? <AlertCircle size={19} className="text-amber-600" /> : <CheckCircle2 size={19} className="text-emerald-600" />}
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  {batchFailed ? 'Lote detenido para revisión' : 'Lote completado'}
+                </p>
+              </div>
+              <p className="mt-2 text-sm text-slate-700 dark:text-slate-300">
+                {batchCompleted} de {batchFiles.length} archivos cargados. Los cálculos y paneles se han actualizado una vez al finalizar.
+              </p>
+              {batchFailed && <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">Revisa el archivo marcado y vuelve a seleccionar únicamente ese archivo y los pendientes.</p>}
             </div>
           )}
         </main>

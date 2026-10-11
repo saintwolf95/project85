@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query
 import pandas as pd
 from typing import Optional, List
 from pydantic import BaseModel
-from sqlalchemy import Date, bindparam, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ..database import get_db
 from .. import schemas, services
@@ -16,56 +16,44 @@ router = APIRouter(prefix="/analytics", tags=["Analytics"])
 MAX_INVENTORY_ANALYTICS_LIMIT = 20_000
 MAX_SALES_EXPLORER_LIMIT = 200
 
-SALES_EXPLORER_WHERE = """
-    p.empresa_id = :empresa_id
-    AND (:fecha_desde IS NULL OR v.fecha_venta >= :fecha_desde)
-    AND (:fecha_hasta IS NULL OR v.fecha_venta <= :fecha_hasta)
-    AND (:busqueda IS NULL OR (
-        LOWER(COALESCE(p.sku, '')) LIKE :busqueda
-        OR LOWER(COALESCE(p.nombre, '')) LIKE :busqueda
-        OR LOWER(COALESCE(c.cliente_pk, '')) LIKE :busqueda
-        OR LOWER(COALESCE(c.nombre, '')) LIKE :busqueda
-    ))
-    AND (:familia IS NULL OR LOWER(COALESCE(p.familia, '')) = LOWER(:familia))
-    AND (:marca IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(:marca))
-    AND (:seccion IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(:seccion))
-    AND (:product_manager IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(:product_manager))
-    AND (:tipo_cliente IS NULL OR LOWER(COALESCE(c.tipo_cliente, '')) = LOWER(:tipo_cliente))
-    AND (:kd IS NULL OR LOWER(COALESCE(v.kd, '')) = LOWER(:kd))
-    AND (:comercial_cliente IS NULL OR LOWER(COALESCE(c.comercial_cliente, '')) = LOWER(:comercial_cliente))
-    AND (:comercial_factura IS NULL OR LOWER(COALESCE(v.comercial_factura, '')) = LOWER(:comercial_factura))
-"""
-
-SALES_EXPLORER_DATE_BINDS = (
-    bindparam("fecha_desde", type_=Date),
-    bindparam("fecha_hasta", type_=Date),
-)
-
-
-def _sales_explorer_query(query: str):
-    """Conserva el tipo DATE incluso cuando un filtro llega vacío en PostgreSQL."""
-    return text(query).bindparams(*SALES_EXPLORER_DATE_BINDS)
-
-
 def _clean_filter(value: Optional[str]) -> Optional[str]:
     return value.strip() if value and value.strip() else None
 
 
-def _sales_explorer_params(empresa_id: int, fecha_desde: Optional[date], fecha_hasta: Optional[date],
-                           busqueda: Optional[str], familia: Optional[str], marca: Optional[str],
-                           seccion: Optional[str], product_manager: Optional[str], tipo_cliente: Optional[str],
-                           kd: Optional[str], comercial_cliente: Optional[str], comercial_factura: Optional[str]) -> dict:
+def _sales_explorer_filters(empresa_id: int, fecha_desde: Optional[date], fecha_hasta: Optional[date],
+                            busqueda: Optional[str], familia: Optional[str], marca: Optional[str],
+                            seccion: Optional[str], product_manager: Optional[str], tipo_cliente: Optional[str],
+                            kd: Optional[str], comercial_cliente: Optional[str], comercial_factura: Optional[str]) -> tuple[str, dict]:
+    """Construye solo los predicados solicitados para no enviar NULL sin tipo a PostgreSQL."""
+    where = ["p.empresa_id = :empresa_id"]
+    params = {"empresa_id": empresa_id}
+    if fecha_desde:
+        where.append("v.fecha_venta >= :fecha_desde")
+        params["fecha_desde"] = fecha_desde
+    if fecha_hasta:
+        where.append("v.fecha_venta <= :fecha_hasta")
+        params["fecha_hasta"] = fecha_hasta
     search = _clean_filter(busqueda)
-    return {
-        "empresa_id": empresa_id,
-        "fecha_desde": fecha_desde,
-        "fecha_hasta": fecha_hasta,
-        "busqueda": f"%{search.casefold()}%" if search else None,
-        "familia": _clean_filter(familia), "marca": _clean_filter(marca), "seccion": _clean_filter(seccion),
-        "product_manager": _clean_filter(product_manager), "tipo_cliente": _clean_filter(tipo_cliente),
-        "kd": _clean_filter(kd), "comercial_cliente": _clean_filter(comercial_cliente),
-        "comercial_factura": _clean_filter(comercial_factura),
+    if search:
+        where.append("""(
+            LOWER(COALESCE(p.sku, '')) LIKE :busqueda
+            OR LOWER(COALESCE(p.nombre, '')) LIKE :busqueda
+            OR LOWER(COALESCE(c.cliente_pk, '')) LIKE :busqueda
+            OR LOWER(COALESCE(c.nombre, '')) LIKE :busqueda
+        )""")
+        params["busqueda"] = f"%{search.casefold()}%"
+    dimensions = {
+        "familia": (familia, "p.familia"), "marca": (marca, "p.marca"), "seccion": (seccion, "p.seccion"),
+        "product_manager": (product_manager, "p.product_manager"), "tipo_cliente": (tipo_cliente, "c.tipo_cliente"),
+        "kd": (kd, "v.kd"), "comercial_cliente": (comercial_cliente, "c.comercial_cliente"),
+        "comercial_factura": (comercial_factura, "v.comercial_factura"),
     }
+    for key, (value, column) in dimensions.items():
+        normalized = _clean_filter(value)
+        if normalized:
+            where.append(f"LOWER(COALESCE({column}, '')) = :{key}")
+            params[key] = normalized.casefold()
+    return " AND ".join(where), params
 
 
 @router.get("/sales-explorer")
@@ -80,26 +68,28 @@ def get_sales_explorer(
     current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     """Detalle de ventas agrupado por fecha, producto y cliente para exploración operativa."""
-    params = _sales_explorer_params(current_user.empresa_id, fecha_desde, fecha_hasta, busqueda, familia, marca,
-                                    seccion, product_manager, tipo_cliente, kd, comercial_cliente, comercial_factura)
+    where_clause, params = _sales_explorer_filters(
+        current_user.empresa_id, fecha_desde, fecha_hasta, busqueda, familia, marca, seccion, product_manager,
+        tipo_cliente, kd, comercial_cliente, comercial_factura,
+    )
     joins = "FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id LEFT JOIN clientes c ON c.id = v.cliente_id"
-    totals = db.execute(_sales_explorer_query(f"""
+    totals = db.execute(text(f"""
         SELECT COALESCE(SUM(v.ingreso_total), 0) ventas_eur, COALESCE(SUM(v.cantidad_vendida), 0) unidades,
                COALESCE(SUM(v.margen_bruto_eur), 0) margen_eur, COALESCE(SUM(v.margen_destino_eur), 0) mgd_eur,
                COUNT(DISTINCT v.producto_id) skus, COUNT(DISTINCT v.cliente_id) clientes
-        {joins} WHERE {SALES_EXPLORER_WHERE}
+        {joins} WHERE {where_clause}
     """), params).mappings().one()
     group_by = """v.fecha_venta, p.sku, p.nombre, p.familia, p.marca, p.seccion, p.product_manager,
                   c.cliente_pk, c.nombre, c.tipo_cliente, c.comercial_cliente, v.kd, v.comercial_factura"""
-    total_records = db.execute(_sales_explorer_query(f"""
-        SELECT COUNT(*) FROM (SELECT 1 {joins} WHERE {SALES_EXPLORER_WHERE} GROUP BY {group_by}) lineas
+    total_records = db.execute(text(f"""
+        SELECT COUNT(*) FROM (SELECT 1 {joins} WHERE {where_clause} GROUP BY {group_by}) lineas
     """), params).scalar_one()
     order_by = {
         "ventas_desc": "ventas_eur DESC, fecha DESC",
         "margen_desc": "margen_eur DESC, fecha DESC",
         "fecha_desc": "fecha DESC, ventas_eur DESC",
     }[sort]
-    rows = db.execute(_sales_explorer_query(f"""
+    rows = db.execute(text(f"""
         SELECT v.fecha_venta fecha, COALESCE(p.sku, 'SIN_SKU') sku, COALESCE(p.nombre, 'SIN_NOMBRE_ARTICULO') articulo,
                COALESCE(p.familia, 'Sin familia') familia, COALESCE(p.marca, 'Sin marca') marca,
                COALESCE(p.seccion, 'Sin sección') seccion, COALESCE(p.product_manager, 'Sin PM') product_manager,
@@ -108,7 +98,7 @@ def get_sales_explorer(
                COALESCE(v.kd, 'Sin KD') kd, COALESCE(v.comercial_factura, 'Sin comercial') comercial_factura,
                COALESCE(SUM(v.ingreso_total), 0) ventas_eur, COALESCE(SUM(v.cantidad_vendida), 0) unidades,
                COALESCE(SUM(v.margen_bruto_eur), 0) margen_eur, COALESCE(SUM(v.margen_destino_eur), 0) mgd_eur
-        {joins} WHERE {SALES_EXPLORER_WHERE}
+        {joins} WHERE {where_clause}
         GROUP BY {group_by} ORDER BY {order_by} LIMIT :limit OFFSET :offset
     """), {**params, "limit": limit, "offset": (page - 1) * limit}).mappings().all()
 

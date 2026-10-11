@@ -358,3 +358,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Los parámetros opcionales de fecha de `/analytics/sales-explorer` se vinculan explícitamente como `DATE`. PostgreSQL debe poder ejecutar la consulta completa con ambos filtros vacíos, además de los intervalos introducidos por el usuario.
 - No sustituir esta vinculación por comparaciones con parámetros sin tipo: con `None`, el driver `psycopg` devuelve `AmbiguousParameter` antes de leer cualquier venta.
+
+## Actualización v1.82 — filtros opcionales compatibles con pooler
+
+- `/analytics/sales-explorer` construye la cláusula `WHERE` desde un catálogo interno de columnas y añade solamente filtros presentes. No enviar expresiones `:param IS NULL OR ...` al pooler: PostgreSQL puede rechazar un `NULL` sin tipo aunque la otra parte del predicado sea textual.
+- Los valores siguen ligados como parámetros y las columnas siguen saliendo de una lista cerrada. La consulta sin filtros contiene solo el alcance obligatorio `empresa_id`.

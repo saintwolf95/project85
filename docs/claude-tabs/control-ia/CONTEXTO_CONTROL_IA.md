@@ -2,7 +2,7 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.83
+## Estado de ejecución y oficina visual · v1.84
 
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.67). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. Desde v1.66, la fase 2 añade fichas rápidas accesibles que solo reutilizan estado e informes ya autorizados. Desde v1.67, la fase 3 conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
@@ -27,6 +27,12 @@ El modelo efectivo de los informes, chats e investigaciones de Control IA es **G
 Como mejora de cálculo, `caida_ventas_comercial` ya no se activa únicamente por un umbral agregado. Tras aplicar el umbral configurable de negocio, su serie diaria se valida con mediana y MAD, persistencia CUSUM y Benjamini–Hochberg con FDR del 10 %, igual que familias y SKU. La evidencia expone el umbral, periodos, regla aplicada y estadística; una caída puntual no debe aparecer como señal activa.
 
 Para una futura mejora de modelo, la recomendación de arquitectura es mantener las fórmulas y controles actuales, y sustituir solo la capa de narración una vez validado el acceso de cuenta y el endpoint compatible. Las candidatas actuales son GPT-6.1 Sol como opción equilibrada y GPT-6 Astra para consolidaciones de máxima complejidad; no se declaran activas ni se muestran como tales hasta que se migre la integración.
+
+## Actualización v1.84 — Terra y Sol solo para CEO
+
+El cambio de modelos está acotado al CEO. El chat de Dirección usa `gpt-5.6-terra`, equilibrado para consultas ejecutivas sobre un expediente, y la consolidación de episodios usa `gpt-6.1-sol`, con razonamiento de mayor capacidad. María, Lucía y Mattia se mantienen en `gpt-4o`; sus detectores continúan siendo el origen de los datos.
+
+La selección se configura con `CEO_CHAT_MODEL` y `CEO_REPORT_MODEL`; `CEO_CHAT_REASONING_EFFORT=medium` y `CEO_REPORT_REASONING_EFFORT=high` establecen los esfuerzos de razonamiento por defecto. El retorno de compatibilidad es `CEO_MODEL_FALLBACK` (`gpt-4o` por defecto). Solo un error de disponibilidad, modelo o permisos activa el fallback: límites de tasa y cortes de red se propagan como incidencias para no ocultar ni duplicar llamadas. La telemetría persiste el modelo efectivo, no el deseado.
 
 ## 1. Propósito
 
@@ -271,7 +277,7 @@ El histórico muestra hasta 100 ejecuciones por empresa, ordenadas de más recie
 
 ### 8.3 Narración con LLM
 
-La narración usa `gpt-4o`, temperatura `0,2` y un prompt explícito que ordena:
+María, Lucía y Mattia usan `gpt-4o`, temperatura `0,2`. El CEO usa `gpt-5.6-terra` para su chat ejecutivo y `gpt-6.1-sol` para la consolidación de episodios; ambos son configurables y, ante un error explícito de modelo o permisos, vuelven a `gpt-4o`. Los prompts explícitos ordenan:
 
 - narrar **solo** el evidence bundle;
 - no ejecutar SQL ni recalcular cifras;
@@ -279,7 +285,7 @@ La narración usa `gpt-4o`, temperatura `0,2` y un prompt explícito que ordena:
 - declarar limitaciones cuando falte evidencia;
 - no inventar causalidad.
 
-María narra disponibilidad, cobertura y capital; Lucía variación y concentración; Mattia rentabilidad y erosión MGD. El CEO solo consolida las 5–7 señales de mayor prioridad y puede emitir hasta tres decisiones con responsable, métrica y horizonte.
+María narra disponibilidad, cobertura y capital; Lucía variación y concentración; Mattia rentabilidad y erosión MGD. El CEO solo consolida las 5–7 señales de mayor prioridad y puede emitir hasta tres decisiones con responsable, métrica y horizonte. La telemetría registra siempre el modelo que respondió realmente.
 
 Si no está configurada la clave de OpenAI, el informe declara el error de configuración; no se fabrica una respuesta.
 

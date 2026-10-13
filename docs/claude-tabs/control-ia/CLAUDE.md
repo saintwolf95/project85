@@ -1,6 +1,6 @@
 # Control IA
 
-## Estado verificado · 13/10/2026 · v1.83
+## Estado verificado · 13/10/2026 · v1.84
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
@@ -86,6 +86,12 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - La etiqueta de Fase 2 es **Consolidación ejecutiva · GPT-4o** y el rol es **CEO · Dirección**. No presentar `o1` ni “Director de Operaciones” mientras `app/agents_service.py` ejecute `gpt-4o`.
 - `caida_ventas_comercial` aplica umbral configurable y validación temporal equivalente a familia/SKU: mediana + MAD, CUSUM de persistencia y Benjamini–Hochberg (`FDR=10%`). Una caída aislada por comercial no debe entrar a la bandeja solo por superar el umbral.
 - El modelo no consulta la BBDD ni recalcula: recibe el evidence bundle y explica lo ya comprobado. Una eventual migración de modelo requiere validar acceso de cuenta y endpoint antes de cambiar el modelo efectivo.
+
+## Actualización v1.84 — modelos del CEO
+
+- Solo el CEO cambia de modelo: `gpt-5.6-terra` para el chat ejecutivo y `gpt-6.1-sol` para la consolidación final. María, Lucía y Mattia mantienen `gpt-4o`.
+- `CEO_CHAT_MODEL`, `CEO_REPORT_MODEL`, `CEO_CHAT_REASONING_EFFORT`, `CEO_REPORT_REASONING_EFFORT` y `CEO_MODEL_FALLBACK` permiten cambiar la selección sin editar código. Terra usa esfuerzo medio y Sol alto por defecto. Ante un error explícito de modelo, acceso o permisos, el CEO vuelve a `gpt-4o` y la telemetría registra el modelo realmente usado.
+- La interfaz debe mostrar **Consolidación ejecutiva · GPT-6.1 Sol** y la ficha del CEO debe distinguir Terra (consulta) de Sol (informe). No presentar el fallback como si fuera una ejecución Sol/Terra.
 
 ## Actualización v1.43
 

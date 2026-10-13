@@ -1,6 +1,7 @@
 """Orquestación de Control IA: detectores deterministas y narración de evidencia."""
 import json
 import logging
+import os
 import re
 import threading
 from datetime import date, datetime, time as datetime_time, timedelta, timezone
@@ -19,6 +20,53 @@ from .models import AgentDecision, AgentEpisode, AgentInsights, AgentSettings, E
 logger = logging.getLogger(__name__)
 MADRID_TZ = ZoneInfo("Europe/Madrid")
 _daily_report_lock = threading.Lock()
+
+# Los analistas conservan GPT-4o. El CEO usa una ruta independiente porque su
+# consolidación es el único informe que reúne impactos de varias áreas.
+DEFAULT_AGENT_MODEL = "gpt-4o"
+DEFAULT_CEO_CHAT_MODEL = "gpt-5.6-terra"
+DEFAULT_CEO_REPORT_MODEL = "gpt-6.1-sol"
+DEFAULT_CEO_FALLBACK_MODEL = "gpt-4o"
+DEFAULT_CEO_CHAT_REASONING_EFFORT = "medium"
+DEFAULT_CEO_REPORT_REASONING_EFFORT = "high"
+
+
+def _configured_model(variable: str, default: str) -> str:
+    """Devuelve el modelo configurado, evitando valores de entorno vacíos."""
+    return os.getenv(variable, default).strip() or default
+
+
+def _is_model_availability_error(error: Exception) -> bool:
+    """Detecta fallos de acceso/modelo para poder conservar el informe ejecutivo.
+
+    No se reintentan cortes de red ni límites de tasa: repetir una petición en
+    esos casos puede duplicar coste y ocultar un incidente operativo.
+    """
+    status_code = getattr(error, "status_code", None)
+    message = str(error).lower()
+    return status_code in {400, 401, 403, 404} and any(token in message for token in (
+        "model", "not found", "does not exist", "access", "permission", "not available",
+    ))
+
+
+def _create_ceo_completion(client, messages: list[dict], model: str, reasoning_effort: str):
+    """Ejecuta una llamada del CEO y vuelve a GPT-4o solo si falta acceso al modelo.
+
+    La decisión y sus fórmulas siguen siendo deterministas; este selector cambia
+    exclusivamente la capa de redacción. Devolvemos el modelo efectivo para que
+    la telemetría no atribuya uso de Sol/Terra cuando hubo fallback.
+    """
+    try:
+        # Los modelos de razonamiento no necesitan temperatura para esta tarea.
+        return client.chat.completions.create(
+            model=model, messages=messages, reasoning_effort=reasoning_effort,
+        ), model
+    except Exception as error:
+        fallback = _configured_model("CEO_MODEL_FALLBACK", DEFAULT_CEO_FALLBACK_MODEL)
+        if model == fallback or not _is_model_availability_error(error):
+            raise
+        logger.warning("El modelo CEO %s no está disponible; se usa %s: %s", model, fallback, error)
+        return client.chat.completions.create(model=fallback, messages=messages, temperature=0.2), fallback
 
 
 def get_business_context(db: Session, empresa_id: int) -> str:
@@ -71,8 +119,8 @@ def _narrate(db: Session, empresa_id: int, agent: str, system_prompt: str, run_i
         )},
     ]
     try:
-        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
-        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_report", model="gpt-4o", run_id=run_id, agent_name=agent)
+        response = client.chat.completions.create(model=DEFAULT_AGENT_MODEL, messages=messages, temperature=0.2)
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_report", model=DEFAULT_AGENT_MODEL, run_id=run_id, agent_name=agent)
         return response.choices[0].message.content
     except Exception as error:
         logger.error("Error narrando señales de %s: %s", agent, error)
@@ -98,8 +146,10 @@ def run_ceo_from_signals(db: Session, empresa_id: int, run_id: str | None = None
         {"role": "user", "content": f"EVIDENCE BUNDLE:\n{json.dumps(evidence, ensure_ascii=False, default=str)}\n\nCONTEXTO:\n{get_business_context(db, empresa_id) or 'No configurado.'}"},
     ]
     try:
-        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
-        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="ceo_report", model="gpt-4o", run_id=run_id, agent_name="ceo")
+        selected_model = _configured_model("CEO_REPORT_MODEL", DEFAULT_CEO_REPORT_MODEL)
+        reasoning_effort = _configured_model("CEO_REPORT_REASONING_EFFORT", DEFAULT_CEO_REPORT_REASONING_EFFORT)
+        response, effective_model = _create_ceo_completion(client, messages, selected_model, reasoning_effort)
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="ceo_report", model=effective_model, run_id=run_id, agent_name="ceo")
         return response.choices[0].message.content
     except Exception as error:
         logger.error("Error narrando episodios CEO: %s", error)
@@ -240,8 +290,14 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
     )
     messages = [{"role": "system", "content": prompt}, *[{"role": item["role"], "content": item["content"]} for item in history[-20:]]]
     try:
-        response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.2)
-        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_chat", model="gpt-4o", agent_name=normalized_agent)
+        if normalized_agent == "ceo":
+            selected_model = _configured_model("CEO_CHAT_MODEL", DEFAULT_CEO_CHAT_MODEL)
+            reasoning_effort = _configured_model("CEO_CHAT_REASONING_EFFORT", DEFAULT_CEO_CHAT_REASONING_EFFORT)
+            response, effective_model = _create_ceo_completion(client, messages, selected_model, reasoning_effort)
+        else:
+            response = client.chat.completions.create(model=DEFAULT_AGENT_MODEL, messages=messages, temperature=0.2)
+            effective_model = DEFAULT_AGENT_MODEL
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_chat", model=effective_model, agent_name=normalized_agent)
         return response.choices[0].message.content
     except Exception as error:
         logger.error("Error en chat de agente %s: %s", normalized_agent, error)

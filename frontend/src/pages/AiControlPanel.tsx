@@ -573,7 +573,7 @@ export const AiControlPanel = () => {
             <div>
               <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
                 <Brain className="h-5 w-5 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
-                Fase 2: Consolidación ejecutiva <span className="text-[13px] font-normal text-[#86868b]">GPT-4o</span>
+                Fase 2: Consolidación ejecutiva <span className="text-[13px] font-normal text-[#86868b]">GPT-6.1 Sol</span>
               </h2>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">El CEO consolida episodios verificables y propone decisiones con responsable, métrica y horizonte.</p>
             </div>

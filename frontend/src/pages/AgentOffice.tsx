@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Bell, CheckCircle2, Circle, FileText, History, Loader2, MessageSquare, Moon, Play, Sun, Users, Volume2, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Bell, Bot, BrainCircuit, CheckCircle2, Circle, ClipboardCheck, FileText, History, Lightbulb, Loader2, MessageSquare, Moon, Play, ShieldCheck, Sparkles, Sun, Users, Volume2, WifiOff, X } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { getAgentExecutionHistory, getLatestAgentInsight, runAgentAnalysis } from '../services/api';
@@ -10,6 +10,7 @@ import type { OfficeVivaCanvasHandle } from '../agent-office-viva/OfficeVivaCanv
 import { ROSTER } from '../agent-office/model';
 import type { AgentId } from '../agent-office/model';
 import { deliveredCount, useOffice } from '../agent-office/store';
+import { AGENT_PROFILES } from '../content/agentProfiles';
 import './AgentOffice.css';
 
 const agentUrl = (id: AgentId) => id === 'ceo' ? '/ai-control/analistas#informe-ceo' : `/ai-control/analistas?agent=${id}&view=expediente`;
@@ -19,6 +20,12 @@ const GENERIC_TASKS: Record<AgentId, string> = {
   lucia: 'Revisión de ventas, clientes y oportunidades comerciales',
   mattia: 'Revisión de MG, MGD y exposición económica',
   ceo: 'Consolidación de los informes verificados del equipo',
+};
+const AGENT_PORTRAITS: Record<AgentId, string> = {
+  maria: '/assets/agents/maria_work.png',
+  lucia: '/assets/agents/lucia_work.png',
+  mattia: '/assets/agents/fin_work.png',
+  ceo: '/assets/agents/ceo_work.png',
 };
 type MeetingState = { type: 'executive' } | { type: 'agent'; agentId: Exclude<AgentId, 'ceo'> } | null;
 
@@ -78,6 +85,7 @@ export const AgentOffice = () => {
   const canRun = userRole === 'admin';
   const canViewFindings = ['admin', 'user', 'direccion', 'dirección', 'manager'].includes(userRole);
   const selectedProfile = ROSTER.find(agent => agent.id === selectedAgent);
+  const selectedDefinition = selectedAgent ? AGENT_PROFILES[selectedAgent] : null;
 
   // Sin confirmación del servidor, la escena no aparenta trabajo en tiempo real.
   useEffect(() => { sync(connected ? execution : null); }, [connected, execution, sync]);
@@ -221,24 +229,52 @@ export const AgentOffice = () => {
       </section>
       <footer className="mt-5 flex flex-wrap justify-between gap-2 text-xs text-slate-500 dark:text-slate-400"><span>Estados del servidor · actualización automática · sin llamadas IA por animación</span><span>Los bocadillos ambientales no muestran clientes, SKU ni importes.</span></footer>
     </div>
-    {selectedAgent && selectedProfile && <div className="office-profile-backdrop">
+    {selectedAgent && selectedProfile && selectedDefinition && <div className="office-profile-backdrop">
       <button type="button" className="office-profile-dismiss-layer" onClick={closeProfile} aria-label={`Cerrar ficha de ${selectedProfile.name}`} />
       <aside ref={profileRef} className="office-profile" role="dialog" aria-modal="true" aria-labelledby="office-profile-title" aria-describedby="office-profile-description">
         <header className="office-profile-header">
-          <div><span className="office-scene-eyebrow">{meeting?.type === 'agent' && meeting.agentId === selectedProfile.id ? 'Reunión individual' : 'Ficha rápida'}</span><h2 id="office-profile-title">{selectedProfile.name} · {selectedProfile.role}</h2></div>
+          <div><span className="office-scene-eyebrow">{meeting?.type === 'agent' && meeting.agentId === selectedProfile.id ? 'Reunión individual' : 'Perfil del agente IA'}</span><h2 id="office-profile-title">{selectedProfile.name} · {selectedProfile.role}</h2></div>
           <button ref={closeProfileRef} type="button" onClick={closeProfile} className="office-profile-close" aria-label={`Cerrar ficha de ${selectedProfile.name}`}><X size={19} /></button>
         </header>
         <div className="office-profile-body">
-          <p id="office-profile-description" className="office-profile-intro">{meeting?.type === 'agent' && meeting.agentId === selectedProfile.id ? 'El agente comparte su hallazgo principal en la mesa central. Esta conversación visual no altera sus análisis ni el estado del servidor.' : 'Estado confirmado por el servidor y contexto del último informe disponible.'}</p>
-          <dl className="office-profile-facts">
-            <div><dt>Estado</dt><dd data-state={connected ? real[selectedAgent].status : 'desconectado'}>{connected ? real[selectedAgent].stage : 'No confirmado'}</dd></div>
-            <div><dt>Etapa de ejecución</dt><dd>{connected ? execution?.etapa || 'Sin ejecución registrada' : 'Esperando reconexión'}</dd></div>
-            <div><dt>Última actualización</dt><dd>{execution ? new Date(execution.actualizado_en).toLocaleString('es-ES') : 'Sin datos'}</dd></div>
-            <div><dt>Última tarea</dt><dd>{connected && real[selectedAgent].status !== 'inactivo' ? GENERIC_TASKS[selectedAgent] : 'Sin tarea activa confirmada'}</dd></div>
-            <div><dt>Ahora mismo en la oficina</dt><dd>{connected ? real[selectedAgent].working ? 'En su mesa, trabajando en la etapa indicada.' : real[selectedAgent].delivered ? 'Ha entregado su informe y permanece disponible.' : 'En su puesto, a la espera de actividad confirmada.' : 'Pendiente de reconexión con el servidor.'}</dd></div>
-          </dl>
+          <section className="office-profile-hero" aria-label={`Identidad de ${selectedProfile.name}`}>
+            <div className="office-profile-portrait"><img src={AGENT_PORTRAITS[selectedAgent]} alt="" /></div>
+            <div className="office-profile-identity">
+              <p id="office-profile-description">{selectedDefinition.purpose}</p>
+              <div className="office-profile-model"><Bot size={15} /><span>{selectedDefinition.model}</span></div>
+              <span className="office-profile-status" data-state={connected ? real[selectedAgent].status : 'desconectado'}>{connected ? real[selectedAgent].stage : 'Estado no confirmado'}</span>
+            </div>
+          </section>
+          <div className="office-profile-grid">
+            <section className="office-profile-section office-profile-section-span">
+              <h3><BrainCircuit size={16} />Cómo trabaja</h3>
+              <p>{selectedDefinition.approach}</p>
+              <p className="office-profile-model-use">{selectedDefinition.modelUse}</p>
+            </section>
+            <section className="office-profile-section">
+              <h3><ClipboardCheck size={16} />Ahora</h3>
+              <dl className="office-profile-facts">
+                <div><dt>Etapa</dt><dd>{connected ? execution?.etapa || 'Sin ejecución registrada' : 'Esperando reconexión'}</dd></div>
+                <div><dt>Última actualización</dt><dd>{execution ? new Date(execution.actualizado_en).toLocaleString('es-ES') : 'Sin datos'}</dd></div>
+                <div><dt>Tarea</dt><dd>{connected && real[selectedAgent].status !== 'inactivo' ? GENERIC_TASKS[selectedAgent] : 'Sin tarea activa confirmada'}</dd></div>
+              </dl>
+            </section>
+            <section className="office-profile-section">
+              <h3><Sparkles size={16} />Qué analiza</h3>
+              <ul className="office-profile-list">{selectedDefinition.analyses.map(item => <li key={item}>{item}</li>)}</ul>
+            </section>
+            <section className="office-profile-section">
+              <h3><ShieldCheck size={16} />Controles</h3>
+              <ul className="office-profile-list">{selectedDefinition.checks.map(item => <li key={item}>{item}</li>)}</ul>
+            </section>
+            <section className="office-profile-section office-profile-section-span">
+              <h3><Lightbulb size={16} />Fórmulas y prioridad</h3>
+              <ul className="office-profile-list office-profile-formulas">{selectedDefinition.formulas.map(item => <li key={item}>{item}</li>)}</ul>
+              <p className="office-profile-priority"><strong>Prioridad:</strong> {selectedDefinition.priority}</p>
+            </section>
+          </div>
           {canViewFindings && <section className="office-profile-finding" aria-labelledby="office-profile-finding-title">
-            <h3 id="office-profile-finding-title">Hallazgo principal</h3>
+            <h3 id="office-profile-finding-title"><AlertTriangle size={16} />Hallazgo principal verificado</h3>
             <p>{findingFor(latestInsight, selectedAgent) || 'Todavía no hay un hallazgo publicado para este agente.'}</p>
             {latestInsight && <span>Informe del {new Date(latestInsight.fecha).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}</span>}
           </section>}

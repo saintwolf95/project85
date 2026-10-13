@@ -1168,13 +1168,16 @@ function resize() {
   view.width = Math.round(vw * dpr); view.height = Math.round(vh * dpr);
   if (autoFit) {
     const narrow = vw < 820;
-    const availW = narrow ? vw - 8 : vw - 330, availH = narrow ? vh - 300 : vh - 150;
-    let z = Math.min(availW / (LW - 40), availH / (LH - 30));
+    // El lienzo ya no reserva hueco para un panel lateral: la ficha del agente
+    // aparece sobre la escena. Aprovechamos el espacio para abrir con una sala
+    // legible, manteniendo margen y sin recortar el mapa en móvil.
+    const availW = narrow ? vw - 16 : vw - 56, availH = narrow ? vh - 48 : vh - 56;
+    let z = Math.min(availW / (LW - 40), availH / (LH - 30)) * (narrow ? 1 : 1.15);
     if (z >= 1) z = dpr >= 2 ? Math.floor(z * 2) / 2 : Math.floor(z);
     zoom = clamp(z, 0.5, 6);
     const sc = screenScale();
-    camGoal.x = LW / 2 - (narrow ? 0 : 150 / sc);
-    camGoal.y = LH / 2 + (narrow ? 120 / sc : 4 / sc);
+    camGoal.x = LW / 2;
+    camGoal.y = LH / 2 + (narrow ? 28 / sc : 4 / sc);
   }
 }
 

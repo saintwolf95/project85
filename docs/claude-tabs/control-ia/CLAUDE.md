@@ -1,10 +1,10 @@
 # Control IA
 
-## Estado verificado · 13/10/2026 · v1.85
+## Estado verificado · 13/10/2026 · v1.86
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
-- Cada personaje y tarjeta abre una ficha rápida con estado, etapa, fecha, tarea genérica y hallazgo resumido del último informe. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
+- Cada personaje y tarjeta abre un perfil ampliado con retrato pixelado existente, modelo real, propósito, enfoque, análisis, controles, fórmulas, prioridad, estado, etapa, fecha, tarea genérica y hallazgo resumido del último informe. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
 - `/ai-control/oficina` usa la escena isométrica PixiJS 8 con placeholders pixel dibujados, mapa textual y BFS del módulo `agent-office` adaptados al proyecto. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.
@@ -98,6 +98,12 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - Los tres analistas usan `gpt-5.6-terra`, razonamiento medio, en informes, chats e investigaciones con contrato de evidencia. Solo el CEO usa Sol y únicamente para la consolidación final.
 - `ANALYST_MODEL`, `ANALYST_REASONING_EFFORT` y `ANALYST_MODEL_FALLBACK` configuran el grupo de analistas. El fallback a `gpt-4o` solo se activa ante un error explícito de modelo, disponibilidad o permisos y la telemetría guarda el modelo efectivo.
 - Las fichas visibles deben mostrar **GPT-5.6 Terra** para María, Lucía y Mattia. El modelo sigue sin consultar BBDD, generar SQL ni recalcular cifras.
+
+## Actualización v1.86 — encuadre y perfil de la Oficina Viva
+
+- El autoencuadre ya no reserva 330 px dentro del canvas para una ficha lateral: abre centrado, más próximo y con margen de seguridad. El usuario conserva rueda, arrastre y doble clic para reencuadrar.
+- El perfil de cada personaje se presenta como modal central responsive sobre la oficina. Reutiliza el retrato de `public/assets/agents`, la fuente funcional `agentProfiles.ts` y el último hallazgo publicado, nunca inventa alertas ni muestra cifras dentro del canvas.
+- La ficha detalla propósito, modelo, método, tareas analíticas, validaciones, fórmulas y prioridad, además de estado/etapa reales. En móvil ocupa la pantalla; Escape y el foco atrapado siguen funcionando.
 
 ## Actualización v1.43
 

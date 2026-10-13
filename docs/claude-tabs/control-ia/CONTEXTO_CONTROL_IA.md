@@ -2,7 +2,7 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.85
+## Estado de ejecución y oficina visual · v1.86
 
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.67). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. Desde v1.66, la fase 2 añade fichas rápidas accesibles que solo reutilizan estado e informes ya autorizados. Desde v1.67, la fase 3 conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
@@ -33,6 +33,10 @@ Para una futura mejora de modelo, la recomendación de arquitectura es mantener 
 El chat de Dirección usa `gpt-5.6-terra`, equilibrado para consultas ejecutivas sobre un expediente, y la consolidación de episodios usa `gpt-6.1-sol`, con razonamiento de mayor capacidad. María, Lucía y Mattia también usan `gpt-5.6-terra` con razonamiento medio en informes, chat e investigaciones; sus detectores continúan siendo el origen de los datos.
 
 La selección se configura con `CEO_CHAT_MODEL` y `CEO_REPORT_MODEL`; `CEO_CHAT_REASONING_EFFORT=medium` y `CEO_REPORT_REASONING_EFFORT=high` establecen los esfuerzos de razonamiento por defecto. Los analistas se configuran con `ANALYST_MODEL=gpt-5.6-terra`, `ANALYST_REASONING_EFFORT=medium` y `ANALYST_MODEL_FALLBACK=gpt-4o`. El retorno de compatibilidad del CEO es `CEO_MODEL_FALLBACK` (`gpt-4o` por defecto). Solo un error de disponibilidad, modelo o permisos activa el fallback: límites de tasa y cortes de red se propagan como incidencias para no ocultar ni duplicar llamadas. La telemetría persiste el modelo efectivo, no el deseado.
+
+### Actualización v1.86 — interacción de perfiles en la oficina
+
+La escena abre con un encuadre centrado y más cercano, aprovechando el ancho completo del canvas porque la ficha ya no ocupa un lateral persistente. El personaje pulsado conserva el indicador de selección dentro de la escena y abre un modal central. La ficha usa el retrato pixelado ya disponible de cada agente y el contenido de `frontend/src/content/agentProfiles.ts`: propósito, modelo, enfoque, análisis, controles, fórmulas y prioridad. Añade estado, etapa, última actualización, tarea confirmada y —solo con rol autorizado— el hallazgo ya publicado. No convierte las actividades ambientales en hallazgos ni introduce datos nuevos.
 
 ## 1. Propósito
 

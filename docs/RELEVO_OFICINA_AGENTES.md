@@ -119,3 +119,8 @@ Regla del proyecto: **cada cambio** (incluso documentación operativa) increment
 ## Primer prompt sugerido para Codex en casa
 
 > Lee `CLAUDE.md`, `docs/claude-tabs/control-ia/CLAUDE.md`, `docs/claude-tabs/control-ia/CONTEXTO_CONTROL_IA.md` y `docs/RELEVO_OFICINA_AGENTES.md`. Comprueba `git status` y la versión desplegada. Estamos revisando la fase 1 de la oficina Pixi con placeholders; no avances a fases 2–4 ni a sprites finales sin mi aprobación. Primero audita la escena y hazme una lista corta de lo que debo validar visualmente, con riesgos concretos y evidencias. No inicies análisis reales ni borres archivos de usuario.
+# Actualización v1.86 — encuadre y perfiles ampliados
+
+- La escena de la oficina abre centrada y más próxima, sin reservar un hueco lateral para la ficha. El usuario conserva zoom con rueda, arrastre y doble clic para reencuadrar.
+- Seleccionar a María, Lucía, Mattia o CEO conserva el anillo visual de selección y abre una ficha central accesible. La ficha muestra el modelo realmente configurado, cometido, método de trabajo, análisis, controles, fórmulas/priorización y el hallazgo verificado autorizado para el rol.
+- La ficha no expone clientes, SKU ni importes dentro de la escena; los accesos existentes a expediente, chat o informe ejecutivo permanecen sujetos a los permisos de cada rol.

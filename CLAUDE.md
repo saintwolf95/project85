@@ -382,3 +382,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - María, Lucía y Mattia usan `gpt-5.6-terra` con razonamiento medio en sus informes, chats e investigaciones verificables. El CEO conserva Terra para su chat y Sol con razonamiento alto para el informe ejecutivo.
 - Las variables `ANALYST_MODEL`, `ANALYST_REASONING_EFFORT` y `ANALYST_MODEL_FALLBACK` controlan a los tres agentes de área. Un error explícito de disponibilidad o permisos usa `gpt-4o` como fallback y se registra el modelo efectivo.
 - El contrato de evidencia, las consultas parametrizadas, las fórmulas y la verificación de cifras de investigación no cambian con la migración de modelo.
+
+## Actualización v1.86 — oficina con perfil ampliado
+
+- La oficina abre centrada y con mayor escala: no reservar espacio lateral dentro del canvas cuando la ficha aparece como modal sobre la escena. Conserva el reencuadre con doble clic, arrastre y rueda, y no recorta el mapa en móvil.
+- Pulsar un personaje abre su perfil completo: retrato pixelado existente, modelo real, misión, enfoque, análisis, controles, fórmulas, prioridad, estado/etapa confirmados y el hallazgo verificado autorizado. Los datos del hallazgo siguen fuera del canvas.
+- Las fichas reutilizan `frontend/src/content/agentProfiles.ts`; no duplicar funciones, fórmulas o modelos en la oficina. El panel mantiene Escape, foco atrapado, acciones de expediente/chat y diseño responsive.

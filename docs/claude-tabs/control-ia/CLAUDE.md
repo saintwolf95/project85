@@ -1,6 +1,6 @@
 # Control IA
 
-## Estado verificado · 11/10/2026 · v1.68
+## Estado verificado · 13/10/2026 · v1.83
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
@@ -15,7 +15,7 @@
 - La Oficina Viva ofrece reuniones exclusivamente de presentación: la ejecutiva reúne a María, Lucía, Mattia y CEO en la mesa central; las individuales reúnen al analista elegido con el CEO y abren su ficha.
 - El Canvas solo usa frases genéricas de etapa. Los hallazgos reales se muestran en paneles React autorizados y las reuniones no modifican análisis, detectores ni estados de `agent_executions`.
 - Al finalizar una reunión, los personajes regresan a una posición coherente con su estado confirmado por servidor (análisis en curso o puesto disponible).
-- La oficina es una ruta lazy para no cargar Pixi en las demás pestañas. `prefers-reduced-motion` evita desplazamientos y tecleo; las etiquetas reales se exponen además como texto fuera del canvas. Fase 1 se detiene con placeholders para revisión visual; fichas rápidas, historial/usage y modo pantalla/móvil específico siguen pendientes en fases 2–4.
+- La oficina es una ruta lazy para no cargar Pixi en las demás pestañas. `prefers-reduced-motion` evita desplazamientos y tecleo; las etiquetas reales se exponen además como texto fuera del canvas. Las fases de escena, fichas rápidas, historial/usage y avisos opcionales ya están disponibles; las vistas específicas de móvil y modo pantalla siguen pendientes de una solicitud separada.
 - Capturas de referencia de los placeholders: `docs/screenshots/office-placeholders-light.png` y `docs/screenshots/office-placeholders-dark.png` (estado sintético, sin datos empresariales).
 - `GET /agents/execution` consulta el último estado de la empresa. `useAgentExecution` actualiza oficina y gabinete cada 3 segundos durante ejecución y cada 8 en reposo. Se elimina el progreso simulado por temporizador.
 - `agent_executions` se crea de forma aditiva al arrancar el backend. `ExecutionProgress` escribe desde sesiones independientes; evita ejecuciones simultáneas por empresa y rechaza publicaciones de un run_id sustituido. Después de 30 minutos sin actualización se informa interrupción y se permite reintento.
@@ -79,6 +79,13 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 ## Actualización v1.68
 
 - Los globos ambientales mantienen texto oscuro sobre su fondo claro en tema claro y oscuro. Los globos azules de trabajo real conservan texto blanco.
+
+## Actualización v1.83 — ficha de agentes y control anti-ruido comercial
+
+- `frontend/src/content/agentProfiles.ts` es la fuente visible única para describir a María, Lucía, Mattia y CEO en el Gabinete: modelo efectivo, propósito, enfoque, análisis, fórmulas, validaciones, prioridad y límites. Las fichas se muestran en `/ai-control/analistas` y, para los analistas, también dentro de su expediente.
+- La etiqueta de Fase 2 es **Consolidación ejecutiva · GPT-4o** y el rol es **CEO · Dirección**. No presentar `o1` ni “Director de Operaciones” mientras `app/agents_service.py` ejecute `gpt-4o`.
+- `caida_ventas_comercial` aplica umbral configurable y validación temporal equivalente a familia/SKU: mediana + MAD, CUSUM de persistencia y Benjamini–Hochberg (`FDR=10%`). Una caída aislada por comercial no debe entrar a la bandeja solo por superar el umbral.
+- El modelo no consulta la BBDD ni recalcula: recibe el evidence bundle y explica lo ya comprobado. Una eventual migración de modelo requiere validar acceso de cuenta y endpoint antes de cambiar el modelo efectivo.
 
 ## Actualización v1.43
 

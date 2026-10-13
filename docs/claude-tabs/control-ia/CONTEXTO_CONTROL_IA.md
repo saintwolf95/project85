@@ -2,13 +2,13 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.63
+## Estado de ejecución y oficina visual · v1.83
 
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.67). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. Desde v1.66, la fase 2 añade fichas rápidas accesibles que solo reutilizan estado e informes ya autorizados. Desde v1.67, la fase 3 conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. Desde v1.63, esta última sustituye el SVG por una escena isométrica PixiJS 8 con placeholders, mapa textual, BFS y máquina de estado por personaje adaptados del módulo `agent-office` proporcionado por el usuario. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. Los paneles conservan la tipografía y tokens de la app; no se incorpora Pixelify.
 
-El estado real del servidor tiene prioridad absoluta y cancela la vida ambiental. Cuando un analista termina, camina a la mesa central, cuenta como informe entregado y vuelve al puesto; el CEO consolida tras los tres. La vida ambiental usa un catálogo fijo de actividades y frases sin clientes, SKU ni importes; reserva baño y sofá. Con la pestaña oculta se detiene el ticker; al volver se restablecen las posiciones ambientales coherentes. `prefers-reduced-motion` elimina desplazamientos y tecleo. La ruta se carga bajo demanda y el estado real permanece legible en tarjetas accesibles. María, Lucía y Mattia enlazan a su expediente; CEO al informe del gabinete. Fase 1 termina con placeholders para validación; las fases 2–4 (ficha, historial/usage/avisos, vistas móvil/pantalla) no se han implementado aún.
+El estado real del servidor tiene prioridad absoluta y cancela la vida ambiental. Cuando un analista termina, camina a la mesa central, cuenta como informe entregado y vuelve al puesto; el CEO consolida tras los tres. La vida ambiental usa un catálogo fijo de actividades y frases sin clientes, SKU ni importes; reserva baño y sofá. Con la pestaña oculta se detiene el ticker; al volver se restablecen las posiciones ambientales coherentes. `prefers-reduced-motion` elimina desplazamientos y tecleo. La ruta se carga bajo demanda y el estado real permanece legible en tarjetas accesibles. María, Lucía y Mattia enlazan a su expediente; CEO al informe del gabinete. Las fases de escena, ficha rápida, historial/uso y avisos opcionales están disponibles; quedan fuera de esta entrega las vistas específicas de móvil y modo pantalla.
 
 `POST /agents/run` sigue siendo síncrono y exclusivo de administradores. `GET /agents/execution`, accesible a usuarios autenticados, devuelve solo el estado de su empresa. Oficina y gabinete usan `useAgentExecution`: consulta cada 3 segundos durante ejecución y cada 8 en reposo; se cancela al desmontar. Sin conexión se oculta la animación de trabajo y se indica que el estado no puede confirmarse.
 
@@ -17,6 +17,16 @@ El estado real del servidor tiene prioridad absoluta y cancela la vida ambiental
 Secuencia: preparación → señales y episodios deterministas → María → Lucía → Mattia → CEO → guardado. Las fases desactivadas aparecen como omitidas. Los estados individuales son pendiente, trabajando, preparado, completado, error, interrumpido y omitido. Preparado significa narración obtenida; completado solo se publica después de confirmar el informe en BBDD. Señales y episodios se confirman antes de narrar y se conservan si falla la API. `_checked_report` bloquea respuestas vacías o que comienzan por Error. No representa una validación numérica adicional: el contrato de evidencia de investigaciones permanece separado.
 
 Límites: se conserva la última ejecución, no un historial de eventos ni una cola durable. Cerrar el navegador no equivale a cancelar trabajo. La oficina no paraleliza los agentes ni aumenta llamadas al LLM. La vida ambiental es decorativa y está claramente separada del trabajo real; la UI no presenta esos movimientos como tareas ejecutadas. Pruebas de aislamiento, concurrencia, sustitución, publicación y fallo: `tests/test_agent_execution.py`.
+
+## Actualización v1.83 — modelos, fichas y mejora de cálculo
+
+La interfaz del Gabinete incorpora fichas desplegables y una ficha resumida en cada expediente. La fuente única de su lenguaje visible es `frontend/src/content/agentProfiles.ts`; explica en términos sencillos qué hace cada agente, el modelo que usa realmente, su enfoque, fórmulas, controles anti-ruido, prioridad y límites de cobertura.
+
+El modelo efectivo de los informes, chats e investigaciones de Control IA es **GPT-4o**. El CEO también usa GPT-4o: las etiquetas históricas `o1` y “Director de Operaciones” eran incorrectas y se sustituyen por **Consolidación ejecutiva · GPT-4o** y **CEO · Dirección**. El modelo sigue siendo una capa de redacción sobre evidencia, nunca un calculador ni un ejecutor SQL.
+
+Como mejora de cálculo, `caida_ventas_comercial` ya no se activa únicamente por un umbral agregado. Tras aplicar el umbral configurable de negocio, su serie diaria se valida con mediana y MAD, persistencia CUSUM y Benjamini–Hochberg con FDR del 10 %, igual que familias y SKU. La evidencia expone el umbral, periodos, regla aplicada y estadística; una caída puntual no debe aparecer como señal activa.
+
+Para una futura mejora de modelo, la recomendación de arquitectura es mantener las fórmulas y controles actuales, y sustituir solo la capa de narración una vez validado el acceso de cuenta y el endpoint compatible. Las candidatas actuales son GPT-6.1 Sol como opción equilibrada y GPT-6 Astra para consolidaciones de máxima complejidad; no se declaran activas ni se muestran como tales hasta que se migre la integración.
 
 ## 1. Propósito
 

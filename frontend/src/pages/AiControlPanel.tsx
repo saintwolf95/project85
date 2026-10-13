@@ -7,48 +7,12 @@ import rehypeSanitize from 'rehype-sanitize';
 import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAgentExecution } from '../hooks/useAgentExecution';
-
-interface AgentInfo {
-  id: string;
-  name: string;
-  role: string;
-  model: string;
-  purpose: string;
-  calculations: string[];
-  prompts: string[];
-}
+import { AGENT_PROFILES } from '../content/agentProfiles';
+import type { AgentProfile } from '../content/agentProfiles';
 
 type StudyTab = 'report' | 'articles' | 'clients' | 'product_managers' | 'laboratory';
 
-const AGENTS_INFO: Record<string, AgentInfo> = {
-  maria: {
-    id: 'maria',
-    name: 'María',
-    role: 'Inventario',
-    model: 'GPT-4o',
-    purpose: 'Protege la disponibilidad y detecta riesgo de rotura, exceso y capital inmovilizado.',
-    calculations: ['Stock y valor de inventario', 'Cobertura y roturas por clase ABC', 'Demanda de 30 y 90 días'],
-    prompts: ['¿Qué productos requieren atención de inventario?', 'Relaciona la demanda de 30 días con el stock disponible.']
-  },
-  lucia: {
-    id: 'lucia',
-    name: 'Lucía',
-    role: 'Ventas',
-    model: 'GPT-4o',
-    purpose: 'Explica el rendimiento comercial y encuentra oportunidades por producto, cliente y equipo.',
-    calculations: ['Ventas 30 y 90 días y variación', 'Clientes activos y concentración Top 10', 'Familias, KD y comerciales'],
-    prompts: ['Compara las ventas de los últimos 30 días con el periodo anterior.', '¿Qué clientes y familias explican mejor las ventas recientes?']
-  },
-  mattia: {
-    id: 'mattia',
-    name: 'Mattia',
-    role: 'Finanzas',
-    model: 'GPT-4o',
-    purpose: 'Vigila rentabilidad, calidad del margen y exposición económica del negocio.',
-    calculations: ['MG y MGD ponderados', 'Margen negativo o estrecho', 'Concentración y capital inmovilizado'],
-    prompts: ['Resume MG y MGD de los últimos 30 días.', 'Detecta productos o clientes con rentabilidad débil.']
-  }
-};
+const AGENTS_INFO: Record<string, AgentProfile> = AGENT_PROFILES;
 
 export const AiControlPanel = () => {
   const { execution, error: executionError } = useAgentExecution();
@@ -541,7 +505,7 @@ export const AiControlPanel = () => {
               <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
                 Fase 1: Agentes de área <span className="text-[13px] font-normal text-[#86868b]">GPT-4o</span>
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">María, Lucía y Mattia extraen alertas y redactan informes cognitivos.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">María, Lucía y Mattia detectan señales verificadas y redactan informes basados en evidencia.</p>
             </div>
             <button
               onClick={() => handleToggle('fase1_active')}
@@ -609,9 +573,9 @@ export const AiControlPanel = () => {
             <div>
               <h2 className="flex items-center gap-2 text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">
                 <Brain className="h-5 w-5 text-[#0071e3] dark:text-brand-cyan" strokeWidth={1.75} />
-                Fase 2: CEO consolidador <span className="text-[13px] font-normal text-[#86868b]">o1</span>
+                Fase 2: Consolidación ejecutiva <span className="text-[13px] font-normal text-[#86868b]">GPT-4o</span>
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">El CEO toma los 3 informes y razona para emitir un Executive Summary.</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">El CEO consolida episodios verificables y propone decisiones con responsable, métrica y horizonte.</p>
             </div>
             <button
               onClick={() => handleToggle('fase2_active')}
@@ -624,7 +588,7 @@ export const AiControlPanel = () => {
             <div className={`w-full max-w-md rounded-[16px] border p-5 transition-all ${settings.fase2_active ? 'border-black/[0.08] bg-white dark:border-slate-700 dark:bg-slate-800' : 'border-black/[0.06] bg-[#fbfbfd] dark:border-slate-700 dark:bg-slate-800/50'}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="flex items-center gap-2 text-[15px] font-semibold text-[#1d1d1f] dark:text-white">
-                  <Brain size={18} className="text-[#0071e3] dark:text-brand-cyan" /> Director de Operaciones (o1)
+                  <Brain size={18} className="text-[#0071e3] dark:text-brand-cyan" /> CEO · Dirección
                 </span>
                 {settings.fase2_active ? (
                   <span className="flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-[#0071e3] opacity-50" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#0071e3]" /></span>
@@ -648,6 +612,34 @@ export const AiControlPanel = () => {
             </div>
           </div>
         </div>
+
+        <section className="mb-6 rounded-[20px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900" aria-labelledby="agent-profiles-heading">
+          <div className="mb-5">
+            <h2 id="agent-profiles-heading" className="text-[20px] font-semibold tracking-[-0.01em] text-[#1d1d1f] dark:text-white">Cómo trabajan los agentes</h2>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Cada ficha explica qué calcula el sistema, qué revisa antes de alertar y el papel real del modelo de IA.</p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {(Object.values(AGENTS_INFO)).map((profile) => (
+              <details key={profile.id} className="group rounded-[14px] border border-black/[0.08] bg-[#fbfbfd] p-4 open:bg-white dark:border-slate-700 dark:bg-slate-800/60 dark:open:bg-slate-800">
+                <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+                  <span><span className="block text-[15px] font-semibold text-[#1d1d1f] dark:text-white">{profile.name} · {profile.role}</span><span className="mt-1 block text-[12px] leading-5 text-[#6e6e73] dark:text-slate-400">{profile.purpose}</span></span>
+                  <span className="shrink-0 rounded-full bg-[#0071e3]/10 px-2.5 py-1 text-[11px] font-medium text-[#0071e3] dark:bg-brand-cyan/10 dark:text-brand-cyan">{profile.model}</span>
+                </summary>
+                <div className="mt-4 space-y-4 border-t border-black/[0.08] pt-4 text-[12px] leading-5 text-[#424245] dark:border-slate-700 dark:text-slate-300">
+                  <p><span className="font-medium text-[#1d1d1f] dark:text-white">Enfoque: </span>{profile.approach}</p>
+                  <p><span className="font-medium text-[#1d1d1f] dark:text-white">El modelo: </span>{profile.modelUse}</p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div><p className="font-medium text-[#1d1d1f] dark:text-white">Análisis</p><ul className="mt-1 list-disc space-y-1 pl-4">{profile.analyses.map(item => <li key={item}>{item}</li>)}</ul></div>
+                    <div><p className="font-medium text-[#1d1d1f] dark:text-white">Fórmulas y reglas</p><ul className="mt-1 list-disc space-y-1 pl-4">{profile.formulas.map(item => <li key={item}>{item}</li>)}</ul></div>
+                  </div>
+                  <div><p className="font-medium text-[#1d1d1f] dark:text-white">Revisiones</p><ul className="mt-1 list-disc space-y-1 pl-4">{profile.checks.map(item => <li key={item}>{item}</li>)}</ul></div>
+                  <p className="rounded-lg bg-[#0071e3]/[0.07] px-3 py-2 text-[11px] leading-4 text-[#424245] dark:bg-[#0a84ff]/10 dark:text-slate-300"><span className="font-medium">Priorización: </span>{profile.priority}</p>
+                  <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200"><span className="font-medium">Límite: </span>{profile.limitations}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
 
         {/* Historial de Informes + Botón de ejecución */}
         <div className="rounded-[20px] border border-black/[0.08] bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -831,17 +823,33 @@ export const AiControlPanel = () => {
                 </div>
               </section>
 
-              {/* Capacidades verificadas */}
+              {/* Ficha de trabajo verificable */}
               <div className="order-2 shrink-0 rounded-[16px] bg-[#f5f5f7] p-5 dark:bg-slate-800/80 lg:col-start-1 lg:row-start-1">
                 <h3 className="mb-2 flex items-center gap-2 text-[12px] font-medium text-[#6e6e73] dark:text-slate-300">
-                  <Calculator size={14} className="text-[#0071e3] dark:text-brand-cyan" /> Qué analiza y calcula
+                  <Calculator size={14} className="text-[#0071e3] dark:text-brand-cyan" /> Ficha de {AGENTS_INFO[selectedAgent].name}
                 </h3>
-                <p className="mb-3 text-[14px] text-[#424245] dark:text-slate-300">{AGENTS_INFO[selectedAgent].purpose}</p>
-                <div className="grid sm:grid-cols-3 gap-2">
-                  {AGENTS_INFO[selectedAgent].calculations.map(calculation => (
-                    <div key={calculation} className="flex items-start gap-2 text-[12px] text-[#424245] dark:text-slate-300"><CheckCircle size={13} className="mt-0.5 shrink-0 text-[#0071e3] dark:text-brand-cyan" />{calculation}</div>
-                  ))}
+                <p className="text-[14px] text-[#424245] dark:text-slate-300">{AGENTS_INFO[selectedAgent].purpose}</p>
+                <p className="mt-2 text-[12px] leading-5 text-[#6e6e73] dark:text-slate-400"><span className="font-medium text-[#424245] dark:text-slate-200">Enfoque:</span> {AGENTS_INFO[selectedAgent].approach}</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[12px] bg-white p-3 dark:bg-slate-700/60">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] dark:text-slate-300">Modelo configurado</p>
+                    <p className="mt-1 text-[13px] font-medium text-[#1d1d1f] dark:text-white">{AGENTS_INFO[selectedAgent].model}</p>
+                    <p className="mt-1 text-[11px] leading-4 text-[#6e6e73] dark:text-slate-400">{AGENTS_INFO[selectedAgent].modelUse}</p>
+                  </div>
+                  <div className="rounded-[12px] bg-white p-3 dark:bg-slate-700/60">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6e6e73] dark:text-slate-300">Cómo prioriza</p>
+                    <p className="mt-1 text-[11px] leading-4 text-[#424245] dark:text-slate-300">{AGENTS_INFO[selectedAgent].priority}</p>
+                  </div>
                 </div>
+                <details className="mt-4 rounded-[12px] border border-black/[0.06] bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800">
+                  <summary className="cursor-pointer text-[12px] font-medium text-[#0071e3] dark:text-brand-cyan">Ver análisis, fórmulas y controles</summary>
+                  <div className="mt-3 grid gap-4 text-[12px] leading-5 text-[#424245] dark:text-slate-300">
+                    <div><p className="font-medium text-[#1d1d1f] dark:text-white">Qué analiza</p><ul className="mt-1 list-disc space-y-1 pl-4">{AGENTS_INFO[selectedAgent].analyses.map(item => <li key={item}>{item}</li>)}</ul></div>
+                    <div><p className="font-medium text-[#1d1d1f] dark:text-white">Fórmulas y reglas</p><ul className="mt-1 list-disc space-y-1 pl-4">{AGENTS_INFO[selectedAgent].formulas.map(item => <li key={item}>{item}</li>)}</ul></div>
+                    <div><p className="font-medium text-[#1d1d1f] dark:text-white">Revisiones antes de avisar</p><ul className="mt-1 list-disc space-y-1 pl-4">{AGENTS_INFO[selectedAgent].checks.map(item => <li key={item}>{item}</li>)}</ul></div>
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200"><span className="font-medium">Límite actual:</span> {AGENTS_INFO[selectedAgent].limitations}</p>
+                  </div>
+                </details>
                 <div className="mt-4 border-t border-black/[0.08] pt-3 dark:border-slate-700">
                   <p className="mb-2 flex items-center gap-2 text-[12px] font-medium text-[#6e6e73] dark:text-slate-300"><Sparkles size={13} /> Preguntas recomendadas</p>
                   <div className="flex flex-wrap gap-2">

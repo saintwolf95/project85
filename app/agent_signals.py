@@ -300,14 +300,31 @@ def _sales_signals(db: Session, empresa_id: int) -> list[dict]:
         WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :ps AND :ce
         GROUP BY COALESCE(NULLIF(v.comercial_factura,''), 'Sin comercial') HAVING SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END) > 0
     """), params).mappings().all()
+    commercial_candidates = []
     for row in commercial_rows:
         previous, current = _number(row["previo"]), _number(row["actual"])
         change = current - previous
-        if change < -max(1000, previous * .10):
+        threshold_rule = resolve_detector_threshold(db, empresa_id, "caida_ventas_comercial", default=max(1000, previous * .10), on_date=anchor)
+        threshold = _number(threshold_rule.value, max(1000, previous * .10))
+        if change < -threshold:
             pct = change / previous * 100
-            signals.append(_signal("lucia", "caida_ventas_comercial", "comercial", row["entidad"], current_start, anchor,
+            commercial_candidates.append(_signal("lucia", "caida_ventas_comercial", "comercial", row["entidad"], current_start, anchor,
                 4 if pct <= -20 else 3, -change, confidence, current, previous,
-                {"metodo": "cartera comercial en periodos equivalentes", "ventas_actuales_eur": current, "ventas_base_eur": previous, "variacion_eur": change, "variacion_pct": pct}))
+                {"metodo": "cartera comercial en periodos equivalentes", "ventas_actuales_eur": current, "ventas_base_eur": previous,
+                 "variacion_eur": change, "variacion_pct": pct, "umbral_eur": threshold,
+                 "periodo_actual": [str(current_start), str(anchor)], "periodo_base": [str(previous_start), str(previous_end)],
+                 "reglas_aplicadas": rule_evidence(umbral_detector=threshold_rule)}))
+    # Los comerciales son una dimensión temporal igual que familias y SKU: aplicar el mismo filtro anti-ruido.
+    commercial_temporal = _robust_temporal_tests(
+        db, empresa_id, [signal["entidad_id"] for signal in commercial_candidates], previous_start, previous_end, current_start, anchor,
+        entity_sql="COALESCE(NULLIF(v.comercial_factura, ''), 'Sin comercial')",
+    )
+    commercial_accepted = _benjamini_hochberg([commercial_temporal[signal["entidad_id"]]["p_value"] for signal in commercial_candidates])
+    for index, signal in enumerate(commercial_candidates):
+        stats = commercial_temporal[signal["entidad_id"]]
+        signal["evidencia"]["validacion_estadistica"] = dict(stats, fdr_bh_alpha=FDR_ALPHA, fdr_aprobado=index in commercial_accepted)
+        if index in commercial_accepted and stats.get("persistente"):
+            signals.append(signal)
 
     amplitude_rows = db.execute(text("""
         SELECT c.cliente_pk cliente, COALESCE(c.nombre, 'Cliente sin identificar') nombre, COALESCE(p.familia, 'Sin familia') familia,

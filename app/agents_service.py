@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 MADRID_TZ = ZoneInfo("Europe/Madrid")
 _daily_report_lock = threading.Lock()
 
-# Los analistas conservan GPT-4o. El CEO usa una ruta independiente porque su
-# consolidación es el único informe que reúne impactos de varias áreas.
-DEFAULT_AGENT_MODEL = "gpt-4o"
+# Los agentes narran evidencia ya verificada. El CEO usa Sol solo para la
+# consolidación, mientras que los analistas y el chat ejecutivo usan Terra.
+DEFAULT_ANALYST_MODEL = "gpt-5.6-terra"
+DEFAULT_ANALYST_REASONING_EFFORT = "medium"
+DEFAULT_ANALYST_FALLBACK_MODEL = "gpt-4o"
 DEFAULT_CEO_CHAT_MODEL = "gpt-5.6-terra"
 DEFAULT_CEO_REPORT_MODEL = "gpt-6.1-sol"
 DEFAULT_CEO_FALLBACK_MODEL = "gpt-4o"
@@ -49,8 +51,8 @@ def _is_model_availability_error(error: Exception) -> bool:
     ))
 
 
-def _create_ceo_completion(client, messages: list[dict], model: str, reasoning_effort: str):
-    """Ejecuta una llamada del CEO y vuelve a GPT-4o solo si falta acceso al modelo.
+def _create_reasoning_completion(client, messages: list[dict], model: str, reasoning_effort: str, *, fallback_variable: str, fallback_default: str = DEFAULT_CEO_FALLBACK_MODEL, fallback_temperature: float = 0.2):
+    """Ejecuta una narración y vuelve a GPT-4o solo si falta acceso al modelo.
 
     La decisión y sus fórmulas siguen siendo deterministas; este selector cambia
     exclusivamente la capa de redacción. Devolvemos el modelo efectivo para que
@@ -62,11 +64,11 @@ def _create_ceo_completion(client, messages: list[dict], model: str, reasoning_e
             model=model, messages=messages, reasoning_effort=reasoning_effort,
         ), model
     except Exception as error:
-        fallback = _configured_model("CEO_MODEL_FALLBACK", DEFAULT_CEO_FALLBACK_MODEL)
+        fallback = _configured_model(fallback_variable, fallback_default)
         if model == fallback or not _is_model_availability_error(error):
             raise
-        logger.warning("El modelo CEO %s no está disponible; se usa %s: %s", model, fallback, error)
-        return client.chat.completions.create(model=fallback, messages=messages, temperature=0.2), fallback
+        logger.warning("El modelo %s no está disponible; se usa %s: %s", model, fallback, error)
+        return client.chat.completions.create(model=fallback, messages=messages, temperature=fallback_temperature), fallback
 
 
 def get_business_context(db: Session, empresa_id: int) -> str:
@@ -119,8 +121,12 @@ def _narrate(db: Session, empresa_id: int, agent: str, system_prompt: str, run_i
         )},
     ]
     try:
-        response = client.chat.completions.create(model=DEFAULT_AGENT_MODEL, messages=messages, temperature=0.2)
-        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_report", model=DEFAULT_AGENT_MODEL, run_id=run_id, agent_name=agent)
+        selected_model = _configured_model("ANALYST_MODEL", DEFAULT_ANALYST_MODEL)
+        reasoning_effort = _configured_model("ANALYST_REASONING_EFFORT", DEFAULT_ANALYST_REASONING_EFFORT)
+        response, effective_model = _create_reasoning_completion(
+            client, messages, selected_model, reasoning_effort, fallback_variable="ANALYST_MODEL_FALLBACK", fallback_default=DEFAULT_ANALYST_FALLBACK_MODEL,
+        )
+        record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_report", model=effective_model, run_id=run_id, agent_name=agent)
         return response.choices[0].message.content
     except Exception as error:
         logger.error("Error narrando señales de %s: %s", agent, error)
@@ -148,7 +154,9 @@ def run_ceo_from_signals(db: Session, empresa_id: int, run_id: str | None = None
     try:
         selected_model = _configured_model("CEO_REPORT_MODEL", DEFAULT_CEO_REPORT_MODEL)
         reasoning_effort = _configured_model("CEO_REPORT_REASONING_EFFORT", DEFAULT_CEO_REPORT_REASONING_EFFORT)
-        response, effective_model = _create_ceo_completion(client, messages, selected_model, reasoning_effort)
+        response, effective_model = _create_reasoning_completion(
+            client, messages, selected_model, reasoning_effort, fallback_variable="CEO_MODEL_FALLBACK",
+        )
         record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="ceo_report", model=effective_model, run_id=run_id, agent_name="ceo")
         return response.choices[0].message.content
     except Exception as error:
@@ -293,10 +301,15 @@ def process_agent_chat(db: Session, empresa_id: int, agent_name: str, history: l
         if normalized_agent == "ceo":
             selected_model = _configured_model("CEO_CHAT_MODEL", DEFAULT_CEO_CHAT_MODEL)
             reasoning_effort = _configured_model("CEO_CHAT_REASONING_EFFORT", DEFAULT_CEO_CHAT_REASONING_EFFORT)
-            response, effective_model = _create_ceo_completion(client, messages, selected_model, reasoning_effort)
+            response, effective_model = _create_reasoning_completion(
+                client, messages, selected_model, reasoning_effort, fallback_variable="CEO_MODEL_FALLBACK",
+            )
         else:
-            response = client.chat.completions.create(model=DEFAULT_AGENT_MODEL, messages=messages, temperature=0.2)
-            effective_model = DEFAULT_AGENT_MODEL
+            selected_model = _configured_model("ANALYST_MODEL", DEFAULT_ANALYST_MODEL)
+            reasoning_effort = _configured_model("ANALYST_REASONING_EFFORT", DEFAULT_ANALYST_REASONING_EFFORT)
+            response, effective_model = _create_reasoning_completion(
+                client, messages, selected_model, reasoning_effort, fallback_variable="ANALYST_MODEL_FALLBACK", fallback_default=DEFAULT_ANALYST_FALLBACK_MODEL,
+            )
         record_llm_usage(db.get_bind(), response, empresa_id=empresa_id, feature="agent_chat", model=effective_model, agent_name=normalized_agent)
         return response.choices[0].message.content
     except Exception as error:

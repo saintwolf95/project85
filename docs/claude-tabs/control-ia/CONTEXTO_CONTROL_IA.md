@@ -2,7 +2,7 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.84
+## Estado de ejecución y oficina visual · v1.85
 
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.67). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. Desde v1.66, la fase 2 añade fichas rápidas accesibles que solo reutilizan estado e informes ya autorizados. Desde v1.67, la fase 3 conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
@@ -22,7 +22,7 @@ Límites: se conserva la última ejecución, no un historial de eventos ni una c
 
 La interfaz del Gabinete incorpora fichas desplegables y una ficha resumida en cada expediente. La fuente única de su lenguaje visible es `frontend/src/content/agentProfiles.ts`; explica en términos sencillos qué hace cada agente, el modelo que usa realmente, su enfoque, fórmulas, controles anti-ruido, prioridad y límites de cobertura.
 
-El modelo efectivo de los informes, chats e investigaciones de Control IA es **GPT-4o**. El CEO también usa GPT-4o: las etiquetas históricas `o1` y “Director de Operaciones” eran incorrectas y se sustituyen por **Consolidación ejecutiva · GPT-4o** y **CEO · Dirección**. El modelo sigue siendo una capa de redacción sobre evidencia, nunca un calculador ni un ejecutor SQL.
+En v1.83 el modelo efectivo de informes, chats e investigaciones era **GPT-4o** y se corrigieron las etiquetas históricas `o1` y “Director de Operaciones”. Desde v1.85, María, Lucía y Mattia usan Terra; el CEO usa Terra en chat y Sol en consolidación. El modelo sigue siendo una capa de redacción sobre evidencia, nunca un calculador ni un ejecutor SQL.
 
 Como mejora de cálculo, `caida_ventas_comercial` ya no se activa únicamente por un umbral agregado. Tras aplicar el umbral configurable de negocio, su serie diaria se valida con mediana y MAD, persistencia CUSUM y Benjamini–Hochberg con FDR del 10 %, igual que familias y SKU. La evidencia expone el umbral, periodos, regla aplicada y estadística; una caída puntual no debe aparecer como señal activa.
 
@@ -30,9 +30,9 @@ Para una futura mejora de modelo, la recomendación de arquitectura es mantener 
 
 ## Actualización v1.84 — Terra y Sol solo para CEO
 
-El cambio de modelos está acotado al CEO. El chat de Dirección usa `gpt-5.6-terra`, equilibrado para consultas ejecutivas sobre un expediente, y la consolidación de episodios usa `gpt-6.1-sol`, con razonamiento de mayor capacidad. María, Lucía y Mattia se mantienen en `gpt-4o`; sus detectores continúan siendo el origen de los datos.
+El chat de Dirección usa `gpt-5.6-terra`, equilibrado para consultas ejecutivas sobre un expediente, y la consolidación de episodios usa `gpt-6.1-sol`, con razonamiento de mayor capacidad. María, Lucía y Mattia también usan `gpt-5.6-terra` con razonamiento medio en informes, chat e investigaciones; sus detectores continúan siendo el origen de los datos.
 
-La selección se configura con `CEO_CHAT_MODEL` y `CEO_REPORT_MODEL`; `CEO_CHAT_REASONING_EFFORT=medium` y `CEO_REPORT_REASONING_EFFORT=high` establecen los esfuerzos de razonamiento por defecto. El retorno de compatibilidad es `CEO_MODEL_FALLBACK` (`gpt-4o` por defecto). Solo un error de disponibilidad, modelo o permisos activa el fallback: límites de tasa y cortes de red se propagan como incidencias para no ocultar ni duplicar llamadas. La telemetría persiste el modelo efectivo, no el deseado.
+La selección se configura con `CEO_CHAT_MODEL` y `CEO_REPORT_MODEL`; `CEO_CHAT_REASONING_EFFORT=medium` y `CEO_REPORT_REASONING_EFFORT=high` establecen los esfuerzos de razonamiento por defecto. Los analistas se configuran con `ANALYST_MODEL=gpt-5.6-terra`, `ANALYST_REASONING_EFFORT=medium` y `ANALYST_MODEL_FALLBACK=gpt-4o`. El retorno de compatibilidad del CEO es `CEO_MODEL_FALLBACK` (`gpt-4o` por defecto). Solo un error de disponibilidad, modelo o permisos activa el fallback: límites de tasa y cortes de red se propagan como incidencias para no ocultar ni duplicar llamadas. La telemetría persiste el modelo efectivo, no el deseado.
 
 ## 1. Propósito
 
@@ -277,7 +277,7 @@ El histórico muestra hasta 100 ejecuciones por empresa, ordenadas de más recie
 
 ### 8.3 Narración con LLM
 
-María, Lucía y Mattia usan `gpt-4o`, temperatura `0,2`. El CEO usa `gpt-5.6-terra` para su chat ejecutivo y `gpt-6.1-sol` para la consolidación de episodios; ambos son configurables y, ante un error explícito de modelo o permisos, vuelven a `gpt-4o`. Los prompts explícitos ordenan:
+María, Lucía y Mattia usan `gpt-5.6-terra` con razonamiento medio en informes, chats e investigaciones; ante un error explícito de modelo o permisos vuelven a `gpt-4o`. El CEO usa `gpt-5.6-terra` para su chat ejecutivo y `gpt-6.1-sol` para la consolidación de episodios; ambos son configurables y usan el mismo fallback controlado. Los prompts explícitos ordenan:
 
 - narrar **solo** el evidence bundle;
 - no ejecutar SQL ni recalcular cifras;

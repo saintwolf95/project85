@@ -367,12 +367,18 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 ## Actualización v1.83 — fichas y coherencia analítica de Control IA
 
 - `frontend/src/content/agentProfiles.ts` centraliza la explicación visible de María, Lucía, Mattia y CEO: modelo efectivo, alcance, fórmulas, validaciones, priorización y límites. No duplicar esta información en la interfaz.
-- La interfaz debe llamar al modelo configurado por su nombre real. A fecha de esta versión, los informes, el chat y las investigaciones de Control IA usan `gpt-4o`; no etiquetar al CEO como `o1` mientras el backend no lo utilice.
+- La interfaz debe llamar al modelo configurado por su nombre real. En v1.83 los informes, chat e investigaciones usaban `gpt-4o`; desde v1.85 los analistas usan Terra y el CEO combina Terra/Sol. No etiquetar al CEO como `o1` mientras el backend no lo utilice.
 - Las caídas por comercial pasan por el mismo filtro temporal robusto que las caídas por familia y SKU: mediana/MAD, CUSUM persistente y Benjamini–Hochberg con FDR del 10 %. El umbral se resuelve desde `empresa_reglas_negocio` y queda en evidencia.
 - Antes de migrar el modelo de los agentes, mantener el contrato de evidencia y confirmar la compatibilidad del endpoint y el acceso de la cuenta. El modelo solo narra; los cálculos continúan siendo deterministas.
 
-## Actualización v1.84 — modelos exclusivos del CEO
+## Actualización v1.84 — modelos del CEO
 
-- María, Lucía y Mattia continúan redactando con `gpt-4o`. El cambio de modelos se limita al CEO: su chat ejecutivo usa por defecto `gpt-5.6-terra` y la consolidación de episodios usa `gpt-6.1-sol`.
+- El CEO: su chat ejecutivo usa por defecto `gpt-5.6-terra` y la consolidación de episodios usa `gpt-6.1-sol`.
 - Los valores se pueden ajustar sin redeploy mediante `CEO_CHAT_MODEL`, `CEO_REPORT_MODEL`, `CEO_CHAT_REASONING_EFFORT`, `CEO_REPORT_REASONING_EFFORT` y `CEO_MODEL_FALLBACK`. Los esfuerzos por defecto son medio para Terra y alto para Sol. Si la cuenta no dispone del modelo CEO y la API devuelve un error de disponibilidad o permisos, se usa `gpt-4o` y `llm_usage_events` registra el modelo efectivo.
 - No usar la migración de modelo para relajar el contrato: las fórmulas, señales, episodios y decisiones siguen siendo deterministas; Terra y Sol solo redactan sobre el evidence bundle autorizado.
+
+## Actualización v1.85 — Terra para agentes de área
+
+- María, Lucía y Mattia usan `gpt-5.6-terra` con razonamiento medio en sus informes, chats e investigaciones verificables. El CEO conserva Terra para su chat y Sol con razonamiento alto para el informe ejecutivo.
+- Las variables `ANALYST_MODEL`, `ANALYST_REASONING_EFFORT` y `ANALYST_MODEL_FALLBACK` controlan a los tres agentes de área. Un error explícito de disponibilidad o permisos usa `gpt-4o` como fallback y se registra el modelo efectivo.
+- El contrato de evidencia, las consultas parametrizadas, las fórmulas y la verificación de cifras de investigación no cambian con la migración de modelo.

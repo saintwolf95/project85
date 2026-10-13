@@ -7,6 +7,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .agent_signals import build_evidence_bundle
+from .agents_service import (
+    DEFAULT_ANALYST_FALLBACK_MODEL,
+    DEFAULT_ANALYST_MODEL,
+    DEFAULT_ANALYST_REASONING_EFFORT,
+    _configured_model,
+    _create_reasoning_completion,
+)
 from .copilot_service import get_openai_client
 from .evidence_contract import verify_report
 from .agent_playbooks import get_playbook, select_playbook_questions
@@ -148,9 +155,19 @@ def redact_and_verify(question: str, plan: list[str], evidence: dict[str, dict],
     )
     for attempt in range(2):
         extra = "" if attempt == 0 else " Corrige: cada línea con una cifra debe llevar su [eN] y cada cifra debe existir en ese mismo bloque de evidencia."
-        response = client.chat.completions.create(model="gpt-4o", messages=[{"role": "user", "content": instruction + extra + "\n" + json.dumps({"pregunta": question, "plan": plan, "evidence": evidence}, ensure_ascii=False, default=str)}], temperature=0)
+        selected_model = _configured_model("ANALYST_MODEL", DEFAULT_ANALYST_MODEL)
+        reasoning_effort = _configured_model("ANALYST_REASONING_EFFORT", DEFAULT_ANALYST_REASONING_EFFORT)
+        response, effective_model = _create_reasoning_completion(
+            client,
+            [{"role": "user", "content": instruction + extra + "\n" + json.dumps({"pregunta": question, "plan": plan, "evidence": evidence}, ensure_ascii=False, default=str)}],
+            selected_model,
+            reasoning_effort,
+            fallback_variable="ANALYST_MODEL_FALLBACK",
+            fallback_default=DEFAULT_ANALYST_FALLBACK_MODEL,
+            fallback_temperature=0,
+        )
         if bind is not None and empresa_id is not None:
-            record_llm_usage(bind, response, empresa_id=empresa_id, feature="agent_investigation", model="gpt-4o", agent_name=agent)
+            record_llm_usage(bind, response, empresa_id=empresa_id, feature="agent_investigation", model=effective_model, agent_name=agent)
         report = response.choices[0].message.content
         verification = verify_report(report, evidence)
         if verification["valid"]:

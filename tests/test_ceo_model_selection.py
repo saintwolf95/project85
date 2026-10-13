@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from app.agents_service import _create_ceo_completion, _configured_model
+from app.agents_service import _create_reasoning_completion, _configured_model
 
 
 class ModelAccessError(Exception):
@@ -16,7 +16,7 @@ class CeoModelSelectionTests(TestCase):
 
     def test_uses_requested_ceo_model_without_touching_fallback(self):
         completion = Mock(return_value=SimpleNamespace(choices=[]))
-        response, model = _create_ceo_completion(self._client(completion), [{"role": "user", "content": "x"}], "gpt-6.1-sol", "high")
+        response, model = _create_reasoning_completion(self._client(completion), [{"role": "user", "content": "x"}], "gpt-6.1-sol", "high", fallback_variable="CEO_MODEL_FALLBACK")
 
         self.assertEqual(model, "gpt-6.1-sol")
         self.assertEqual(response.choices, [])
@@ -26,7 +26,7 @@ class CeoModelSelectionTests(TestCase):
         completion = Mock(side_effect=[ModelAccessError("The model is not available for this account"), SimpleNamespace(choices=[])])
 
         with patch.dict("os.environ", {"CEO_MODEL_FALLBACK": "gpt-4o"}, clear=False):
-            _, model = _create_ceo_completion(self._client(completion), [{"role": "user", "content": "x"}], "gpt-5.6-terra", "medium")
+            _, model = _create_reasoning_completion(self._client(completion), [{"role": "user", "content": "x"}], "gpt-5.6-terra", "medium", fallback_variable="CEO_MODEL_FALLBACK")
 
         self.assertEqual(model, "gpt-4o")
         self.assertEqual(completion.call_args_list[0].kwargs["model"], "gpt-5.6-terra")

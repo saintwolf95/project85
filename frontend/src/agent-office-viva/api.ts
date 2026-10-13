@@ -16,6 +16,20 @@ export type OfficeSnapshot = {
   }>;
 };
 
+export type OfficeEngineAgentState = {
+  id: OfficeAgentId;
+  status: 'idle' | 'working' | 'done' | 'error';
+  stage: string;
+  progress: number;
+  ambient: string;
+};
+
+export type OfficeEngineSnapshot = {
+  agents: OfficeEngineAgentState[];
+  hour: number;
+  selectedId: OfficeAgentId | null;
+};
+
 export interface OfficeOptions {
   onSelect?: (agentId: OfficeAgentId | null) => void;
   onOpenExpediente?: (agentId: Exclude<OfficeAgentId, 'ceo'>) => void;
@@ -23,6 +37,8 @@ export interface OfficeOptions {
   onOpenInforme?: () => void;
   /** User presentation preference; enabled by default. */
   dayNight?: boolean;
+  /** Hora real de Madrid por defecto; el ciclo acelerado solo se permite en desarrollo. */
+  hourSource?: () => number;
 }
 
 export interface OfficeHandle {
@@ -34,6 +50,10 @@ export interface OfficeHandle {
   meeting(type: 'executive' | 'agent', agentId?: OfficeAgentId): void;
   /** Returns attendees to their server-confirmed working or resting positions. */
   endMeeting(): void;
+  setDayNight(on: boolean): void;
+  getSnapshot(): OfficeEngineSnapshot;
+  subscribe(listener: (snapshot: OfficeEngineSnapshot) => void): () => void;
+  portrait(agentId: OfficeAgentId, size: number): string;
   destroy(): void;
 }
 

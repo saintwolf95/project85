@@ -1,10 +1,10 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 11/10/2026, código base v1.68. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 13/10/2026, código base v1.87. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 
-Evolucionar **Control IA / Oficina de analistas** (`/ai-control/oficina`) hacia una oficina viva, isométrica y de estética pixel art. El usuario cambió expresamente de dirección: la antigua escena SVG **se sustituye**. La base es PixiJS 8 + `@pixi/react` 8 sobre React 19, tomando como referencia el módulo `agent-office` aportado en un zip: mapa textual, búsqueda de rutas BFS y máquina de estados por personaje. No se integra Next.js, su SSE/bus en memoria, sus cinco agentes ficticios ni la fuente Pixelify. HUD, ficha y paneles usan el diseño normal de Five Minutes; solo la escena es pixel art. Nunca usar gráficos de Habbo ni otros assets sin licencia comercial.
+Evolucionar **Control IA / Oficina de analistas** (`/ai-control/oficina`) hacia una oficina viva, isométrica y de estética pixel art. La antigua escena SVG queda sustituida por Canvas 2D puro, con mapa textual, búsqueda de rutas BFS y máquina de estados por personaje. El HUD visible procede del prototipo `hud-oficina`: cabecera, reloj, controles, tarjetas y ficha rápida. No se integra Next.js, su SSE/bus en memoria ni sus agentes ficticios. Nunca usar gráficos de Habbo ni otros assets sin licencia comercial.
 
 **Trabajar por fases y parar tras cada una para revisión.** La fase 0 de diagnóstico se hizo sin cambiar código. La fase 1 se ha implementado **solo con placeholders**; el usuario debe validar comportamiento y estética antes de invertir en sprites definitivos. No adelantar las fases 2, 3 y 4 ni un circuito de aprobaciones.
 
@@ -119,8 +119,8 @@ Regla del proyecto: **cada cambio** (incluso documentación operativa) increment
 ## Primer prompt sugerido para Codex en casa
 
 > Lee `CLAUDE.md`, `docs/claude-tabs/control-ia/CLAUDE.md`, `docs/claude-tabs/control-ia/CONTEXTO_CONTROL_IA.md` y `docs/RELEVO_OFICINA_AGENTES.md`. Comprueba `git status` y la versión desplegada. Estamos revisando la fase 1 de la oficina Pixi con placeholders; no avances a fases 2–4 ni a sprites finales sin mi aprobación. Primero audita la escena y hazme una lista corta de lo que debo validar visualmente, con riesgos concretos y evidencias. No inicies análisis reales ni borres archivos de usuario.
-# Actualización v1.86 — encuadre y perfiles ampliados
+# Actualización v1.87 — HUD del prototipo
 
-- La escena de la oficina abre centrada y más próxima, sin reservar un hueco lateral para la ficha. El usuario conserva zoom con rueda, arrastre y doble clic para reencuadrar.
-- Seleccionar a María, Lucía, Mattia o CEO conserva el anillo visual de selección y abre una ficha central accesible. La ficha muestra el modelo realmente configurado, cometido, método de trabajo, análisis, controles, fórmulas/priorización y el hallazgo verificado autorizado para el rol.
-- La ficha no expone clientes, SKU ni importes dentro de la escena; los accesos existentes a expediente, chat o informe ejecutivo permanecen sujetos a los permisos de cada rol.
+- `frontend/src/agent-office-viva/hud/OfficeHud.tsx` y `.module.css` son la referencia de estructura y aspecto: no cambiar textos ni estilo salvo adaptación obligatoria de Vite, que carga Pixelify Sans y Nunito desde CSS en vez de `next/font`.
+- El contrato del motor incorpora `getSnapshot`, `subscribe`, `portrait`, `select` y `setDayNight`. Limitar publicaciones de estado a cuatro por segundo; las tarjetas, la ficha y el canvas deben conservar la misma selección.
+- El reloj usa `Europe/Madrid` y `?hora=` solo funciona en desarrollo. La ficha rápida sustituye al perfil anterior, conserva Escape y lleva al expediente, chat o informe ejecutivo. No exponer clientes, SKU ni importes dentro de la escena.

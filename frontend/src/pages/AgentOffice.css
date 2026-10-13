@@ -1,5 +1,7 @@
 .agent-office { background: #f5f5f7; color: #1d1d1f; }
 .dark .agent-office { background: #0c1220; color: #f1f5f9; }
+.office-hud-prototype { height: min(65vw, 680px); min-height: 470px; margin-bottom: 20px; }
+@media (max-width: 600px) { .office-hud-prototype { height: 430px; min-height: 400px; } }
 .office-control { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 42px; padding: .6rem .85rem; border: 1px solid #94a3b855; border-radius: 12px; font-size: 12px; font-weight: 600; cursor: pointer; background: #fff; }
 .dark .office-control { background: #172437; }
 .office-control-primary, .dark .office-control-primary { background: #0071e3; border-color: #0071e3; color: #fff; }

@@ -17,6 +17,17 @@ export function createOfficeEngine(canvas, options) {
   };
   const emitActivity = () => undefined;
   const notifyInformeReady = () => undefined;
+  const listeners = new Set();
+  let lastSnapshotAt = 0;
+  const madridHour = () => {
+    const values = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date());
+    const part = (type) => Number(values.find((value) => value.type === type)?.value || 0);
+    return part('hour') + part('minute') / 60;
+  };
+  const hourSource = options.hourSource || madridHour;
+  const devHour = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('hora')) : Number.NaN;
 /* ============ utilidades ============ */
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -443,6 +454,27 @@ const W = {
   board: [], doorOpen: 0, bathroom: null, cat: null,
 };
 W.dayNight = options.dayNight ?? true;
+
+function snapshot() {
+  return {
+    agents: AG_LIST.map((agent) => ({
+      id: agent.id,
+      status: agent.real.status,
+      stage: agent.real.stage,
+      progress: agent.real.progress || 0,
+      ambient: agent.ambient || 'En su puesto',
+    })),
+    hour: W.hour,
+    selectedId: selected?.id || null,
+  };
+}
+function notifySnapshot(force = false) {
+  const now = performance.now();
+  if (!force && now - lastSnapshotAt < 250) return;
+  lastSnapshotAt = now;
+  const value = snapshot();
+  listeners.forEach((listener) => listener(value));
+}
 const DESK_OF = {};
 for (const [seat, owner] of Object.entries(SEAT_OWNER)) {
   const s = SEATS[seat];
@@ -1404,7 +1436,7 @@ W.day = 25;
 }
 function update(dt) {
   W.t += dt; W.day += dt;
-  W.hour = W.dayNight ? hourAt(W.day) : 11;
+  W.hour = W.dayNight ? (Number.isFinite(devHour) ? devHour : hourSource()) : 11;
   for (const a of AG_LIST) updateAgent(a, dt);
   updateCat(dt);
   for (const p of parts) { p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.g) p.vy += p.g * dt; else p.vx *= 0.98; }
@@ -1415,6 +1447,7 @@ function update(dt) {
   for (let i = bubbles.length - 1; i >= 0; i--) if (W.t - bubbles[i].t0 > bubbles[i].dur) bubbles.splice(i, 1);
   if (selected && autoFollow) { const s = iso(selected.x, selected.y - 1); camGoal.x = s.x; camGoal.y = s.y; }
   cam.x = lerp(cam.x, camGoal.x, Math.min(1, dt * 6)); cam.y = lerp(cam.y, camGoal.y, Math.min(1, dt * 6));
+  notifySnapshot();
 }
 function loop(now) { if (destroyed) return;
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
@@ -1483,6 +1516,7 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
       camGoal.x = s.x; camGoal.y = s.y; autoFit = false;
     }
     options.onSelect?.(selected?.id ?? null);
+    notifySnapshot(true);
   }
 
   function apply(ev) {
@@ -1497,6 +1531,7 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
       case 'agent.end': if (a) realEnd(a, ev.ok !== false); break;
       default: break;
     }
+    notifySnapshot(true);
   }
 
   function hydrate(snapshot) {
@@ -1516,6 +1551,7 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
       a.ambient = next.status === 'working' ? 'Trabajando en el análisis' : 'En su puesto';
       if (a.id !== 'ceo' && next.delivered) W.stack = Math.min(3, W.stack + 1);
     }
+    notifySnapshot(true);
   }
 
   function resumeFromMeeting(a) {
@@ -1592,12 +1628,21 @@ function hitCat(sx, sy) { const c = W.cat; if (!c) return false; const l = toLow
     hydrate,
     meeting,
     endMeeting,
+    setDayNight(on) { W.dayNight = Boolean(on); notifySnapshot(true); },
+    getSnapshot: snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      listener(snapshot());
+      return () => listeners.delete(listener);
+    },
+    portrait: (agentId, size) => AG[agentId] ? portrait(AG[agentId], size) : '',
     destroy() {
       if (destroyed) return;
       destroyed = true;
       cancelAnimationFrame(rafId);
       for (const timer of timers) window.clearTimeout(timer);
       timers.clear();
+      listeners.clear();
       window.removeEventListener('resize', onResize);
       view.removeEventListener('pointerdown', onPointerDown);
       view.removeEventListener('pointermove', onPointerMove);

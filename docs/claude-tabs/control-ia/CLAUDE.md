@@ -1,13 +1,13 @@
 # Control IA
 
-## Estado verificado · 13/10/2026 · v1.86
+## Estado verificado · 13/10/2026 · v1.87
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
-- Cada personaje y tarjeta abre un perfil ampliado con retrato pixelado existente, modelo real, propósito, enfoque, análisis, controles, fórmulas, prioridad, estado, etapa, fecha, tarea genérica y hallazgo resumido del último informe. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
+- Cada personaje y tarjeta abre la ficha rápida del HUD de referencia, con retrato pixelado, estado, etapa, última actualización, tarea genérica, actividad ambiental y hallazgo autorizado. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
-- `/ai-control/oficina` usa la escena isométrica PixiJS 8 con placeholders pixel dibujados, mapa textual y BFS del módulo `agent-office` adaptados al proyecto. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.
+- `/ai-control/oficina` usa una escena isométrica Canvas 2D, sin dependencias de motor gráfico. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.
 - La prioridad visual es estado real `agent_executions` → entrega de los tres informes en la mesa central → actividad ambiental solo en reposo. El sondeo existente de 3/8 segundos sigue siendo la fuente; no crear un bus SSE en memoria ni inferir trabajo por animación. El catálogo ambiental está en `frontend/src/agent-office/model.ts`, con destinos, pesos, duraciones y frases genéricas; el baño es exclusivo y dura 20–40 segundos. La pestaña oculta detiene la simulación.
 
 ## Actualización v1.79 — reuniones de la Oficina Viva
@@ -104,6 +104,12 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - El autoencuadre ya no reserva 330 px dentro del canvas para una ficha lateral: abre centrado, más próximo y con margen de seguridad. El usuario conserva rueda, arrastre y doble clic para reencuadrar.
 - El perfil de cada personaje se presenta como modal central responsive sobre la oficina. Reutiliza el retrato de `public/assets/agents`, la fuente funcional `agentProfiles.ts` y el último hallazgo publicado, nunca inventa alertas ni muestra cifras dentro del canvas.
 - La ficha detalla propósito, modelo, método, tareas analíticas, validaciones, fórmulas y prioridad, además de estado/etapa reales. En móvil ocupa la pantalla; Escape y el foco atrapado siguen funcionando.
+
+## Actualización v1.87 — HUD de referencia
+
+- La escena Canvas queda cubierta por el HUD exacto de `frontend/src/agent-office-viva/hud/`: cabecera Five Minutes y reloj, control Día y noche, inicio de análisis para administrador, tarjetas y ficha rápida. En móvil se conservan las tarjetas horizontales y la ficha como hoja inferior definidos por el CSS del prototipo.
+- `OfficeHandle.subscribe()` entrega una instantánea limitada a 4 Hz: hora Madrid, agente seleccionado y estado, etapa, progreso y actividad ambiental de cada integrante. La selección opera en ambos sentidos entre tarjeta, ficha y personaje.
+- La hoja rápida no duplica la antigua ficha extensa. Hallazgos, tareas y actividad se mantienen genéricos o autorizados; nada sensible entra en el canvas. Vite carga Pixelify Sans y Nunito desde el CSS porque `next/font` es exclusivo de Next.js.
 
 ## Actualización v1.43
 

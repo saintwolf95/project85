@@ -388,3 +388,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La oficina abre centrada y con mayor escala: no reservar espacio lateral dentro del canvas cuando la ficha aparece como modal sobre la escena. Conserva el reencuadre con doble clic, arrastre y rueda, y no recorta el mapa en móvil.
 - Pulsar un personaje abre su perfil completo: retrato pixelado existente, modelo real, misión, enfoque, análisis, controles, fórmulas, prioridad, estado/etapa confirmados y el hallazgo verificado autorizado. Los datos del hallazgo siguen fuera del canvas.
 - Las fichas reutilizan `frontend/src/content/agentProfiles.ts`; no duplicar funciones, fórmulas o modelos en la oficina. El panel mantiene Escape, foco atrapado, acciones de expediente/chat y diseño responsive.
+
+## Actualización v1.87 — HUD de la Oficina Viva
+
+- La oficina usa el HUD aportado en `hud-oficina/`: cabecera con reloj, controles, tarjetas sincronizadas y ficha rápida. La escena sigue siendo Canvas 2D; React posee todos los paneles y el canvas no muestra hallazgos, clientes, SKU ni importes.
+- El contrato `OfficeHandle` expone `getSnapshot`, `subscribe`, `select`, `setDayNight` y `portrait`. El motor publica como máximo cuatro actualizaciones por segundo con hora, selección y estado/etapa/progreso/actividad de cada agente.
+- La hora se obtiene de `Europe/Madrid`; `?hora=` solo puede afectar al ciclo en desarrollo. Vite no admite `next/font`, por lo que el HUD carga las mismas familias Pixelify Sans y Nunito desde su CSS. No alterar la estructura ni los textos del HUD de referencia.
+- La ficha rápida sustituye al perfil anterior. Sus acciones navegan dentro de React hacia expediente, chat o informe ejecutivo; `POST /agents/run` continúa validando la autorización de administrador en servidor.

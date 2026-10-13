@@ -2,11 +2,11 @@
 
 > Documento de referencia funcional y técnico. Base detallada v1.51; mapa de rutas y estado del gabinete revisados el 09/10/2026 en v1.61. Las reglas ejecutables de los detectores siguen siendo la fuente de verdad para sus umbrales.
 
-## Estado de ejecución y oficina visual · v1.86
+## Estado de ejecución y oficina visual · v1.87
 
-Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md` (actualizado en v1.67). No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. Desde v1.66, la fase 2 añade fichas rápidas accesibles que solo reutilizan estado e informes ya autorizados. Desde v1.67, la fase 3 conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
+Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. La oficina conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
-La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. Desde v1.63, esta última sustituye el SVG por una escena isométrica PixiJS 8 con placeholders, mapa textual, BFS y máquina de estado por personaje adaptados del módulo `agent-office` proporcionado por el usuario. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. Los paneles conservan la tipografía y tokens de la app; no se incorpora Pixelify.
+La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. La oficina sustituye el SVG por una escena isométrica Canvas 2D con mapa textual, BFS y máquina de estado por personaje. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El HUD de referencia usa Pixelify Sans y Nunito, respetando además el tema claro u oscuro de la app.
 
 El estado real del servidor tiene prioridad absoluta y cancela la vida ambiental. Cuando un analista termina, camina a la mesa central, cuenta como informe entregado y vuelve al puesto; el CEO consolida tras los tres. La vida ambiental usa un catálogo fijo de actividades y frases sin clientes, SKU ni importes; reserva baño y sofá. Con la pestaña oculta se detiene el ticker; al volver se restablecen las posiciones ambientales coherentes. `prefers-reduced-motion` elimina desplazamientos y tecleo. La ruta se carga bajo demanda y el estado real permanece legible en tarjetas accesibles. María, Lucía y Mattia enlazan a su expediente; CEO al informe del gabinete. Las fases de escena, ficha rápida, historial/uso y avisos opcionales están disponibles; quedan fuera de esta entrega las vistas específicas de móvil y modo pantalla.
 
@@ -37,6 +37,12 @@ La selección se configura con `CEO_CHAT_MODEL` y `CEO_REPORT_MODEL`; `CEO_CHAT_
 ### Actualización v1.86 — interacción de perfiles en la oficina
 
 La escena abre con un encuadre centrado y más cercano, aprovechando el ancho completo del canvas porque la ficha ya no ocupa un lateral persistente. El personaje pulsado conserva el indicador de selección dentro de la escena y abre un modal central. La ficha usa el retrato pixelado ya disponible de cada agente y el contenido de `frontend/src/content/agentProfiles.ts`: propósito, modelo, enfoque, análisis, controles, fórmulas y prioridad. Añade estado, etapa, última actualización, tarea confirmada y —solo con rol autorizado— el hallazgo ya publicado. No convierte las actividades ambientales en hallazgos ni introduce datos nuevos.
+
+### Actualización v1.87 — HUD sincronizado
+
+El HUD del prototipo vive en `frontend/src/agent-office-viva/hud/` y sustituye la ficha extensa anterior. `OfficeVivaCanvas` monta y destruye el motor desde `useEffect`; el `OfficeHandle` ofrece `getSnapshot`, `subscribe`, `portrait`, `select` y `setDayNight`. La instantánea incluye estado, etapa, progreso, actividad ambiental, hora y selección, con una cadencia máxima de 4 Hz.
+
+El reloj y la iluminación siguen `Europe/Madrid`; el parámetro `?hora=` queda restringido al entorno de desarrollo. Tarjeta y personaje se seleccionan mutuamente, Escape cierra la ficha, y las acciones navegan al expediente, chat o informe ejecutivo existente. La fuente `next/font` del prototipo se sustituye por la carga CSS equivalente por ser una aplicación Vite.
 
 ## 1. Propósito
 

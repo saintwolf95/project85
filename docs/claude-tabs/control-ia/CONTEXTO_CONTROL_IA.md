@@ -42,6 +42,10 @@ La escena abre con un encuadre centrado y más cercano, aprovechando el ancho co
 
 El HUD del prototipo vive en `frontend/src/agent-office-viva/hud/` y sustituye la ficha extensa anterior. `OfficeVivaCanvas` monta y destruye el motor desde `useEffect`; el `OfficeHandle` ofrece `getSnapshot`, `subscribe`, `portrait`, `select` y `setDayNight`. La instantánea incluye estado, etapa, progreso, actividad ambiental, hora y selección, con una cadencia máxima de 4 Hz.
 
+### Oficina Viva — Fase 1 del almacén (v1.88)
+
+La escena Canvas añade un ascensor en el borde de la oficina, pasarela elevada de cristal, cinta de cajas y fachada del almacén. Es una ampliación visual de la oficina: no consulta ni representa todavía datos de inventario. El motor usa `z` para altura y los pasos `lift`, `line` y `hide(..., 'store')` para la ronda ambiental. Cuando un estado real llega mientras un agente está en el ascensor o la pasarela, el motor lo retorna primero a la oficina y después inicia el trabajo real; esta regla evita saltos visuales o agentes flotando. María hace la ronda con más frecuencia que Mattia y CEO. La fase siguiente solo puede empezar tras validar visualmente esta ruta.
+
 El reloj y la iluminación siguen `Europe/Madrid`; el parámetro `?hora=` queda restringido al entorno de desarrollo. Tarjeta y personaje se seleccionan mutuamente, Escape cierra la ficha, y las acciones navegan al expediente, chat o informe ejecutivo existente. La fuente `next/font` del prototipo se sustituye por la carga CSS equivalente por ser una aplicación Vite.
 
 ## 1. Propósito

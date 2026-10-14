@@ -395,3 +395,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El contrato `OfficeHandle` expone `getSnapshot`, `subscribe`, `select`, `setDayNight` y `portrait`. El motor publica como máximo cuatro actualizaciones por segundo con hora, selección y estado/etapa/progreso/actividad de cada agente.
 - La hora se obtiene de `Europe/Madrid`; `?hora=` solo puede afectar al ciclo en desarrollo. Vite no admite `next/font`, por lo que el HUD carga las mismas familias Pixelify Sans y Nunito desde su CSS. No alterar la estructura ni los textos del HUD de referencia.
 - La ficha rápida sustituye al perfil anterior. Sus acciones navegan dentro de React hacia expediente, chat o informe ejecutivo; `POST /agents/run` continúa validando la autorización de administrador en servidor.
+
+## Actualización v1.88 — Pasarela al almacén (Fase 1)
+
+- La Oficina Viva incorpora la primera fase de conexión visual con el almacén: ascensor acristalado, pasarela elevada sobre carretera, cinta de cajas y fachada de almacén. Es escenografía operativa; no presenta aún métricas ni datos de inventario.
+- El roster admite coordenada vertical `z` y pasos `lift`, `line` y `hide(..., 'store')`. Si una tarea real interrumpe una ronda, el agente vuelve primero por la pasarela y baja en ascensor; no puede teletransportarse desde el tramo elevado.
+- La ronda por el almacén es ambiental, no revela clientes, SKU ni importes. María la recibe con mayor frecuencia y Mattia/CEO de forma ocasional. Las definiciones de aging, cobertura y valor de inventario quedan expresamente aplazadas a la fase de datos reales y requieren validación previa.

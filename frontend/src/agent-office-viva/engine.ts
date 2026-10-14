@@ -118,15 +118,17 @@ const MAP = OFFICE_GRID; /* Prototype map moved to map.ts. */
 */
 const MH = MAP.length, MW = MAP[0].length;
 const ch = (x, y) => (MAP[y] && MAP[y][x]) || '#';
-const WALK = new Set(['.', ',', '~', ':', 'x', '1', '2', '3', '4', 't', 's', 'o']);
+const WALK = new Set(['.', ',', '~', ':', 'x', '1', '2', '3', '4', 't', 's', 'o', 'V']);
 const walkable = (x, y) => WALK.has(ch(x, y));
 const SEATS = {};
 for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) { const c = ch(x, y); if (/[1-4]/.test(c)) SEATS[c] = { x, y }; }
 const TABLE_SEATS = []; for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) if (ch(x, y) === 't') TABLE_SEATS.push({ x, y });
 
 /* ============ proyección isométrica 2:1 (resolución baja) ============ */
+// The warehouse bridge extends the scene beyond the original office bounds.
+// Keep a generous right margin so the initial camera includes the whole route.
 const OX = MH * 16 + 24, OY = 76;
-const LW = (MW + MH) * 16 + 48, LH = OY + (MW + MH) * 8 + 24;
+const LW = (MW + MH + 12) * 16 + 64, LH = OY + (MW + MH) * 8 + 24;
 const iso = (x, y, z = 0) => ({ x: OX + (x - y) * 16, y: OY + (x + y) * 8 - z });
 function facingTo(dx, dy) { const sx = dx - dy, sy = dx + dy; return { back: sy < 0, flip: sx < 0 ? -1 : 1 }; }
 
@@ -174,6 +176,20 @@ function skewText(g, text, x0, y0, color) {
 
 function buildBackground() {
   const [c, g] = mk(LW, LH);
+  // Exterior mínimo de la fase 1: carretera y aceras bajo la pasarela.
+  // El almacén es todavía escenografía; sus métricas llegan en la fase 4.
+  for (let y = -2; y <= 6; y++) for (let x = 16; x <= 22; x++) {
+    const road = x >= 17 && x <= 19;
+    const base = road ? '#596275' : '#cbd3dc';
+    const A = iso(x, y), B = iso(x + 1, y), Cc = iso(x + 1, y + 1), D = iso(x, y + 1);
+    P.poly(g, [A, B, Cc, D], base);
+    P.line(g, A.x, A.y, B.x, B.y, shade(base, 0.86));
+    P.line(g, A.x, A.y, D.x, D.y, shade(base, 0.86));
+    if (road && (x + y) % 3 === 0) {
+      const p = iso(x + 0.42, y + 0.46);
+      P.rect(g, p.x - 5, p.y, 10, 1, '#f7db71');
+    }
+  }
   // suelo
   for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
     const k = ch(x, y);
@@ -263,6 +279,52 @@ const STOOLS = ['#ffd166', '#7bd389', '#ff8fab', '#8ecdf5', '#c3a6ff', '#ffb067'
 let stoolI = 0;
 
 function addProp(tx, ty, spr, dyn, dOff = 0) { props.push({ tx, ty, depth: tx + ty + 1 + dOff, spr, dyn }); }
+
+/* Pasarela acristalada con cinta transportadora: oficina → almacén, sobre la carretera. */
+const BRIDGE = { x0: 15, x1: 22, y: 2, z: 28 };
+function buildBridge() {
+  const { y, z } = BRIDGE;
+  for (let x = BRIDGE.x0; x < BRIDGE.x1; x++) {
+    const first = x === BRIDGE.x0, last = x === BRIDGE.x1 - 1;
+    addProp(x, y, makeSprite(1, 1, 90, (g, L) => {
+      if (x === 16 || x === 20) box(g, L, 0.4, 0.4, 0.6, 0.6, 0, z, '#8f97ab');
+      box(g, L, 0, 0.12, 1, 0.88, z, 3, '#dfe4ee', { noX1: !last, skip: { x0: !first }, left: '#aab3c6', right: '#9aa3b5' });
+      P.poly(g, [L(0, 0.12, z + 3), L(1, 0.12, z + 3), L(1, 0.12, z + 26), L(0, 0.12, z + 26)], 'rgba(178,226,255,0.30)');
+      box(g, L, 0, 0.16, 1, 0.42, z + 3, 4, '#3b4256', { noX1: !last, skip: { x0: !first }, noLines: true });
+      box(g, L, 0, 0.12, 1, 0.88, z + 26, 2, '#c3cad8', { noX1: !last, skip: { x0: !first } });
+      const r0 = L(0, 0.12, z + 14), r1 = L(1, 0.12, z + 14); P.line(g, r0.x, r0.y, r1.x, r1.y, '#c3cad8');
+    }), (g, t) => bridgeFx(g, t, x), -0.05);
+    // La segunda capa de cristal se dibuja por delante: el personaje camina entre ambas.
+    addProp(x, y, makeSprite(1, 1, 90, (g, L) => {
+      P.poly(g, [L(0, 0.88, z + 3), L(1, 0.88, z + 3), L(1, 0.88, z + 26), L(0, 0.88, z + 26)], 'rgba(178,226,255,0.26)');
+      const a = L(0.2, 0.88, z + 6), b = L(0.45, 0.88, z + 22); P.line(g, a.x, a.y, b.x, b.y, 'rgba(255,255,255,0.7)');
+      for (const zz of [z + 3, z + 14, z + 26]) { const p0 = L(0, 0.88, zz), p1 = L(1, 0.88, zz); P.line(g, p0.x, p0.y, p1.x, p1.y, '#aab3c6'); }
+      if (first || last) { const p0 = L(first ? 0 : 1, 0.88, z), p1 = L(first ? 0 : 1, 0.88, z + 28); P.line(g, p0.x, p0.y, p1.x, p1.y, '#5c6378'); }
+    }), null, 1.3);
+  }
+}
+function bridgeFx(g, t, x) {
+  const L = WL(x, BRIDGE.y), z = BRIDGE.z;
+  const off = (t * 0.9) % 0.5;
+  for (let k = 0; k < 2; k++) { const u = k * 0.5 + off, a = L(1 - u, 0.17, z + 7), b = L(1 - u, 0.41, z + 7); P.line(g, a.x, a.y, b.x, b.y, '#5c6378'); }
+  for (let i = 0; i < 9; i++) {
+    const wx = BRIDGE.x1 + 0.2 - (((t * 0.9) + i * 0.83) % (BRIDGE.x1 - BRIDGE.x0 + 0.4));
+    if (wx < x || wx >= x + 1) continue;
+    const p = iso(wx, BRIDGE.y + 0.29, z + 7);
+    P.rect(g, p.x - 4, p.y - 6, 8, 7, OUT); P.rect(g, p.x - 3, p.y - 5, 6, 5, '#d6a066'); P.rect(g, p.x - 3, p.y - 5, 6, 2, '#e8b77c'); P.rect(g, p.x - 1, p.y - 5, 1, 5, '#b8743f');
+  }
+}
+
+function buildWarehouseFacade() {
+  addProp(22, -2, makeSprite(5, 6, 76, (g, L) => {
+    box(g, L, 0, 0, 5, 6, 0, 44, '#cfd5e0', { top: '#9aa3b5', left: '#c3cad8', right: '#b3bbcc' });
+    box(g, L, 0.8, 5.82, 4.2, 6.02, 3, 33, '#63708a', { top: '#7b879e' });
+    for (const x of [1.1, 2.4, 3.7]) { const p = L(x, 5.84, 28); P.rect(g, p.x - 3, p.y - 5, 6, 5, '#ffd66b'); }
+    const a = L(0.7, 5.95, 48), b = L(4.3, 5.95, 48), c = L(4.3, 5.95, 56), d = L(0.7, 5.95, 56);
+    P.poly(g, [a, b, c, d], '#3d6ef5'); P.line(g, a.x, a.y, b.x, b.y, OUT); P.line(g, b.x, b.y, c.x, c.y, OUT); P.line(g, c.x, c.y, d.x, d.y, OUT); P.line(g, d.x, d.y, a.x, a.y, OUT);
+    const tx = L(1.15, 5.96, 54); skewText(g, 'ALMACEN', tx.x, tx.y, '#ffffff');
+  }), null, -0.2);
+}
 
 function buildProps() {
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
@@ -437,9 +499,28 @@ function buildProps() {
         }));
         break;
       }
+      case 'V':
+        addProp(x, y, makeSprite(1, 1, 70, (g, L) => {
+          box(g, L, 0.08, 0.08, 0.92, 0.92, 0, 2, '#9aa1b8');
+          for (const [px, py] of [[0.08, 0.08], [0.84, 0.08], [0.08, 0.84]]) box(g, L, px, py, px + 0.08, py + 0.08, 2, 58, '#5c6378');
+          P.poly(g, [L(0.08, 0.08, 2), L(0.08, 0.92, 2), L(0.08, 0.92, 60), L(0.08, 0.08, 60)], 'rgba(178,226,255,0.35)');
+          box(g, L, 0.08, 0.08, 0.92, 0.92, 60, 3, '#5c6378');
+          const s = L(0.3, 0.08, 52); P.rect(g, s.x, s.y, 4, 3, '#3df5a8');
+        }), (g) => {
+          const L = WL(x, y), z = W.liftZ || 0;
+          box(g, L, 0.12, 0.12, 0.88, 0.88, z + 1, 2, '#ffd23f', { left: '#e0b52f', right: '#ebc23a' });
+        }, -0.35);
+        addProp(x, y, makeSprite(1, 1, 70, (g, L) => {
+          P.poly(g, [L(0.08, 0.92, 2), L(0.92, 0.92, 2), L(0.92, 0.92, 60), L(0.08, 0.92, 60)], 'rgba(178,226,255,0.22)');
+          P.poly(g, [L(0.92, 0.08, 2), L(0.92, 0.92, 2), L(0.92, 0.92, 60), L(0.92, 0.08, 60)], 'rgba(178,226,255,0.22)');
+          box(g, L, 0.84, 0.84, 0.92, 0.92, 2, 58, '#5c6378');
+        }), null, 0.4);
+        break;
       default: break;
     }
   }
+  buildWarehouseFacade();
+  buildBridge();
   // cama del gato (decoración)
   addProp(4, 10, makeSprite(1, 1, 10, (g, L) => {
     box(g, L, 0.22, 0.25, 0.78, 0.75, 0, 4, '#ffd166', { left: '#e5b54c' });
@@ -451,7 +532,7 @@ function buildProps() {
 const W = {
   t: 0, hour: 9, dayNight: true, stack: 0,
   coffeeBusy: 0, fridgeOpen: 0, waterBusy: 0, printing: 0, printStart: 0, arcadePlaying: 0,
-  board: [], doorOpen: 0, bathroom: null, cat: null,
+  board: [], doorOpen: 0, bathroom: null, inStore: null, liftZ: 0, cat: null,
 };
 W.dayNight = options.dayNight ?? true;
 
@@ -827,7 +908,7 @@ const AG = {};
 for (const def of AGENTS) {
   const s = SEATS[def.seat];
   AG[def.id] = Object.assign(def, {
-    x: s.x + 0.5, y: s.y + 0.5, path: [], facing: facingTo(0, 1), anim: 'sit', queue: [], cur: null, stepEnd: 0,
+    x: s.x + 0.5, y: s.y + 0.5, z: 0, lineTo: null, path: [], facing: facingTo(0, 1), anim: 'sit', queue: [], cur: null, stepEnd: 0,
     hidden: false, carry: null, mugOnDesk: false, reserved: null, lastSay: 0, nextAmbient: rand(0.5, 3), ambient: 'En su puesto',
     real: { status: 'idle', stage: '', progress: 0, lastTask: 'Sin ejecuciones hoy', finding: '' }, blinkAt: rand(1, 4), chat: null,
   });
@@ -898,7 +979,9 @@ const S = {
   call: (fn) => ({ k: 'call', fn }),
   wait: (dur) => ({ k: 'wait', dur }),
   until: (cond, max = 8) => ({ k: 'until', cond, max }),
-  hide: (dur) => ({ k: 'hide', dur }),
+  hide: (dur, where = 'bath') => ({ k: 'hide', dur, where }),
+  lift: (z) => ({ k: 'lift', z }),
+  line: (to) => ({ k: 'line', to }),
 };
 const lines = (arr) => typeof arr === 'string' ? arr : pick(arr);
 
@@ -919,7 +1002,9 @@ function startStep(a, s) {
     case 'call': s.fn(a); s.done = true; return;
     case 'wait': a.stepEnd = t + s.dur; return;
     case 'until': a.stepEnd = t + s.max; return;
-    case 'hide': a.hidden = true; W.bathroom = a.id; a.stepEnd = t + s.dur; return;
+    case 'hide': a.hidden = true; if (s.where === 'store') W.inStore = a.id; else W.bathroom = a.id; a.stepEnd = t + s.dur; return;
+    case 'lift': s.from = a.z || 0; s.t0 = t; a.stepEnd = t + 1.1; a.anim = 'stand'; return;
+    case 'line': a.lineTo = s.to; a.path = []; return;
   }
 }
 function stepDone(a, s) {
@@ -935,8 +1020,14 @@ function stepDone(a, s) {
     case 'wait': return t >= a.stepEnd;
     case 'until': return s.cond(a) || t >= a.stepEnd;
     case 'hide':
-      if (t >= a.stepEnd) { a.hidden = false; W.bathroom = null; W.doorOpen = t + 0.7; return true; }
+      if (t >= a.stepEnd) { a.hidden = false; if (s.where === 'store') W.inStore = null; else { W.bathroom = null; W.doorOpen = t + 0.7; } return true; }
       return false;
+    case 'lift': {
+      const k = clamp((t - s.t0) / 1.1, 0, 1), e = k * k * (3 - 2 * k);
+      a.z = lerp(s.from, s.z, e); W.liftZ = a.z;
+      return k >= 1;
+    }
+    case 'line': return !a.lineTo;
   }
   return true;
 }
@@ -978,8 +1069,8 @@ const ACTIVITIES = {
   } },
   window: { w: 5, label: 'Mirando por la ventana', spot: () => pick([{ x: 5, y: 1 }, { x: 12, y: 1 }]), make: (a, sp) => [
     S.go(sp, { x: sp.x, y: 0 }), S.anim('stretch', 2.4), S.emote(nightness(W.hour) > 0.5 ? 'star' : 'smile')] },
-  printer: { w: 5, label: 'Imprimiendo', spot: { x: 13, y: 2 }, make: (a, sp) => [
-    S.go(sp, { x: 14, y: 2 }), S.call(() => { W.printing = W.t + 1.8; W.printStart = W.t; }), S.anim('use', 1.8),
+  printer: { w: 5, label: 'Imprimiendo', spot: { x: 13, y: 3 }, make: (a, sp) => [
+    S.go(sp, { x: 14, y: 3 }), S.call(() => { W.printing = W.t + 1.8; W.printStart = W.t; }), S.anim('use', 1.8),
     S.call((x) => { x.carry = 'paper'; }), S.emote('paper'), S.go(seatOf(a), deskFace(a)), S.call((x) => { x.carry = null; }), S.anim('type', rand(3, 5))] },
   sofa: { w: 6, label: 'Descansando en el sofá', spot: () => pick([{ x: 1, y: 8 }, { x: 1, y: 9 }, { x: 6, y: 9 }, { x: 8, y: 9 }]), make: (a, sp) => [
     S.go(sp, sp.x === 1 ? { x: 2, y: sp.y } : { x: 7, y: 10 }), S.anim(a.id === 'lucia' || a.id === 'ceo' ? 'sitPhone' : 'sit', rand(6, 9)), S.emote('music')] },
@@ -991,6 +1082,10 @@ const ACTIVITIES = {
     return [S.go(n, ct), S.anim('pet', 2.2), S.call(() => { emote(c, 'heart'); c.mode = 'sit'; c.until = W.t + 3; }), S.say(['¿Quién es un buen gato?', 'Hola, pequeño'], 0.5)];
   } },
   chat: { w: 10, label: 'Charlando', make: (a) => startChat(a) },
+  warehouse: { w: 2, label: 'Ronda por el almacén', spot: { x: 14, y: 2 }, make: (a, sp) => [
+    S.say(['Voy a revisar el almacén', 'Ronda de stock', 'Bajo a ver los palés'], 0.8), S.go(sp, { x: 15, y: 2 }), S.lift(BRIDGE.z),
+    S.line({ x: 22.3, y: 2.5 }), S.hide(rand(6, 10), 'store'), S.line({ x: 14.5, y: 2.5 }), S.lift(0),
+    S.say(['Todo en orden ahí abajo', 'He contado las cajas', 'Hay palés por colocar', 'El stock cuadra'], 0.9), S.emote(pick(['check', 'paper']))] },
   supervise: { w: 0, label: 'Pasando por las mesas', make: (a) => {
     const target = pick(AG_LIST.filter((x) => x.id !== 'ceo')); const d = DESK_OF[target.id];
     return [S.go({ x: d.x, y: d.y + 1 }, d), S.anim('talk', 2.2), S.say(L_SUPER, 0.8), S.emote(pick(['smile', 'idea']))];
@@ -998,8 +1093,8 @@ const ACTIVITIES = {
   phone: { w: 0, label: 'Al teléfono', make: (a) => [S.go(pick([{ x: 12, y: 9 }, { x: 13, y: 9 }, { x: 12, y: 7 }]), { x: 14, y: 9 }), S.anim('phone', rand(4, 6)), S.say(L_PHONE, 0.7)] },
 };
 const WEIGHTS = {
-  maria: { printer: 9 }, mattia: { board: 12 }, lucia: { chat: 14 },
-  ceo: { desk: 22, supervise: 16, phone: 12, arcade: 2, printer: 0, board: 3, fridge: 2 },
+  maria: { printer: 9, warehouse: 12 }, mattia: { board: 12, warehouse: 3 }, lucia: { chat: 14 },
+  ceo: { desk: 22, supervise: 16, phone: 12, arcade: 2, printer: 0, board: 3, fridge: 2, warehouse: 3 },
 };
 
 function boardTick(a, t) {
@@ -1050,9 +1145,9 @@ function chooseActivity(a) {
 
 function interrupt(a) {
   release(a);
-  if (a.hidden) { a.hidden = false; W.bathroom = null; W.doorOpen = W.t + 0.7; }
+  if (a.hidden) { a.hidden = false; if (W.inStore === a.id) W.inStore = null; else { W.bathroom = null; W.doorOpen = W.t + 0.7; } }
   if (a.chat) { const c = a.chat; a.chat = null; for (const b of AG_LIST) if (b !== a && b.chat === c) { b.chat = null; b.queue = []; b.cur = null; release(b); } }
-  a.queue = []; a.cur = null; a.path = [];
+  a.queue = []; a.cur = null; a.path = []; a.lineTo = null;
   a.carry = a.carry === 'mug' ? null : a.carry;
 }
 
@@ -1063,6 +1158,9 @@ function tableSeatFor(a) {
   return c[0] || TABLE_SEATS[0];
 }
 const TABLE_CENTER = { x: 7, y: 5 };
+const returnFromBridge = (a) => (a.z > 0.5 || a.x >= BRIDGE.x0)
+  ? [S.line({ x: 14.5, y: 2.5 }), S.lift(0)]
+  : [];
 
 function realStart(a) {
   interrupt(a);
@@ -1070,9 +1168,9 @@ function realStart(a) {
   a.ambient = 'Trabajando en el análisis';
   if (a.id === 'ceo') {
     const sp = { x: 9, y: 5 }; reserve(a, sp);
-    a.queue = [S.say('Vamos a consolidar', 1), S.go(sp, TABLE_CENTER), S.anim('type', Infinity)];
+    a.queue = [...returnFromBridge(a), S.say('Vamos a consolidar', 1), S.go(sp, TABLE_CENTER), S.anim('type', Infinity)];
   } else {
-    a.queue = [S.say(['Me pongo con ello', '¡Vamos allá!', 'Abro los datos'], 1), S.go(seatOf(a), deskFace(a)), S.anim('type', Infinity)];
+    a.queue = [...returnFromBridge(a), S.say(['Me pongo con ello', '¡Vamos allá!', 'Abro los datos'], 1), S.go(seatOf(a), deskFace(a)), S.anim('type', Infinity)];
   }
   a.queue.forEach((s) => { s.important = true; });
 }
@@ -1155,7 +1253,12 @@ function catSay(text) { const c = W.cat; bubbles.forEach((b) => { b.off += 30; }
 const SPEED = 3.6;
 function updateAgent(a, dt) {
   const t = W.t;
-  if (a.path.length) {
+  if (a.lineTo) {
+    const dx = a.lineTo.x - a.x, dy = a.lineTo.y - a.y, d = Math.hypot(dx, dy), st = SPEED * dt;
+    if (d > 0.001) a.facing = facingTo(dx, dy);
+    if (d <= st) { a.x = a.lineTo.x; a.y = a.lineTo.y; a.lineTo = null; } else { a.x += dx / d * st; a.y += dy / d * st; }
+    a.walking = true;
+  } else if (a.path.length) {
     const n = a.path[0], tx = n.x + 0.5, ty = n.y + 0.5, dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy), st = SPEED * dt;
     if (d > 0.001) a.facing = facingTo(dx, dy);
     if (d <= st) { a.x = tx; a.y = ty; a.path.shift(); } else { a.x += dx / d * st; a.y += dy / d * st; }
@@ -1163,7 +1266,16 @@ function updateAgent(a, dt) {
     if (!REDUCED && Math.random() < 0.04) { const p = iso(a.x, a.y); puff(p.x + rand(-3, 3), p.y, '#ffffff', -3); }
   } else a.walking = false;
 
-  if (!a.cur && a.queue.length) { a.cur = a.queue.shift(); startStep(a, a.cur); }
+  if (!a.cur && a.queue.length) {
+    let next = a.queue.shift();
+    // A real task, or any normal route, must first bring an agent back from
+    // the elevated bridge. This prevents characters from teleporting/floating.
+    if (next.k === 'go' && (a.z > 0.5 || a.x >= BRIDGE.x0)) {
+      a.queue.unshift(S.lift(0), next);
+      next = a.x >= BRIDGE.x0 ? S.line({ x: 14.5, y: 2.5 }) : a.queue.shift();
+    }
+    a.cur = next; startStep(a, a.cur);
+  }
   if (a.cur && !a.walking) { if (stepDone(a, a.cur)) { a.cur = null; } }
   else if (a.cur && a.cur.k !== 'go' && stepDone(a, a.cur)) a.cur = null;
 
@@ -1273,7 +1385,7 @@ function render() {
 
   const items = [];
   for (const p of props) items.push({ d: p.depth, p });
-  for (const a of AG_LIST) if (!a.hidden) items.push({ d: a.x + a.y + 0.05, a });
+  for (const a of AG_LIST) if (!a.hidden) items.push({ d: a.x + a.y + (a.z > 0 ? 1.1 : 0.05), a });
   if (W.cat) items.push({ d: W.cat.x + W.cat.y + 0.02, cat: W.cat });
   items.sort((m, k) => m.d - k.d);
 
@@ -1283,7 +1395,7 @@ function render() {
       if (p.spr) lg.drawImage(p.spr.c, s.x - p.spr.ax, s.y - p.spr.ay);
       if (p.dyn) p.dyn(lg, t);
     } else if (it.a) {
-      const a = it.a, s = iso(a.x, a.y);
+      const a = it.a, s = iso(a.x, a.y, a.z || 0);
       lg.fillStyle = 'rgba(42,33,64,0.22)'; lg.fillRect(Math.round(s.x) - 6, Math.round(s.y) - 1, 13, 3);
       if (a === selected) { P.rect(lg, s.x - 9, s.y - 1, 19, 1, '#3d6ef5'); P.rect(lg, s.x - 7, s.y - 2, 15, 1, '#3d6ef5'); P.rect(lg, s.x - 7, s.y + 1, 15, 1, '#3d6ef5'); }
       const { anim, f } = frameOf(a);
@@ -1334,12 +1446,12 @@ function render() {
   // emociones y flecha de selección (sin oscurecer)
   for (const e of emotes) {
     const tg = e.target; if (tg.hidden) continue;
-    const s = iso(tg.x, tg.y), age = t - e.t0, up = age < 0.15 ? (1 - age / 0.15) * 5 : 0;
+    const s = iso(tg.x, tg.y, tg.z || 0), age = t - e.t0, up = age < 0.15 ? (1 - age / 0.15) * 5 : 0;
     const icon = iconSprite(e.icon), isCat = tg === W.cat;
     lg.drawImage(icon, Math.round(s.x) - 7, Math.round(s.y - (isCat ? 26 : 56) + up - Math.min(3, age * 2)));
   }
   if (selected && !selected.hidden) {
-    const s = iso(selected.x, selected.y), b = Math.round(Math.sin(t * 5) * 2), y = Math.round(s.y) - (SIT.has(selected.anim) && !selected.walking ? 44 : 48) + b, x = Math.round(s.x);
+    const s = iso(selected.x, selected.y, selected.z || 0), b = Math.round(Math.sin(t * 5) * 2), y = Math.round(s.y) - (SIT.has(selected.anim) && !selected.walking ? 44 : 48) + b, x = Math.round(s.x);
     P.rect(lg, x - 4, y - 1, 9, 1, OUT); P.rect(lg, x - 3, y, 7, 1, '#3d6ef5'); P.rect(lg, x - 4, y, 1, 1, OUT); P.rect(lg, x + 4, y, 1, 1, OUT);
     P.rect(lg, x - 2, y + 1, 5, 1, '#3d6ef5'); P.rect(lg, x - 3, y + 1, 1, 1, OUT); P.rect(lg, x + 3, y + 1, 1, 1, OUT);
     P.rect(lg, x - 1, y + 2, 3, 1, '#3d6ef5'); P.rect(lg, x - 2, y + 2, 1, 1, OUT); P.rect(lg, x + 2, y + 2, 1, 1, OUT); P.rect(lg, x, y + 3, 1, 1, OUT);
@@ -1370,8 +1482,8 @@ function drawLabels(g, t) {
   // estados y nombres
   for (const a of AG_LIST) {
     if (a.hidden) continue;
-    const head = iso(a.x, a.y).y - (SIT.has(a.anim) && !a.walking ? 40 : 44);
-    const p = toScreen(iso(a.x, a.y).x, head);
+    const head = iso(a.x, a.y, a.z || 0).y - (SIT.has(a.anim) && !a.walking ? 40 : 44);
+    const p = toScreen(iso(a.x, a.y, a.z || 0).x, head);
     let y = p.y - 6;
     const st = a.real.status;
     const showBadge = st === 'working' || st === 'error' || (st === 'done' && W.t - (a.real.doneAt || 0) < (a.id === 'ceo' ? 12 : 7));
@@ -1402,7 +1514,7 @@ function drawLabels(g, t) {
   for (const b of bubbles) {
     const age = t - b.t0; if (age > b.dur) continue;
     const src = b.cat ? W.cat : b.a; if (!src) continue;
-    const anchorY = iso(src.x, src.y).y - (b.cat ? 22 : 50);
+    const anchorY = iso(src.x, src.y, src.z || 0).y - (b.cat ? 22 : 50);
     const p = toScreen(b.wx, anchorY);
     const rise = REDUCED ? 0 : age * 9;
     const x = p.x, y = p.y - 30 - (b.cat ? 0 : (b.a.badgeH || 0)) - b.off - rise;
@@ -1464,7 +1576,7 @@ function hitAgent(sx, sy) {
   let best = null, bd = -Infinity;
   for (const a of AG_LIST) {
     if (a.hidden) continue;
-    const s = iso(a.x, a.y);
+    const s = iso(a.x, a.y, a.z || 0);
     if (l.x >= s.x - 10 && l.x <= s.x + 10 && l.y >= s.y - 38 && l.y <= s.y + 3 && a.x + a.y > bd) { best = a; bd = a.x + a.y; }
   }
   return best;

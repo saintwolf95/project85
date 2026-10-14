@@ -154,3 +154,26 @@
 @media (max-width: 600px) { .office-roster, .office-meeting-findings { grid-template-columns: 1fr; } .office-viva-canvas { min-height: 400px; height: 430px; } .office-scene-heading { padding: 15px; } .office-meeting-actions { padding: 0 15px 14px; } .office-meeting-end { margin-left: 0; } .office-profile-header, .office-profile-body { padding: 20px; } .office-profile-actions { padding: 16px 20px 20px; } }
 @media (max-width: 760px) { .office-history-run summary { grid-template-columns: 82px 1fr 70px; } .office-history-stage { grid-column: 1 / -1; } .office-history-members { grid-template-columns: 1fr; } .office-history-members > div { grid-template-columns: 70px 80px 60px 1fr; } }
 @media (prefers-reduced-motion: reduce) { .agent-office *, .agent-office *::before, .agent-office *::after { animation: none !important; transition: none !important; } }
+
+/* Fase 1 de Oficina Viva: el módulo cerrado ocupa el área principal sin límite de 680 px. */
+.agent-office { min-width: 0; }
+.agent-office-shell { display: flex; width: 100%; min-width: 0; flex-direction: column; gap: 16px; }
+.agent-office-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; }
+.agent-office-heading p, .office-demo-heading span { color: #64748b; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.agent-office-heading h1 { margin-top: 2px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.agent-office-heading nav { display: flex; flex-wrap: wrap; gap: 14px; }
+.agent-office-heading a { display: inline-flex; align-items: center; gap: 5px; color: #0071e3; font-size: 13px; font-weight: 650; }
+.agent-office-status { border: 1px solid; border-radius: 10px; padding: 11px 14px; font-size: 13px; }
+.agent-office-status.is-success { border-color: #10b98166; background: #ecfdf5; color: #047857; }
+.agent-office-status.is-error { border-color: #ef444466; background: #fef2f2; color: #b91c1c; }
+.agent-office-viva-stage { width: 100%; height: calc(100dvh - 190px); min-height: 640px; overflow: hidden; border-radius: 16px; }
+.agent-office-viva { width: 100%; height: 100%; }
+.office-demo-page { min-height: 100dvh; padding: 16px; background: #0b1220; }
+.office-demo-heading { display: flex; width: 100%; max-width: 100%; align-items: center; justify-content: space-between; min-height: 38px; color: #f8fafc; }
+.office-demo-heading strong { font-size: 15px; }
+.office-demo-stage { width: 100%; height: calc(100dvh - 70px); min-height: 640px; overflow: hidden; border-radius: 16px; }
+.dark .agent-office-heading p { color: #94a3b8; }
+.dark .agent-office-heading a { color: #67e8f9; }
+.dark .agent-office-status.is-success { background: #064e3b66; color: #a7f3d0; }
+.dark .agent-office-status.is-error { background: #7f1d1d66; color: #fecaca; }
+@media (max-width: 700px) { .agent-office-heading { align-items: flex-start; flex-direction: column; gap: 8px; } .agent-office-viva-stage { height: calc(100dvh - 170px); min-height: 520px; } .office-demo-page { padding: 0; } .office-demo-heading { padding: 10px 14px; } .office-demo-stage { height: calc(100dvh - 58px); min-height: 520px; border-radius: 0; } }

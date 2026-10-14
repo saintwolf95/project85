@@ -401,3 +401,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La Oficina Viva incorpora la primera fase de conexión visual con el almacén: ascensor acristalado, pasarela elevada sobre carretera, cinta de cajas y fachada de almacén. Es escenografía operativa; no presenta aún métricas ni datos de inventario.
 - El roster admite coordenada vertical `z` y pasos `lift`, `line` y `hide(..., 'store')`. Si una tarea real interrumpe una ronda, el agente vuelve primero por la pasarela y baja en ascensor; no puede teletransportarse desde el tramo elevado.
 - La ronda por el almacén es ambiental, no revela clientes, SKU ni importes. María la recibe con mayor frecuencia y Mattia/CEO de forma ocasional. Las definiciones de aging, cobertura y valor de inventario quedan expresamente aplazadas a la fase de datos reales y requieren validación previa.
+
+## Actualización v1.89 — módulo cerrado de Oficina Viva (Fase 1)
+
+- La ruta `/ai-control/oficina` monta `frontend/src/agent-office-viva/OfficeViva.tsx`, wrapper sin cambios del módulo cerrado. Sus archivos `vendor/office-viva.js`, `.css` y `.d.ts` no se editan, formatean ni lintan; únicamente reciben opciones y callbacks desde React.
+- La demo sin sesión `/oficina-demo` solo existe cuando `import.meta.env.DEV` es verdadero. Nunca exponerla en el build de producción ni convertirla en una ruta autenticada de datos reales.
+- El Canvas/HUD anterior permanece como legado sin uso hasta validación del usuario. La Fase 2 cableará `OfficeAgentState[]`, etapas reales y navegación; la Fase 3 aportará `OfficeVivaData`. No anticipar esos datos con valores ficticios dentro de la ruta real.
+- La oficina ocupa todo el ancho disponible y elimina el límite visual anterior de 680 px. El historial sigue debajo y las acciones de sonido/notificación mantienen las preferencias actuales.

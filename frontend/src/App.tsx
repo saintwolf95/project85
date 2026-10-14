@@ -23,6 +23,7 @@ import { MarginEntity } from './pages/MarginEntity';
 import { Sales } from './pages/Sales';
 
 const AgentOffice = lazy(() => import('./pages/AgentOffice').then(module => ({ default: module.AgentOffice })));
+const OfficeDemo = import.meta.env.DEV ? lazy(() => import('./pages/OfficeDemo')) : null;
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -39,6 +40,7 @@ function App() {
         <BrowserRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
+          {OfficeDemo && <Route path="/oficina-demo" element={<Suspense fallback={<div className="p-8">Cargando oficina…</div>}><OfficeDemo /></Suspense>} />}
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Home />} />
             <Route path="sales" element={<Sales />} />

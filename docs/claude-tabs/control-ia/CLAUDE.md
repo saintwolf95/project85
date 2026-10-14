@@ -1,13 +1,13 @@
 # Control IA
 
-## Estado verificado · 13/10/2026 · v1.87
+## Estado verificado · 14/10/2026 · v1.89
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
 - Cada personaje y tarjeta abre la ficha rápida del HUD de referencia, con retrato pixelado, estado, etapa, última actualización, tarea genérica, actividad ambiental y hallazgo autorizado. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
-- `/ai-control/oficina` usa una escena isométrica Canvas 2D, sin dependencias de motor gráfico. Sustituye el SVG previo; conserva acceso a expedientes, tarjetas accesibles y tema claro/oscuro. No ejecuta agentes adicionales.
+- `/ai-control/oficina` monta el módulo cerrado `agent-office-viva/OfficeViva.tsx`. Sustituye la integración manual de la escena anterior; conserva tema claro/oscuro, accesos del módulo y el historial React. No ejecuta agentes adicionales por animación.
 - La prioridad visual es estado real `agent_executions` → entrega de los tres informes en la mesa central → actividad ambiental solo en reposo. El sondeo existente de 3/8 segundos sigue siendo la fuente; no crear un bus SSE en memoria ni inferir trabajo por animación. El catálogo ambiental está en `frontend/src/agent-office/model.ts`, con destinos, pesos, duraciones y frases genéricas; el baño es exclusivo y dura 20–40 segundos. La pestaña oculta detiene la simulación.
 
 ## Actualización v1.79 — reuniones de la Oficina Viva
@@ -110,6 +110,13 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - La escena Canvas queda cubierta por el HUD exacto de `frontend/src/agent-office-viva/hud/`: cabecera Five Minutes y reloj, control Día y noche, inicio de análisis para administrador, tarjetas y ficha rápida. En móvil se conservan las tarjetas horizontales y la ficha como hoja inferior definidos por el CSS del prototipo.
 - `OfficeHandle.subscribe()` entrega una instantánea limitada a 4 Hz: hora Madrid, agente seleccionado y estado, etapa, progreso y actividad ambiental de cada integrante. La selección opera en ambos sentidos entre tarjeta, ficha y personaje.
 - La hoja rápida no duplica la antigua ficha extensa. Hallazgos, tareas y actividad se mantienen genéricos o autorizados; nada sensible entra en el canvas. Vite carga Pixelify Sans y Nunito desde el CSS porque `next/font` es exclusivo de Next.js.
+
+## Actualización v1.89 — montaje del módulo cerrado
+
+- `vendor/office-viva.js`, `vendor/office-viva.css` y `vendor/office-viva.d.ts` son un módulo de proveedor cerrado: se copian de forma literal, se excluyen de ESLint/Prettier y no se modifican para resolver problemas. Si falla, informar el error literal y corregir únicamente la integración exterior tras autorización.
+- `OfficeViva.tsx` es el único wrapper importado por la aplicación. En la Fase 1 recibe tema, permiso de ejecución, solo lectura y callbacks de navegación; todavía no recibe estados de agentes ni datos de negocio.
+- `/oficina-demo` se registra solo en Vite de desarrollo y renderiza `<OfficeViva demo theme="dark" />` sin autenticación. El build productivo no debe ofrecer esa ruta.
+- Se conserva `engine.ts`, `OfficeVivaCanvas.tsx` y `hud/` como legado sin uso hasta que la validación del módulo cerrado quede aprobada. La ruta real no debe mezclar ambas implementaciones.
 
 ## Actualización v1.43
 

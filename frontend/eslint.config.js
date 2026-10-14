@@ -7,7 +7,16 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores([
+    'dist',
+    // Módulo cerrado recibido para la oficina; se consume sin modificar.
+    'src/agent-office-viva/vendor/**',
+    'src/agent-office-viva/OfficeViva.tsx',
+    // Implementación anterior retenida hasta la validación funcional del módulo cerrado.
+    'src/agent-office-viva/engine.ts',
+    'src/agent-office-viva/OfficeVivaCanvas.tsx',
+    'src/agent-office-viva/hud/**',
+  ]),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

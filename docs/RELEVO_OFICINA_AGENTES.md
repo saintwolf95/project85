@@ -1,10 +1,10 @@
 # Relevo para continuar la oficina de agentes desde casa
 
-**Estado comprobado:** 13/10/2026, código base v1.87. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
+**Estado comprobado:** 14/10/2026, código base v1.89. La fuente de verdad es el código; contrastar este relevo con `git log` al retomar.
 
 ## Encargo y decisiones ya tomadas
 
-Evolucionar **Control IA / Oficina de analistas** (`/ai-control/oficina`) hacia una oficina viva, isométrica y de estética pixel art. La antigua escena SVG queda sustituida por Canvas 2D puro, con mapa textual, búsqueda de rutas BFS y máquina de estados por personaje. El HUD visible procede del prototipo `hud-oficina`: cabecera, reloj, controles, tarjetas y ficha rápida. No se integra Next.js, su SSE/bus en memoria ni sus agentes ficticios. Nunca usar gráficos de Habbo ni otros assets sin licencia comercial.
+Evolucionar **Control IA / Oficina de analistas** (`/ai-control/oficina`) hacia una oficina viva, isométrica y de estética pixel art. Desde v1.89 la ruta usa el módulo cerrado `frontend/src/agent-office-viva/OfficeViva.tsx` y su carpeta `vendor/`, copiados literalmente desde `oficina-viva-modulo.zip`; no reescribir, simplificar ni modificar esos archivos. La implementación manual anterior queda conservada, sin uso, hasta revisión. No se integra Next.js, su SSE/bus en memoria ni agentes ficticios como datos reales. Nunca usar gráficos de Habbo ni otros assets sin licencia comercial.
 
 **Trabajar por fases y parar tras cada una para revisión.** La fase 0 de diagnóstico se hizo sin cambiar código. La fase 1 se ha implementado **solo con placeholders**; el usuario debe validar comportamiento y estética antes de invertir en sprites definitivos. No adelantar las fases 2, 3 y 4 ni un circuito de aprobaciones.
 
@@ -21,11 +21,11 @@ El sistema actual distingue administrador de usuario autenticado. `POST /agents/
 
 ## Estado técnico actual (fase 0 + fase 1)
 
-- Frontend React 19, TypeScript, Vite y Tailwind. `frontend/src/App.tsx` carga `AgentOffice` de forma diferida para que Pixi no pese en las demás pestañas.
+- Frontend React 19, TypeScript, Vite y Tailwind. `frontend/src/App.tsx` carga `AgentOffice` de forma diferida. `/oficina-demo` es una ruta sin sesión exclusiva del desarrollo para comparar el módulo cerrado; nunca se publica en producción.
 - Backend FastAPI, SQLAlchemy y PostgreSQL en producción. El análisis se inicia con un `POST /agents/run` síncrono atendido por el servicio web; no hay un worker durable separado documentado. **Número actual de instancias de Render: no verificado**; comprobarlo en Render antes de diseñar transporte o colas. No usar un bus en memoria para coordinar instancias.
 - `GET /agents/execution` consulta una fila por empresa de `agent_executions`: `run_id`, estado global, etapa, estados individuales, inicio, actualización e `informe_id`. Solo se guarda **la última ejecución**, no un historial de eventos. El hook `useAgentExecution` hace polling cada **3 s** durante una ejecución y cada **8 s** en reposo. No hay SSE ni WebSocket. El frontend no genera llamadas OpenAI por la animación.
 - Secuencia real: preparación → señales y episodios deterministas → María → Lucía → Mattia → CEO → guardado. Las fases desactivadas pueden quedar `omitido`. Estados por agente: `pendiente`, `trabajando`, `preparado`, `completado`, `error`, `interrumpido`, `omitido`. `preparado` no significa que el informe esté guardado.
-- La fase 1 nueva representa tres puestos, zona del CEO, mesa central, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El trabajo real interrumpe cualquier actividad ambiental. Un analista terminado lleva el informe a la mesa central, suma al indicador 0–3 y vuelve; con tres informes, el CEO consolida y vuelve a su zona. Solo cuando no hay ejecución real hay vida ambiental: notas, café, baño de 20–40 s, charla entre dos libres, impresora, ventana, pizarra y estiramientos. Las frases son genéricas: **nunca clientes, SKU ni importes**.
+- La Fase 1 del módulo cerrado valida escena completa: mundo exterior, pasarela, viñeta de almacén, barra de siete accesos, Centro de mando y pantalla completa. En la ruta real aún no se inyectan estados ni datos; la Fase 2 conectará agentes y la Fase 3 conectará el Centro de mando.
 - El baño y las zonas compartidas se reservan; las sillas tienen dueño. La pestaña oculta detiene el ticker y la simulación ambiental; al volver se reubican coherentemente. `prefers-reduced-motion` elimina desplazamiento y animación de tecleo. La ficha en texto bajo la escena conserva acceso por teclado a cada expediente.
 - La paleta claro/oscuro mantiene el azul para interacción o trabajo real; verde/ámbar/rojo quedan reservados para estados. Los monitores en reposo son grises. El zoom y posiciones de personajes se calculan dentro del canvas.
 

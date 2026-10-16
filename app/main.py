@@ -55,6 +55,43 @@ def ensure_inventory_history_schema() -> None:
         """))
 
 
+def ensure_dashboard_schema() -> None:
+    """Completa de forma idempotente las columnas que utiliza el Dashboard."""
+    if not IS_POSTGRES:
+        return
+    from sqlalchemy import text
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE productos ADD COLUMN IF NOT EXISTS marca VARCHAR"))
+        connection.execute(text("ALTER TABLE productos ADD COLUMN IF NOT EXISTS familia_marca VARCHAR"))
+        connection.execute(text("ALTER TABLE productos ADD COLUMN IF NOT EXISTS product_manager VARCHAR"))
+        connection.execute(text("ALTER TABLE productos ADD COLUMN IF NOT EXISTS seccion VARCHAR"))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS clientes (
+                id SERIAL PRIMARY KEY,
+                empresa_id INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+                cliente_pk VARCHAR(120) NOT NULL,
+                nombre VARCHAR(255) NOT NULL,
+                tipo_cliente VARCHAR(120),
+                comercial_cliente VARCHAR(255),
+                CONSTRAINT uq_clientes_empresa_cliente_pk UNIQUE (empresa_id, cliente_pk)
+            )
+        """))
+        connection.execute(text("ALTER TABLE ventas_historicas ADD COLUMN IF NOT EXISTS margen_bruto_eur DOUBLE PRECISION NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE ventas_historicas ADD COLUMN IF NOT EXISTS margen_destino_eur DOUBLE PRECISION NOT NULL DEFAULT 0"))
+        connection.execute(text("ALTER TABLE ventas_historicas ADD COLUMN IF NOT EXISTS cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL"))
+        connection.execute(text("ALTER TABLE ventas_historicas ADD COLUMN IF NOT EXISTS comercial_factura VARCHAR(255)"))
+        connection.execute(text("""
+            CREATE TABLE IF NOT EXISTS producto_metricas (
+                producto_id INTEGER PRIMARY KEY REFERENCES productos(id),
+                abc VARCHAR, xyz VARCHAR, matriz_abc VARCHAR,
+                dias_cobertura INTEGER, riesgo_rotura BOOLEAN DEFAULT FALSE
+            )
+        """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_clientes_empresa_id ON clientes (empresa_id)"))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_ventas_historicas_cliente_id ON ventas_historicas (cliente_id)"))
+
+
 def ensure_agent_signals_schema() -> None:
     """Crea las señales persistentes también cuando producción omite create_all."""
     if not IS_POSTGRES:
@@ -228,8 +265,9 @@ async def lifespan(app: FastAPI):
     if IS_PRODUCTION and not ALLOW_SCHEMA_INIT:
         try:
             ensure_inventory_history_schema()
+            ensure_dashboard_schema()
             ensure_agent_signals_schema()
-            logger.info("[STARTUP] Esquema de histórico de inventario verificado.")
+            logger.info("[STARTUP] Esquema analítico y de histórico verificado.")
         except Exception:
             logger.exception("[STARTUP] No se pudo verificar el esquema de histórico de inventario.")
         logger.info("[STARTUP] Produccion: se omiten create_all, auto-seed y sincronizacion de arranque.")
@@ -313,7 +351,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.92.0",
+    version="1.93.0",
     lifespan=lifespan
 )
 
@@ -395,14 +433,6 @@ CORS_ORIGINS = [
     if origin.strip()
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
-)
-
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(inventory.router, prefix="/api/v1")
@@ -437,6 +467,16 @@ def get_empresas(
 ):
     empresas = db.query(models.Empresa).all()
     return [{"id": e.id, "nombre": e.nombre} for e in empresas]
+
+# CORS debe envolver también el manejador de errores de FastAPI. De otro modo
+# un 500 pierde las cabeceras y el navegador lo presenta como un error CORS.
+app = CORSMiddleware(
+    app=app,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+)
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,6 +2,12 @@
 
 La aplicación no modifica automáticamente el esquema de PostgreSQL en producción.
 
+## V1.93 - Dashboard ejecutivo
+
+El backend v1.93 verifica estas columnas al arrancar de forma idempotente. Si se
+mantiene una política de migraciones manuales, ejecutar también
+`V1.93__dashboard_schema.sql` antes del despliegue.
+
 ## V1.02 - fivemin_ventas
 
 1. Abre el proyecto en Supabase.

@@ -1,10 +1,11 @@
 # Control IA
 
-## Estado verificado · 14/10/2026 · v1.89
+## Estado verificado · 16/10/2026 · v1.90
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.
 - La oficina neutraliza el estado visual si pierde conexión y muestra la fecha del último estado confirmado; no mantiene monitores azules como si fueran tiempo real.
 - Cada personaje y tarjeta abre la ficha rápida del HUD de referencia, con retrato pixelado, estado, etapa, última actualización, tarea genérica, actividad ambiental y hallazgo autorizado. Los accesos llevan al expediente, al chat o al informe CEO y son navegables por teclado.
+- La Fase 2 conecta el polling confirmado a `OfficeViva`: los cuatro agentes reciben estados `idle`, `working`, `done` o `error`, la etapa activa y una tarea genérica. El array solo cambia cuando cambia esa información, para no reiniciar animaciones con sondeos idénticos. Las etapas son las que publica `app/agents_service.py`.
 
 - Ocho rutas del módulo: Hoy, analistas, oficina, señal, episodio, decisiones, reglas y guía. No confundir la entrada Hoy con el gabinete.
 - `/ai-control/oficina` monta el módulo cerrado `agent-office-viva/OfficeViva.tsx`. Sustituye la integración manual de la escena anterior; conserva tema claro/oscuro, accesos del módulo y el historial React. No ejecuta agentes adicionales por animación.

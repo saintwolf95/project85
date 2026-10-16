@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Volume2 } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
@@ -7,6 +7,7 @@ import { useTheme } from '../context/useTheme';
 import { getAgentExecutionHistory, runAgentAnalysis } from '../services/api';
 import type { AgentExecutionHistory } from '../services/api';
 import OfficeViva from '../agent-office-viva/OfficeViva';
+import type { AgentId as OfficeVivaAgentId, OfficeAgentState } from '../agent-office-viva/vendor/office-viva';
 import type { AgentId } from '../agent-office/model';
 import { ROSTER } from '../agent-office/model';
 import './AgentOffice.css';
@@ -14,6 +15,30 @@ import './AgentOffice.css';
 const agentUrl = (id: AgentId) => id === 'ceo' ? '/ai-control/analistas#informe-ceo' : `/ai-control/analistas?agent=${id}&view=expediente`;
 const duration = (milliseconds: number | null) => milliseconds == null ? 'En curso' : milliseconds < 60_000 ? `${Math.max(1, Math.round(milliseconds / 1000))} s` : `${Math.floor(milliseconds / 60_000)} min ${Math.round((milliseconds % 60_000) / 1000)} s`;
 const errorLabel = (code: string | null) => code === 'model_error' ? 'No se pudo contactar con el modelo' : code ? 'La ejecución no pudo completarse' : '';
+
+// Son las etapas publicadas por el flujo real en app/agents_service.py; no son una simulación de la escena.
+const OFFICE_STAGES: Partial<Record<OfficeVivaAgentId, string[]>> = {
+  maria: ['María redactando su análisis', 'Análisis de María preparado'],
+  lucia: ['Lucía redactando su análisis', 'Análisis de Lucía preparado'],
+  mattia: ['Mattia redactando su análisis', 'Análisis de Mattia preparado'],
+  ceo: ['CEO consolidando episodios y decisiones', 'Consolidación preparada'],
+};
+
+const officeAgentStatus = (status: string): OfficeAgentState['status'] => {
+  if (status === 'trabajando') return 'working';
+  if (status === 'preparado' || status === 'completado') return 'done';
+  if (status === 'error' || status === 'interrumpido') return 'error';
+  return 'idle';
+};
+
+const officeAgentTask = (id: OfficeVivaAgentId, status: string, stage: string | undefined) => {
+  if (status === 'trabajando') return stage || 'Análisis en curso';
+  if (status === 'preparado') return 'Informe preparado';
+  if (status === 'completado') return id === 'ceo' ? 'Informe ejecutivo listo' : 'Informe entregado';
+  if (status === 'error' || status === 'interrumpido') return 'Ejecución interrumpida';
+  if (status === 'pendiente') return 'En cola';
+  return 'Sin análisis en curso';
+};
 
 const playTone = (frequency: number) => {
   try {
@@ -48,6 +73,20 @@ export const AgentOffice = () => {
   const userRole = String(session?.user.app_metadata?.rol || session?.user.user_metadata?.rol || 'admin').toLowerCase();
   const canRun = userRole === 'admin';
   const readOnly = ['direccion', 'dirección'].includes(userRole);
+  const officeStateSnapshot = JSON.stringify({
+    stage: execution?.etapa ?? '',
+    agents: execution?.agentes ?? {},
+  });
+  // El poll puede devolver objetos nuevos sin cambios. Mantener esta referencia evita
+  // que el módulo reinicie una animación cuando el estado confirmado es el mismo.
+  const officeAgents = useMemo<OfficeAgentState[]>(() => {
+    const snapshot = JSON.parse(officeStateSnapshot) as { stage: string; agents: Partial<Record<OfficeVivaAgentId, string>> };
+    return (['maria', 'lucia', 'mattia', 'ceo'] as OfficeVivaAgentId[]).map(id => {
+      const status = snapshot.agents[id] ?? 'pendiente';
+      const stage = status === 'trabajando' ? snapshot.stage : undefined;
+      return { id, status: officeAgentStatus(status), stage, lastTask: officeAgentTask(id, status, stage) };
+    });
+  }, [officeStateSnapshot]);
 
   useEffect(() => {
     getAgentExecutionHistory(10)
@@ -114,6 +153,8 @@ export const AgentOffice = () => {
           theme={theme === 'dark' ? 'dark' : 'light'}
           canRun={canRun && !starting}
           readOnly={readOnly}
+          agents={officeAgents}
+          stages={OFFICE_STAGES}
           onRunRequested={() => start()}
           onOpenExpediente={(agentId) => navigate(agentUrl(agentId))}
           onOpenChat={(agentId) => navigate(`/ai-control/analistas?agent=${agentId}&view=chat`)}

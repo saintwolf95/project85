@@ -408,3 +408,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - La demo sin sesión `/oficina-demo` solo existe cuando `import.meta.env.DEV` es verdadero. Nunca exponerla en el build de producción ni convertirla en una ruta autenticada de datos reales.
 - El Canvas/HUD anterior permanece como legado sin uso hasta validación del usuario. La Fase 2 cableará `OfficeAgentState[]`, etapas reales y navegación; la Fase 3 aportará `OfficeVivaData`. No anticipar esos datos con valores ficticios dentro de la ruta real.
 - La oficina ocupa todo el ancho disponible y elimina el límite visual anterior de 680 px. El historial sigue debajo y las acciones de sonido/notificación mantienen las preferencias actuales.
+
+## Actualización v1.90 — estados reales de Oficina Viva (Fase 2)
+
+- `AgentOffice.tsx` transforma el estado confirmado de `useAgentExecution` en `OfficeAgentState[]` para María, Lucía, Mattia y CEO. Los estados del backend se limitan a `idle`, `working`, `done` y `error` dentro del módulo, sin inventar progreso ni datos de negocio.
+- Las etapas registradas en `app/agents_service.py` se declaran en orden para cada agente. La etapa activa y la última tarea son mensajes genéricos; no muestran clientes, SKU, importes ni hallazgos en la escena.
+- Los sondeos con el mismo estado reutilizan el mismo array de agentes; el módulo solo anima cambios confirmados. Inicio de análisis, permisos de administrador y navegación a expediente, chat e informe ejecutivo conservan sus callbacks React existentes.

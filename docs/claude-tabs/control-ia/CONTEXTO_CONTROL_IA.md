@@ -4,6 +4,17 @@
 
 ## Estado de ejecución y oficina visual · v1.87
 
+### Actualización v1.96 — filtros del Centro de mando v6
+
+`/ai-control/oficina` guarda los filtros PM, Sección, Marca y Artículo (SKU)
+en la URL y los restaura al cargar. `GET /agents/office-viva` los recibe como
+parámetros opcionales y los aplica con consultas parametrizadas a ventas,
+inventario y margen; las alertas se limitan a las entidades SKU o familia que
+pertenecen a la selección. Las opciones PM, sección y marca provienen de
+`productos`; los artículos se buscan en el servidor y se limitan a 50 por
+consulta. La respuesta contiene `filterOptions` y los gráficos ofrecen el
+filtro dimensional coherente (PM, sección o marca).
+
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. La oficina conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. La oficina sustituye el SVG por una escena isométrica Canvas 2D con mapa textual, BFS y máquina de estado por personaje. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El HUD de referencia usa Pixelify Sans y Nunito, respetando además el tema claro u oscuro de la app.

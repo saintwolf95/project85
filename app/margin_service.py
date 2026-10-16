@@ -9,6 +9,12 @@ from sqlalchemy.orm import Session
 
 
 MARGIN_COLUMNS = {"mg": "margen_bruto_eur", "mgd": "margen_destino_eur"}
+OFFICE_FILTER_SQL = """
+ AND (CAST(:marca AS TEXT) IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(CAST(:marca AS TEXT)))
+ AND (CAST(:seccion AS TEXT) IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(CAST(:seccion AS TEXT)))
+ AND (CAST(:product_manager AS TEXT) IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(CAST(:product_manager AS TEXT)))
+ AND (CAST(:articulo AS TEXT) IS NULL OR LOWER(COALESCE(p.sku, '')) = LOWER(CAST(:articulo AS TEXT)))
+"""
 DETAIL_DIMENSIONS = {
     "sku": ("p.sku", "p.sku", "p.nombre", "p.familia", "p.product_manager"),
     "familia": ("COALESCE(p.familia, 'Sin familia')", "COALESCE(p.familia, 'Sin familia')", "NULL", "COALESCE(p.familia, 'Sin familia')", "NULL"),
@@ -54,8 +60,8 @@ def resolve_period(db: Session, empresa_id: int, window: str, start: date | None
     return current_start, current_end, previous_start, previous_end
 
 
-def _summary(db: Session, empresa_id: int, start: date, end: date) -> dict[str, float | None]:
-    row = db.execute(text("""
+def _summary(db: Session, empresa_id: int, start: date, end: date, filters: dict[str, str | None]) -> dict[str, float | None]:
+    row = db.execute(text(f"""
         SELECT COALESCE(SUM(v.ingreso_total), 0) ventas,
                COALESCE(SUM(v.margen_bruto_eur), 0) mg,
                COALESCE(SUM(v.margen_destino_eur), 0) mgd,
@@ -64,37 +70,42 @@ def _summary(db: Session, empresa_id: int, start: date, end: date) -> dict[str, 
                COUNT(CASE WHEN v.margen_destino_eur > v.margen_bruto_eur THEN 1 END) lineas_mgd_superior_mg,
                COALESCE(SUM(CASE WHEN v.margen_destino_eur > v.margen_bruto_eur THEN v.margen_destino_eur - v.margen_bruto_eur ELSE 0 END), 0) exceso_mgd_sobre_mg_eur
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
-        WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :start AND :end
-    """), {"empresa_id": empresa_id, "start": start, "end": end}).mappings().one()
+        WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :start AND :end {OFFICE_FILTER_SQL}
+    """), {"empresa_id": empresa_id, "start": start, "end": end, **filters}).mappings().one()
     sales, mg, mgd = _number(row["ventas"]), _number(row["mg"]), _number(row["mgd"])
     return {"ventas_eur": sales, "mg_eur": mg, "mg_pct": _pct(mg, sales), "mgd_eur": mgd, "mgd_pct": _pct(mgd, sales, absolute_sales=True), "diferencia_eur": mg - mgd, "diferencia_pp": _pct(mg, sales) - _pct(mgd, sales, absolute_sales=True) if sales else 0.0, "sku_negativos": int(row["sku_negativos"] or 0), "margen_negativo_eur": _number(row["margen_negativo"]), "lineas_mgd_superior_mg": int(row["lineas_mgd_superior_mg"] or 0), "exceso_mgd_sobre_mg_eur": _number(row["exceso_mgd_sobre_mg_eur"])}
 
 
-def overview(db: Session, empresa_id: int, window: str, start: date | None = None, end: date | None = None) -> dict:
+def overview(db: Session, empresa_id: int, window: str, start: date | None = None, end: date | None = None,
+             *, marca: str | None = None, seccion: str | None = None,
+             product_manager: str | None = None, articulo: str | None = None) -> dict:
     cs, ce, ps, pe = resolve_period(db, empresa_id, window, start, end)
-    current, previous = _summary(db, empresa_id, cs, ce), _summary(db, empresa_id, ps, pe)
-    daily = db.execute(text("""
+    filters = {"marca": marca, "seccion": seccion, "product_manager": product_manager, "articulo": articulo}
+    current, previous = _summary(db, empresa_id, cs, ce, filters), _summary(db, empresa_id, ps, pe, filters)
+    daily = db.execute(text(f"""
         SELECT v.fecha_venta fecha, COALESCE(SUM(v.ingreso_total),0) ventas_eur,
                COALESCE(SUM(v.margen_bruto_eur),0) mg_eur, COALESCE(SUM(v.margen_destino_eur),0) mgd_eur
         FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
-        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :start AND :end
+        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :start AND :end {OFFICE_FILTER_SQL}
         GROUP BY v.fecha_venta ORDER BY v.fecha_venta
-    """), {"empresa_id": empresa_id, "start": cs, "end": ce}).mappings().all()
-    concentration = _concentration_rows(db, empresa_id, cs, ce, "mgd")
+    """), {"empresa_id": empresa_id, "start": cs, "end": ce, **filters}).mappings().all()
+    concentration = _concentration_rows(db, empresa_id, cs, ce, "mgd", filters)
     total = sum(max(0, _number(row["margen_eur"])) for row in concentration)
     top10 = sum(max(0, _number(row["margen_eur"])) for row in concentration[:10])
     return {"periodo": {"inicio": str(cs), "fin": str(ce), "anterior_inicio": str(ps), "anterior_fin": str(pe)}, "actual": current, "anterior": previous, "variacion": {key: (_number(current[key]) - _number(previous[key])) if current[key] is not None and previous[key] is not None else None for key in current}, "top10_mgd_positivo_pct": top10 / total * 100 if total > 0 else None, "serie_diaria": [{**dict(row), "mg_pct": _pct(_number(row["mg_eur"]), _number(row["ventas_eur"])), "mgd_pct": _pct(_number(row["mgd_eur"]), _number(row["ventas_eur"]), absolute_sales=True)} for row in daily]}
 
 
-def _concentration_rows(db: Session, empresa_id: int, start: date, end: date, metric: str) -> list[dict]:
+def _concentration_rows(db: Session, empresa_id: int, start: date, end: date, metric: str,
+                        filters: dict[str, str | None] | None = None) -> list[dict]:
     margin = MARGIN_COLUMNS[metric]
+    filters = filters or {"marca": None, "seccion": None, "product_manager": None, "articulo": None}
     return [dict(row) for row in db.execute(text(f"""
         SELECT p.sku, p.nombre, COALESCE(p.familia,'Sin familia') familia, COALESCE(p.product_manager,'Sin Product Manager') product_manager,
                COALESCE(SUM(v.ingreso_total),0) ventas_eur, COALESCE(SUM(v.{margin}),0) margen_eur
         FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
-        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :start AND :end
+        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :start AND :end {OFFICE_FILTER_SQL}
         GROUP BY p.sku, p.nombre, p.familia, p.product_manager ORDER BY margen_eur DESC, p.sku LIMIT 500
-    """), {"empresa_id": empresa_id, "start": start, "end": end}).mappings().all()]
+    """), {"empresa_id": empresa_id, "start": start, "end": end, **filters}).mappings().all()]
 
 
 def concentration(db: Session, empresa_id: int, metric: str, window: str, start: date | None = None, end: date | None = None) -> dict:

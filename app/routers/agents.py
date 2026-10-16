@@ -24,7 +24,7 @@ from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
 from ..business_rules import ensure_no_overlap, validate_rule_payload
 from ..agent_execution import ExecutionBusy, read_execution, read_execution_history
-from ..office_viva_service import build_office_viva_data, dead_inventory_rows
+from ..office_viva_service import build_office_viva_data, dead_inventory_rows, office_filter_options
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -326,7 +326,20 @@ def get_agents_readiness(current_user: Usuario = Depends(get_current_user), db: 
 @router.get("/agents/office-viva")
 @limiter.limit("30/minute")
 def get_office_viva(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
-    return build_office_viva_data(db, current_user.empresa_id)
+    return build_office_viva_data(
+        db, current_user.empresa_id, pm=request.query_params.get("pm"),
+        seccion=request.query_params.get("seccion"), marca=request.query_params.get("marca"),
+        articulo=request.query_params.get("articulo"),
+    )
+
+
+@router.get("/agents/office-viva/filter-options")
+@limiter.limit("30/minute")
+def get_office_viva_filter_options(
+    request: Request, article_query: str | None = Query(default=None, max_length=120),
+    current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db),
+):
+    return office_filter_options(db, current_user.empresa_id, article_query)
 
 
 @router.get("/agents/office-viva/inventory-export")

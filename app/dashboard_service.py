@@ -43,6 +43,8 @@ FILTER_SQL = """
  AND (CAST(:marca AS TEXT) IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(CAST(:marca AS TEXT)))
  AND (CAST(:familia_marca AS TEXT) IS NULL OR LOWER(COALESCE(p.familia_marca, '')) = LOWER(CAST(:familia_marca AS TEXT)))
  AND (CAST(:seccion AS TEXT) IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(CAST(:seccion AS TEXT)))
+ AND (CAST(:product_manager AS TEXT) IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(CAST(:product_manager AS TEXT)))
+ AND (CAST(:articulo AS TEXT) IS NULL OR LOWER(COALESCE(p.sku, '')) = LOWER(CAST(:articulo AS TEXT)))
 """
 _dashboard_cache = TTLCache(maxsize=256, ttl=300)
 _dashboard_cache_lock = RLock()
@@ -109,9 +111,11 @@ def comparison_window(anchor: date, period: str) -> tuple[date, date, date, date
     return current_start, anchor, previous_start, previous_end
 
 
-def _filters(familia=None, marca=None, familia_marca=None, seccion=None) -> dict:
+def _filters(familia=None, marca=None, familia_marca=None, seccion=None,
+             product_manager=None, articulo=None) -> dict:
     return {key: _clean(value) for key, value in {
         "familia": familia, "marca": marca, "familia_marca": familia_marca, "seccion": seccion,
+        "product_manager": product_manager, "articulo": articulo,
     }.items()}
 
 
@@ -234,17 +238,18 @@ def _filter_options(db: Session, empresa_id: int) -> dict:
 
 
 @cached(_dashboard_cache, key=lambda _db, empresa_id, period="fytd", familia=None, marca=None,
-        familia_marca=None, seccion=None, breakdown="comercial": (
+        familia_marca=None, seccion=None, breakdown="comercial", product_manager=None, articulo=None: (
             empresa_id, period, *[(_clean(value) or "").casefold()
-            for value in (familia, marca, familia_marca, seccion)], breakdown,
+            for value in (familia, marca, familia_marca, seccion, product_manager, articulo)], breakdown,
         ), lock=_dashboard_cache_lock)
 def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd",
                               familia: str | None = None, marca: str | None = None,
                               familia_marca: str | None = None, seccion: str | None = None,
-                              breakdown: str = "comercial") -> dict:
+                              breakdown: str = "comercial", product_manager: str | None = None,
+                              articulo: str | None = None) -> dict:
     period = period if period in {"fytd", "90d", "30d"} else "fytd"
     breakdown = breakdown if breakdown in BREAKDOWN_DIMENSIONS else "comercial"
-    filters = _filters(familia, marca, familia_marca, seccion)
+    filters = _filters(familia, marca, familia_marca, seccion, product_manager, articulo)
     coverage = db.execute(text("""
         SELECT MIN(v.fecha_venta) ventas_desde, MAX(v.fecha_venta) ventas_hasta
         FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id

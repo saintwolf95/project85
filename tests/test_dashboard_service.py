@@ -46,6 +46,8 @@ class DashboardPeriodTests(unittest.TestCase):
         self.assertIn("CAST(:marca AS TEXT)", FILTER_SQL)
         self.assertIn("CAST(:familia_marca AS TEXT)", FILTER_SQL)
         self.assertIn("CAST(:seccion AS TEXT)", FILTER_SQL)
+        self.assertIn("CAST(:product_manager AS TEXT)", FILTER_SQL)
+        self.assertIn("CAST(:articulo AS TEXT)", FILTER_SQL)
 
     def test_fytd_compara_mismos_dias_del_ejercicio_anterior(self):
         current_start, current_end, previous_start, previous_end = comparison_window(
@@ -82,7 +84,7 @@ class DashboardPeriodTests(unittest.TestCase):
 
         result = _monthly_series(
             session, 1, date(2026, 7, 26), date(2026, 8, 24),
-            {"familia": None, "marca": None, "familia_marca": None, "seccion": None},
+            {"familia": None, "marca": None, "familia_marca": None, "seccion": None, "product_manager": None, "articulo": None},
         )
 
         self.assertEqual(
@@ -117,7 +119,7 @@ class DashboardBreakdownTests(unittest.TestCase):
             session, 1,
             (date(2026, 5, 1), date(2025, 5, 1)),
             (date(2026, 8, 24), date(2025, 8, 24)),
-            {"familia": None, "marca": None, "familia_marca": None, "seccion": None},
+            {"familia": None, "marca": None, "familia_marca": None, "seccion": None, "product_manager": None, "articulo": None},
             "familia", 20000,
         )
 
@@ -136,7 +138,7 @@ class DashboardBreakdownTests(unittest.TestCase):
             connection.execute(text("""
                 CREATE TABLE productos (
                     id INTEGER PRIMARY KEY, empresa_id INTEGER, familia TEXT, marca TEXT,
-                    familia_marca TEXT, seccion TEXT
+                    familia_marca TEXT, seccion TEXT, product_manager TEXT, sku TEXT
                 );
             """))
             connection.execute(text("""
@@ -150,7 +152,7 @@ class DashboardBreakdownTests(unittest.TestCase):
                     comercial_factura TEXT
                 );
             """))
-            connection.execute(text("INSERT INTO productos VALUES (1, 1, 'F', 'M', 'F-M', 'S')"))
+            connection.execute(text("INSERT INTO productos VALUES (1, 1, 'F', 'M', 'F-M', 'S', 'PM', 'SKU-1')"))
             connection.execute(text("""
                 INSERT INTO clientes VALUES (1, 'CLI-1', 'Cliente homónimo'),
                                              (2, 'CLI-2', 'Cliente homónimo')
@@ -165,7 +167,7 @@ class DashboardBreakdownTests(unittest.TestCase):
                 connection, 1,
                 (date(2026, 5, 1), date(2025, 5, 1)),
                 (date(2026, 8, 24), date(2025, 8, 24)),
-                {"familia": None, "marca": None, "familia_marca": None, "seccion": None},
+                {"familia": None, "marca": None, "familia_marca": None, "seccion": None, "product_manager": None, "articulo": None},
                 "cliente", 300,
             )
 
@@ -181,7 +183,7 @@ class DashboardBreakdownTests(unittest.TestCase):
             1,
             (date(2026, 5, 1), date(2025, 5, 1)),
             (date(2026, 8, 24), date(2025, 8, 24)),
-            {"familia": None, "marca": None, "familia_marca": None, "seccion": None},
+            {"familia": None, "marca": None, "familia_marca": None, "seccion": None, "product_manager": None, "articulo": None},
             "familia", 100,
         )
 

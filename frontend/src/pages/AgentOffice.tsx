@@ -4,8 +4,8 @@ import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Mail, Volume2 } 
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
-import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, notifyAgentProductManager, runAgentAnalysis, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
-import type { AgentExecutionHistory } from '../services/api';
+import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, notifyAgentProductManager, runAgentAnalysis, searchOfficeVivaArticles, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
+import type { AgentExecutionHistory, OfficeVivaFilters } from '../services/api';
 import OfficeViva from '../agent-office-viva/OfficeViva';
 import type { AgentId as OfficeVivaAgentId, OfficeActionName, OfficeAgentState, OfficeVivaData } from '../agent-office-viva/vendor/office-viva';
 import type { AgentId } from '../agent-office/model';
@@ -23,6 +23,11 @@ const OFFICE_STAGES: Partial<Record<OfficeVivaAgentId, string[]>> = {
   mattia: ['Mattia redactando su análisis', 'Análisis de Mattia preparado'],
   ceo: ['CEO consolidando episodios y decisiones', 'Consolidación preparada'],
 };
+const OFFICE_FILTERS = [
+  { key: 'pm', label: 'PM' }, { key: 'seccion', label: 'Sección' },
+  { key: 'marca', label: 'Marca' }, { key: 'articulo', label: 'Artículo', search: true },
+];
+const OFFICE_CHART_DIMS = { pmHealth: 'pm', pmCov: 'pm', deadByCat: 'seccion', mgd: 'marca' } as const;
 
 const officeAgentStatus = (status: string): OfficeAgentState['status'] => {
   if (status === 'trabajando') return 'working';
@@ -62,7 +67,7 @@ export const AgentOffice = () => {
   const { session } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isScreenMode = searchParams.get('modo') === 'pantalla';
   const [starting, setStarting] = useState(false);
   const [runError, setRunError] = useState('');
@@ -80,6 +85,12 @@ export const AgentOffice = () => {
     stage: execution?.etapa ?? '',
     agents: execution?.agentes ?? {},
   });
+  const officeFilters = useMemo<OfficeVivaFilters>(() => Object.fromEntries(
+    OFFICE_FILTERS.flatMap(({ key }) => {
+      const value = searchParams.get(key)?.trim();
+      return value ? [[key, value]] : [];
+    }),
+  ) as OfficeVivaFilters, [searchParams]);
   // El poll puede devolver objetos nuevos sin cambios. Mantener esta referencia evita
   // que el módulo reinicie una animación cuando el estado confirmado es el mismo.
   const officeAgents = useMemo<OfficeAgentState[]>(() => {
@@ -103,8 +114,11 @@ export const AgentOffice = () => {
     let timer: ReturnType<typeof setTimeout>;
     const pollOfficeData = async () => {
       try {
-        const data = await getOfficeVivaData();
-        if (!cancelled) setOfficeData(data);
+        const data = await getOfficeVivaData(officeFilters);
+        if (!cancelled) {
+          setOfficeData(data);
+          setRunError('');
+        }
       } catch {
         if (!cancelled) setRunError('No se pudo actualizar el Centro de mando de la oficina.');
       } finally {
@@ -113,7 +127,7 @@ export const AgentOffice = () => {
     };
     void pollOfficeData();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [isScreenMode]);
+  }, [isScreenMode, officeFilters]);
 
   useEffect(() => {
     if (!execution) return;
@@ -179,7 +193,17 @@ export const AgentOffice = () => {
     } else if (name === 'inventory.export') {
       await downloadOfficeVivaDeadInventory();
     }
-    setOfficeData(await getOfficeVivaData());
+    const data = await getOfficeVivaData(officeFilters);
+    setOfficeData(data);
+  };
+
+  const onOfficeFilterChange = (next: Record<string, string>) => {
+    const updated = new URLSearchParams(searchParams);
+    OFFICE_FILTERS.forEach(({ key }) => {
+      const value = next[key]?.trim();
+      if (value) updated.set(key, value); else updated.delete(key);
+    });
+    setSearchParams(updated, { replace: true });
   };
 
   const mobileCards = <section className="office-mobile-cards" aria-label="Estado del equipo de análisis">
@@ -211,6 +235,11 @@ export const AgentOffice = () => {
           agents={officeAgents}
           stages={OFFICE_STAGES}
           data={officeData}
+          filters={OFFICE_FILTERS}
+          activeFilters={officeFilters}
+          chartDims={OFFICE_CHART_DIMS}
+          onFilterChange={onOfficeFilterChange}
+          onFilterSearch={(key, value) => key === 'articulo' ? searchOfficeVivaArticles(value) : Promise.resolve([])}
           onRunRequested={() => start()}
           onOpenExpediente={(agentId) => navigate(agentUrl(agentId))}
           onOpenChat={(agentId) => navigate(`/ai-control/analistas?agent=${agentId}&view=chat`)}

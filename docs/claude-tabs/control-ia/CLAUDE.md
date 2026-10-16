@@ -1,5 +1,17 @@
 # Control IA
 
+## Fase 2 v6 — filtros reales del Centro de mando
+
+- `GET /agents/office-viva` acepta `pm`, `seccion`, `marca` y `articulo`
+  (SKU) y aplica esos filtros, siempre aislados por `empresa_id`, a ventas,
+  margen, inventario, salud de PM, alertas con entidad SKU/familia y gráficos.
+  Los valores PM, sección y marca salen de `productos`; Artículo se busca en
+  `GET /agents/office-viva/filter-options?article_query=…`, limitado a 50.
+- La oficina conserva los filtros en la URL y los restaura al abrir. El
+  contrato v6 recibe `data.filterOptions`; los gráficos de PM usan `pm`, el
+  stock muerto `seccion` y MGD por marca usa `marca`. Los archivos del
+  proveedor permanecen sin modificar.
+
 ## Fase 1 v6 — módulo cerrado
 
 - Se sustituyeron literalmente `OfficeViva.tsx` y los tres archivos de

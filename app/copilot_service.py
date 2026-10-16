@@ -15,6 +15,7 @@ from sqlalchemy import text
 from fastapi import HTTPException
 from .core.security import SUPABASE_JWT_SECRET
 from .llm_usage import record_llm_usage
+from .copilot_models import create_copilot_completion, get_copilot_model_profile
 
 # Configuración de Logger de Auditoría
 logger = logging.getLogger(__name__)
@@ -342,7 +343,7 @@ def is_conversational(message: str) -> bool:
         return True
     return False
 
-def handle_conversational(message: str, contexto: str = "", usage_context: dict | None = None) -> str:
+def handle_conversational(message: str, contexto: str = "", usage_context: dict | None = None, model_preference: str = "terra") -> str:
     """Responde a preguntas conversacionales sin generar SQL."""
     client = get_openai_client()
     if not client:
@@ -353,19 +354,18 @@ Responde de forma amigable, concisa y en español. Menciona brevemente qué tipo
 Contexto de la empresa: {contexto or 'No disponible'}"""
     
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": message}],
-            max_tokens=300,
-            temperature=0.7
+        response, model_name = create_copilot_completion(
+            client,
+            [{"role": "developer", "content": system}, {"role": "user", "content": message}],
+            model_preference,
         )
         if usage_context:
-            record_llm_usage(response=response, feature="copilot_conversation", model="gpt-4o", **usage_context)
+            record_llm_usage(response=response, feature="copilot_conversation", model=model_name, **usage_context)
         return response.choices[0].message.content.strip()
     except Exception:
         return "¡Hola! Soy tu AI Copilot. Puedo analizar tu inventario, ventas, y métricas ABC/XYZ. ¿Qué necesitas saber?"
 
-def generate_sql(history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "", usage_context: dict | None = None) -> str:
+def generate_sql(history: list, empresa_id: int, model_preference: str = "terra", contexto: str = "", usage_context: dict | None = None) -> str:
     prompt = SCHEMA_PROMPT + f"\n\n¡REGLA DE SEGURIDAD CRÍTICA! TODAS tus consultas deben filtrar usando `p.empresa_id = {empresa_id}` (o un JOIN a productos si usas otras tablas) para evitar ver datos de otros clientes."
     if contexto:
         prompt += f"\n\nContexto y Reglas de Negocio de la Empresa:\n{contexto}"
@@ -374,34 +374,13 @@ def generate_sql(history: list, empresa_id: int, model_preference: str = "fast",
     if not client:
         return "SELECT 'Error: API Key de OpenAI no configurada' AS error"
         
-    if model_preference in ["thinking", "ultra_thinking"]:
-        model_name = "o3-mini" if model_preference == "thinking" else "o1"
-        messages = [{"role": "developer", "content": prompt}]
-        messages.extend(history)
-        try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages
-            )
-        except Exception as e:
-            error_msg = str(e)
-            if "model_not_found" in error_msg or "does not exist" in error_msg:
-                return "SELECT '⚠️ Tu clave de OpenAI no tiene nivel (Tier) suficiente para usar los modelos o1 (Thinking). Por favor, cambia a modo Fast (gpt-4o).' AS error"
-            logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL Thinking): {error_msg}", exc_info=True)
-            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
-    else:
-        model_name = "gpt-4o"
-        messages = [{"role": "system", "content": prompt}]
-        messages.extend(history)
-        try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=0.0
-            )
-        except Exception as e:
-            logger.error(f"[AUDIT SQL] Error en API OpenAI (Generación SQL): {str(e)}", exc_info=True)
-            return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
+    messages = [{"role": "developer", "content": prompt}]
+    messages.extend(history)
+    try:
+        response, model_name = create_copilot_completion(client, messages, model_preference)
+    except Exception as e:
+        logger.error("[AUDIT SQL] Error en API OpenAI (Generación SQL): %s", e, exc_info=True)
+        return "SELECT 'Error de comunicación con el motor de IA. Inténtalo de nuevo más tarde.' AS error"
     
     if usage_context:
         record_llm_usage(response=response, feature="copilot_sql_generation", model=model_name, **usage_context)
@@ -537,7 +516,7 @@ def interpret_results(
     sql_query: str,
     raw_data: any,
     error: str = None,
-    model_preference: str = "fast",
+    model_preference: str = "terra",
     contexto: str = "",
     trusted_query: bool = False,
     export_params: dict[str, Any] | None = None,
@@ -569,7 +548,7 @@ def interpret_results(
             return f"{fallback}\n\n{metrics_marker}" if metrics_marker else fallback
         return "⚠️ Error: API Key de OpenAI no configurada en el servidor."
 
-    if model_preference in ["thinking", "ultra_thinking"]:
+    if bool(get_copilot_model_profile(model_preference)["advanced"]):
         contrato_dossier = contrato_respuesta_analitica() if es_dossier else ""
         INTERPRET_PROMPT = f"""
 Eres SupplyChain AI, un **Analista de Negocio y Científico de Datos Senior** experto en operaciones, cadena de suministro y finanzas corporativas.
@@ -606,20 +585,13 @@ Consulta SQL ejecutada: {sql_query}
 Resultado bruto de BD: {raw_data_truncated}
 Contexto del Negocio: {contexto}
 """
-        model_name = "o3-mini" if model_preference == "thinking" else "o1"
         messages = [{"role": "developer", "content": INTERPRET_PROMPT}]
         messages.extend(history)
         
         try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages
-            )
+            response, model_name = create_copilot_completion(client, messages, model_preference)
         except Exception as e:
-            error_msg = str(e)
-            if "model_not_found" in error_msg or "does not exist" in error_msg:
-                return "⚠️ **Nivel de API Insuficiente:** Tu clave de OpenAI no tiene permisos para acceder a los modelos avanzados de razonamiento (`o1` u `o3-mini`). Por favor, cambia al modo **Fast (gpt-4o)** en la barra inferior."
-            logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación Thinking): {error_msg}", exc_info=True)
+            logger.error("[AUDIT SQL] Error en API OpenAI (Interpretación avanzada): %s", e, exc_info=True)
             if es_dossier:
                 return renderizar_respuesta_analitica(raw_data)
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
@@ -650,19 +622,13 @@ Consulta SQL ejecutada: {sql_query}
 Resultado bruto de BD: {raw_data_truncated}
 Contexto del Negocio: {contexto}
 """
-        model_name = "gpt-4o"
-        messages = [{"role": "system", "content": INTERPRET_PROMPT}]
+        messages = [{"role": "developer", "content": INTERPRET_PROMPT}]
         messages.extend(history)
         
         try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=0.1,
-                max_tokens=2000
-            )
+            response, model_name = create_copilot_completion(client, messages, model_preference)
         except Exception as e:
-            logger.error(f"[AUDIT SQL] Error en API OpenAI (Interpretación): {str(e)}", exc_info=True)
+            logger.error("[AUDIT SQL] Error en API OpenAI (Interpretación): %s", e, exc_info=True)
             return "⚠️ **Error de comunicación:** No se pudo obtener la interpretación de la IA en este momento."
     
     if usage_context:
@@ -689,7 +655,7 @@ Contexto del Negocio: {contexto}
         
     return reply
 
-def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "fast", contexto: str = "") -> str:
+def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "terra", contexto: str = "") -> str:
     if not history:
         return "No hay historial de mensajes."
         
@@ -718,7 +684,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
 
     # Las conversaciones simples no necesitan consultar el resumen empresarial.
     if not intento and is_conversational(user_message):
-        return handle_conversational(user_message, contexto, usage_context)
+        return handle_conversational(user_message, contexto, usage_context, model_preference)
 
     from .copilot_context import construir_resumen_operativo
     contexto_analisis = (contexto or "")[:MAX_CONTEXT_PROMPT_CHARS]
@@ -766,7 +732,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         from .analitica_ventas import crear_plan_analitico_ventas, es_pregunta_gerencial
 
         usar_plan_analitico = (
-            model_preference in {"thinking", "ultra_thinking"}
+            bool(get_copilot_model_profile(model_preference)["advanced"])
             and intento.tipo in {"ventas", "rentabilidad"}
             and intento.agrupacion not in {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
             # El dossier global es para diagnósticos gerenciales. Las preguntas

@@ -168,9 +168,9 @@ const getCopilotErrorMessage = (error: unknown) => {
 };
 
 const MODEL_OPTIONS = [
-  { value: 'fast' as const, label: 'Fast', sublabel: 'GPT-4o', icon: <Zap size={14} />, desc: 'Rápido y eficiente' },
-  { value: 'thinking' as const, label: 'Thinking', sublabel: 'o3-mini', icon: <Brain size={14} />, desc: 'Razonamiento avanzado' },
-  { value: 'ultra_thinking' as const, label: 'Ultra', sublabel: 'o1', icon: <Brain size={14} />, desc: 'Máxima profundidad' },
+  { value: 'luna' as const, label: 'Luna', sublabel: 'GPT-5.6 Luna', icon: <Zap size={14} />, desc: 'Ágil para consultas frecuentes' },
+  { value: 'terra' as const, label: 'Terra', sublabel: 'GPT-5.6 Terra', icon: <Brain size={14} />, desc: 'Equilibrio entre análisis, velocidad y coste · Recomendado' },
+  { value: 'sol' as const, label: 'Sol', sublabel: 'GPT-5.6 Sol', icon: <Brain size={14} />, desc: 'Máxima profundidad para análisis complejos' },
 ];
 
 interface CopilotChartConfig {
@@ -291,7 +291,7 @@ const ThinkingIndicator = ({ modelPreference }: { modelPreference: string }) => 
     const interval = setInterval(() => setMsgIdx(i => (i + 1) % THINKING_MESSAGES.length), 1800);
     return () => clearInterval(interval);
   }, []);
-  const isAdvanced = modelPreference !== 'fast';
+  const isAdvanced = modelPreference !== 'luna';
   return (
     <div className="flex justify-start">
       <div className="flex gap-4 max-w-[80%]">
@@ -337,7 +337,7 @@ export const AiCopilot = () => {
   const [contextSaveError, setContextSaveError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [modelPreference, setModelPreference] = useState<'fast' | 'thinking' | 'ultra_thinking'>('fast');
+  const [modelPreference, setModelPreference] = useState<'luna' | 'terra' | 'sol'>('terra');
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [capabilities, setCapabilities] = useState<CopilotCapabilities | null>(null);
   // LibrerIA docs

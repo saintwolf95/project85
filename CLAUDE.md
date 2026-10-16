@@ -27,7 +27,7 @@ Aplicación interna de analítica comercial, inventario y supply chain para Five
 - Las consultas agregadas frecuentes pasan por `app/copilot_orchestrator.py`, no por SQL generado libremente. Mantenerlas parametrizadas y con `empresa_id`.
 - Las respuestas de continuación deben conservar medida, período, agrupación y filtros. El parser entiende rangos de fechas, meses nombrados, abreviaturas y rangos que cruzan año.
 - Los mensajes se persisten en `copilot_messages.creado_en` en UTC y se muestran en el navegador como `HH:mm dd-MM-yyyy` en hora local.
-- Fast es directo; Thinking/Ultra deben usar el mismo dato real y aportar análisis avanzado, no inventar conclusiones.
+- Luna es directo; Terra y Sol deben usar el mismo dato real y aportar análisis avanzado, no inventar conclusiones.
 
 ## Pestañas documentadas
 

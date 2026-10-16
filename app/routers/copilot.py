@@ -36,7 +36,9 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     chat_id: Optional[int] = None
     history: List[ChatMessage] = Field(..., min_length=1, max_length=MAX_CHAT_CONTEXT_MESSAGES)
-    model_preference: Literal["fast", "thinking", "ultra_thinking"] = "fast"
+    # Se aceptan valores heredados mientras los clientes con caché se actualizan;
+    # el servicio los normaliza a Luna, Terra o Sol antes de llamar a OpenAI.
+    model_preference: Literal["luna", "terra", "sol", "fast", "thinking", "ultra_thinking"] = "terra"
     libreria_doc_ids: Optional[List[int]] = Field(default=None, max_length=MAX_LIBRERIA_DOCS_PER_QUERY)
 
 class ChatResponse(BaseModel):

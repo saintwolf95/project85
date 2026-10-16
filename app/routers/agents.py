@@ -497,7 +497,7 @@ def create_decision(request: Request, payload: AgentDecisionCreateRequest, curre
 
 @router.patch("/agents/decisions/{decision_id}")
 @limiter.limit("20/minute")
-def update_decision(request: Request, decision_id: int, payload: AgentDecisionUpdateRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_decision(request: Request, decision_id: int, payload: AgentDecisionUpdateRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
     decision = _decision_or_404(db, current_user.empresa_id, decision_id)
     for field in ("estado", "responsable", "metrica_objetivo", "valor_objetivo", "horizonte_fecha", "resultado_texto"):
         value = getattr(payload, field)
@@ -518,7 +518,7 @@ def list_decision_steps(decision_id: int, current_user: Usuario = Depends(get_cu
 
 
 @router.patch("/agents/decisions/{decision_id}/steps/{step_id}")
-def update_decision_step(decision_id: int, step_id: int, payload: AgentDecisionStepUpdateRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_decision_step(decision_id: int, step_id: int, payload: AgentDecisionStepUpdateRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
     decision = _decision_or_404(db, current_user.empresa_id, decision_id)
     step = db.query(AgentDecisionStep).filter(AgentDecisionStep.id == step_id, AgentDecisionStep.empresa_id == current_user.empresa_id, AgentDecisionStep.decision_id == decision.id).first()
     if not step:
@@ -533,7 +533,7 @@ def update_decision_step(decision_id: int, step_id: int, payload: AgentDecisionS
 
 
 @router.patch("/agents/signals/{signal_id}/office")
-def update_signal_from_office(signal_id: int, payload: AgentOfficeAlertActionRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def update_signal_from_office(signal_id: int, payload: AgentOfficeAlertActionRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
     signal = _signal_or_404(db, current_user.empresa_id, signal_id)
     if payload.status is not None:
         signal.office_status = payload.status

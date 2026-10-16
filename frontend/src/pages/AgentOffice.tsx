@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Mail, Volume2 } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
@@ -62,6 +62,8 @@ export const AgentOffice = () => {
   const { session } = useAuth();
   const { theme } = useTheme();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isScreenMode = searchParams.get('modo') === 'pantalla';
   const [starting, setStarting] = useState(false);
   const [runError, setRunError] = useState('');
   const [runResult, setRunResult] = useState('');
@@ -73,7 +75,7 @@ export const AgentOffice = () => {
   const previousRunStateRef = useRef<string | null>(null);
   const userRole = String(session?.user.app_metadata?.rol || session?.user.user_metadata?.rol || 'admin').toLowerCase();
   const canRun = userRole === 'admin';
-  const readOnly = ['direccion', 'dirección'].includes(userRole);
+  const readOnly = isScreenMode || ['direccion', 'dirección'].includes(userRole);
   const officeStateSnapshot = JSON.stringify({
     stage: execution?.etapa ?? '',
     agents: execution?.agentes ?? {},
@@ -96,6 +98,7 @@ export const AgentOffice = () => {
   }, [execution?.run_id, execution?.estado]);
 
   useEffect(() => {
+    if (isScreenMode) return undefined;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
     const pollOfficeData = async () => {
@@ -110,7 +113,7 @@ export const AgentOffice = () => {
     };
     void pollOfficeData();
     return () => { cancelled = true; clearTimeout(timer); };
-  }, []);
+  }, [isScreenMode]);
 
   useEffect(() => {
     if (!execution) return;
@@ -179,14 +182,27 @@ export const AgentOffice = () => {
     setOfficeData(await getOfficeVivaData());
   };
 
-  return <div className="agent-office">
+  const mobileCards = <section className="office-mobile-cards" aria-label="Estado del equipo de análisis">
+    {officeAgents.map(agent => <article key={agent.id} className="office-mobile-card" data-status={agent.status}>
+      <div><p>{ROSTER.find(item => item.id === agent.id)?.name || agent.id}</p><strong>{agent.status === 'working' ? 'Analizando' : agent.status === 'done' ? 'Completado' : agent.status === 'error' ? 'Requiere atención' : 'En espera'}</strong></div>
+      <span>{agent.stage || agent.lastTask}</span>
+      <div className="office-mobile-actions"><Link to={agentUrl(agent.id)}>Ver {agent.id === 'ceo' ? 'informe' : 'expediente'}</Link>{agent.id !== 'ceo' && <Link to={`/ai-control/analistas?agent=${agent.id}&view=chat`}>Abrir chat</Link>}</div>
+    </article>)}
+  </section>;
+
+  const screenBoard = <section className="office-screen-board" aria-label="Estado de la Oficina de analistas">
+    <header><p>Five Minutes · Estado en directo</p><h1>Oficina de analistas</h1></header>
+    <div>{officeAgents.map(agent => <article key={agent.id} data-status={agent.status}><span>{ROSTER.find(item => item.id === agent.id)?.name || agent.id}</span><strong>{agent.status === 'working' ? 'En análisis' : agent.status === 'done' ? 'Completado' : agent.status === 'error' ? 'Atención' : 'En espera'}</strong><small>{agent.stage || agent.lastTask}</small></article>)}</div>
+  </section>;
+
+  return <div className={`agent-office${isScreenMode ? ' office-screen-mode' : ''}`}>
     <div className="agent-office-shell">
-      <header className="agent-office-heading">
+      {!isScreenMode && <header className="agent-office-heading">
         <div><p>Equipo de análisis · Five Minutes</p><h1>Oficina de analistas</h1></div>
         <nav aria-label="Navegación de Control IA"><Link to="/ai-control"><ArrowLeft size={16} />Prioridades de hoy</Link><Link to="/ai-control/analistas">Gabinete <ArrowUpRight size={15} /></Link>{canRun && <Link to="/ai-control/avisos"><Mail size={15} />Avisos PM</Link>}</nav>
-      </header>
-      {(runError || runResult) && <p className={`agent-office-status ${runError ? 'is-error' : 'is-success'}`} role="status">{runError || runResult}</p>}
-      <section className="agent-office-viva-stage" aria-label="Oficina isométrica de agentes">
+      </header>}
+      {!isScreenMode && (runError || runResult) && <p className={`agent-office-status ${runError ? 'is-error' : 'is-success'}`} role="status">{runError || runResult}</p>}
+      {isScreenMode ? screenBoard : <><section className="agent-office-viva-stage" aria-label="Oficina isométrica de agentes">
         <OfficeViva
           className="agent-office-viva"
           theme={theme === 'dark' ? 'dark' : 'light'}
@@ -202,15 +218,15 @@ export const AgentOffice = () => {
           onAction={onOfficeAction}
           onError={() => setRunError('La oficina no pudo completar la acción solicitada. Revisa el Gabinete de Analistas IA.')}
         />
-      </section>
-      <section className="office-history" aria-labelledby="office-history-title">
+      </section>{mobileCards}</>}
+      {!isScreenMode && <section className="office-history" aria-labelledby="office-history-title">
         <header className="office-history-header"><div><span className="office-scene-eyebrow">Trazabilidad</span><h2 id="office-history-title"><History size={19} /> Historial de ejecuciones</h2></div><div className="office-preferences" aria-label="Preferencias de avisos">
           <button type="button" onClick={toggleSound} aria-pressed={soundEnabled} title="Aviso sonoro"><Volume2 size={16} />Sonido <span>{soundEnabled ? 'Sí' : 'No'}</span></button>
           <button type="button" onClick={() => void toggleBrowserNotifications()} aria-pressed={browserNotifications} title="Aviso del navegador"><Bell size={16} />Navegador <span>{browserNotifications ? 'Sí' : 'No'}</span></button>
         </div></header>
         {historyError && <p className="office-history-error" role="alert"><AlertTriangle size={16} />{historyError}</p>}
         {history.length ? <div className="office-history-list">{history.map(run => <details key={run.run_id} className="office-history-run"><summary><span className="office-history-status" data-state={run.estado}>{run.estado}</span><strong>{new Date(run.inicio).toLocaleString('es-ES')}</strong><span>{duration(run.duracion_ms)}</span><span className="office-history-stage">{errorLabel(run.error_code) || run.etapa_final}</span></summary><div className="office-history-members">{run.agentes.map(agent => <div key={agent.agent_name}><strong>{ROSTER.find(item => item.id === agent.agent_name)?.name || agent.agent_name}</strong><span data-state={agent.estado}>{agent.estado}</span><span>{duration(agent.duracion_ms)}</span><small>{errorLabel(agent.error_code) || agent.etapa_final}</small></div>)}</div></details>)}</div> : !historyError && <p className="office-history-empty">Todavía no hay ejecuciones registradas en el historial.</p>}
-      </section>
+      </section>}
     </div>
   </div>;
 };

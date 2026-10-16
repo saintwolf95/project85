@@ -421,3 +421,9 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El aging del almacén se define por días desde la última venta: 0–30, 31–90, 91–180 y más de 180. La exportación CSV contiene solo referencias con inventario positivo y más de 180 días sin venta. La cobertura agregada se pondera por valor de inventario.
 - `agent_notification_recipients` permite a un administrador definir destinatarios globales o por Product Manager en `/ai-control/avisos`; `agent_notification_logs` conserva el envío. Los avisos usan `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_STARTTLS`; si falta configuración, la acción falla sin marcarse como enviada.
 - Los pasos de decisión se persisten en `agent_decision_steps`. El estado de gestión visual de una señal y su responsable se guardan aparte de su estado determinista, por lo que una acción humana no puede alterar la detección.
+
+## Actualización v1.92 — móvil y modo pantalla de Oficina Viva (Fase 4)
+
+- En dispositivos de hasta 700 px, la escena se sustituye por tarjetas accesibles por agente. Muestran exclusivamente estado confirmado, etapa y tarea genérica, y conservan los enlaces permitidos a expediente, informe o chat.
+- `/ai-control/oficina?modo=pantalla` es una vista a pantalla completa con tipografía ampliada, solo estados de trabajo y sin acciones, hallazgos, historial ni datos del Centro de mando. No consulta `/agents/office-viva`.
+- Las mutaciones de decisiones, pasos y gestión visual de señales de la oficina exigen `get_current_active_admin` en servidor. El parámetro de URL no concede permisos ni cambia las garantías de API.

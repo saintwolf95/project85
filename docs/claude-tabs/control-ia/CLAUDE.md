@@ -1,5 +1,15 @@
 # Control IA
 
+## Fase 4 v6 — salud calculada en servidor
+
+- La respuesta de Oficina Viva entrega `health.sales` e `health.inventory`
+  con umbrales `[40, 70]`. Ventas usa variación semanal, tendencia de ocho
+  semanas, variación semanal de margen bruto y alertas altas abiertas; el
+  inventario usa cobertura, aging muerto, stock reciente y media de PM.
+- Los pesos v6 se normalizan si un dato no existe, de modo que no se simula un
+  factor faltante. Las pruebas cubren límites lineales, pesos y cuatro factores
+  de inventario. Los valores reales requieren la empresa autenticada.
+
 ## Fase 3 v6 — desglose interactivo verificable
 
 - `GET /agents/office-viva/drill` recibe `chart`, `key` y los filtros activos,

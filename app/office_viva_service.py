@@ -1,6 +1,6 @@
 """Adaptador de fuentes verificadas al contrato cerrado de Oficina Viva."""
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -106,6 +106,86 @@ def _inventory_date(db: Session, empresa_id: int) -> date | None:
 
 def _drill_result(title: str, subtitle: str, rows: list[dict], *, unit: str, digits: int = 0) -> dict:
     return {"title": title, "subtitle": subtitle, "unit": unit, "digits": digits, "rows": rows[:10]}
+
+
+def _linear_score(value: float, low: float, high: float) -> float:
+    """Escala lineal acotada en 0..100, igual que el módulo v6."""
+    if high == low:
+        return 100.0
+    return max(0.0, min(100.0, (value - low) / (high - low) * 100))
+
+
+def _health(components: list[dict]) -> dict | None:
+    valid = [item for item in components if item.get("score") is not None]
+    if not valid:
+        return None
+    total_weight = sum(float(item["weight"]) for item in valid)
+    if not total_weight:
+        return None
+    normalized = [{**item, "weight": float(item["weight"]) / total_weight,
+                   "score": round(float(item["score"]), 1)} for item in valid]
+    score = round(sum(item["score"] * item["weight"] for item in normalized))
+    return {"score": score, "components": normalized}
+
+
+def _weekly_sales_health(db: Session, empresa_id: int, filters: dict[str, str | None], anchor: date,
+                         alerts: list[dict]) -> tuple[dict | None, list[float], float | None, float | None]:
+    """Calcula ocho semanas reales y los cuatro factores de salud de ventas."""
+    first_day = anchor - timedelta(days=55)
+    rows = db.execute(text(f"""
+        SELECT v.fecha_venta fecha, COALESCE(SUM(v.ingreso_total), 0) ventas,
+               COALESCE(SUM(v.margen_bruto_eur), 0) margen
+        FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
+        WHERE p.empresa_id = :empresa_id AND v.fecha_venta BETWEEN :start AND :end {PRODUCT_FILTER_SQL}
+        GROUP BY v.fecha_venta ORDER BY v.fecha_venta
+    """), {"empresa_id": empresa_id, "start": first_day, "end": anchor, **filters}).mappings().all()
+    daily = { _as_date(row["fecha"]): (float(row["ventas"] or 0), float(row["margen"] or 0)) for row in rows }
+    weeks: list[tuple[float, float]] = []
+    for index in range(8):
+        end = anchor - timedelta(days=(7 - index) * 7)
+        start = end - timedelta(days=6)
+        sales = margin = 0.0
+        for offset in range(7):
+            day_sales, day_margin = daily.get(start + timedelta(days=offset), (0.0, 0.0))
+            sales += day_sales; margin += day_margin
+        weeks.append((sales, margin))
+    sales_series = [sales for sales, _ in weeks]
+    current_sales, previous_sales = sales_series[-1], sales_series[-2]
+    weekly_delta = (current_sales - previous_sales) / abs(previous_sales) * 100 if previous_sales else None
+    trend = (sales_series[-1] - sales_series[0]) / abs(sales_series[0]) * 100 if sales_series[0] else None
+    current_margin_pct = weeks[-1][1] / current_sales * 100 if current_sales else None
+    previous_margin_pct = weeks[-2][1] / previous_sales * 100 if previous_sales else None
+    margin_delta = current_margin_pct - previous_margin_pct if current_margin_pct is not None and previous_margin_pct is not None else None
+    high_sales_alerts = sum(alert["agent"] == "lucia" and alert["sev"] == "alta" and alert.get("status") != "resuelta" for alert in alerts)
+    components = []
+    if weekly_delta is not None:
+        components.append({"label": "Variación semanal de ventas", "value": f"{weekly_delta:+.1f} %", "score": _linear_score(weekly_delta, -10, 10), "weight": .35, "tab": "lucia", "hint": "−10 % o peor = 0 puntos; sin cambio = 50; +10 % o mejor = 100."})
+    if trend is not None:
+        components.append({"label": "Tendencia 8 semanas", "value": f"{trend:+.1f} %", "score": _linear_score(trend, -15, 15), "weight": .25, "tab": "lucia", "hint": "Cambio entre la primera y la última semana: −15 % = 0; +15 % = 100."})
+    if margin_delta is not None:
+        components.append({"label": "Evolución del margen bruto", "value": f"{margin_delta:+.1f} pts", "score": _linear_score(margin_delta, -2, 2), "weight": .20, "tab": "mattia", "hint": "−2 puntos o peor = 0; +2 puntos o mejor = 100."})
+    components.append({"label": "Alertas altas de ventas abiertas", "value": str(high_sales_alerts), "score": _linear_score(high_sales_alerts, 10, 0), "weight": .20, "tab": "alertas", "hint": "Ninguna = 100 puntos; 10 o más = 0."})
+    return _health(components), sales_series, weekly_delta, margin_delta
+
+
+def _inventory_health(inventory: dict | None, pms: list[dict]) -> dict | None:
+    components = []
+    if inventory:
+        coverage = float(inventory.get("coverageDays") or 0)
+        coverage_score = _linear_score(coverage, 0, 20) if coverage < 20 else 100.0 if coverage <= 45 else _linear_score(coverage, 120, 45)
+        components.append({"label": "Cobertura", "value": f"{coverage:.0f} días", "score": coverage_score, "weight": .30, "tab": "almacen", "hint": "Ideal entre 20 y 45 días. Por debajo hay riesgo de rotura; por encima, capital inmovilizado."})
+        if inventory.get("valueEur"):
+            dead_pct = float(inventory.get("deadEur") or 0) / float(inventory["valueEur"]) * 100
+            components.append({"label": f"Aging muerto (>{inventory.get('deadDays', 180)} d)", "value": f"{dead_pct:.1f} %", "score": _linear_score(dead_pct, 15, 0), "weight": .30, "tab": "almacen", "drill": "deadByCat", "hint": "0 % del valor = 100 puntos; 15 % o más = 0 puntos."})
+        aging = inventory.get("aging") or []
+        total_aging = sum(float(item[1] or 0) for item in aging)
+        if total_aging and aging:
+            recent_pct = float(aging[0][1] or 0) / total_aging * 100
+            components.append({"label": "Stock de menos de 30 días", "value": f"{recent_pct:.0f} %", "score": _linear_score(recent_pct, 20, 60), "weight": .20, "tab": "almacen", "hint": "60 % o más del valor con menos de 30 días = 100 puntos; 20 % o menos = 0."})
+    if pms:
+        pm_average = sum(float(item["score"]) for item in pms) / len(pms)
+        components.append({"label": "Sanidad media de PM", "value": f"{pm_average:.0f}/100", "score": pm_average, "weight": .20, "tab": "maria", "hint": "Media de la salud de las carteras de PM que revisa María."})
+    return _health(components)
 
 
 def office_viva_drill(db: Session, empresa_id: int, *, chart: str, key: str,
@@ -328,7 +408,12 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
         GROUP BY COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca') ORDER BY category
     """), {"empresa_id": empresa_id, "start": dashboard["periodo_actual"]["inicio"],
              "end": dashboard["periodo_actual"]["fin"], **filters}).mappings().all()
+    sales_health, _weekly_sales, _weekly_delta, _margin_delta = _weekly_sales_health(
+        db, empresa_id, filters, _as_date(dashboard["periodo_actual"]["fin"]), alerts,
+    )
+    inventory_health = _inventory_health(inventory_payload, pm_health)
     return {
+        "health": {"sales": sales_health, "inventory": inventory_health, "thresholds": [40, 70]},
         "kpis": {"sales": {"value": dashboard["actual"]["ventas_eur"], "delta": dashboard["variacion"]["ventas_pct"], "spark": [item["ventas_eur"] for item in series]}, "stockHealth": {"value": 100 - 100 * dashboard["inventario"]["clase_a_sin_stock"] / max(1, dashboard["inventario"]["clase_a_total"]), "delta": None}, "margin": {"value": margin["actual"].get("mg_pct"), "delta": margin["variacion"].get("mg_pct"), "spark": [item["mg_pct"] or 0 for item in margin.get("serie_diaria", [])][-8:]}, "alertsSpark": []},
         "alerts": alerts, "pms": pm_health, "findings": dict(findings),
         "sales": [(row["entidad"], row["ventas_eur"] / 1000, row["variacion_pct"] or 0) for row in dashboard["desglose"]["filas"][:8]],

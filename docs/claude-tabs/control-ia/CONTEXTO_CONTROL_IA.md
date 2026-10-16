@@ -25,6 +25,17 @@ dos ventanas de 30 días y MGD se ordena por el porcentaje ponderado de cada
 artículo. El aging muerto se agrupa por **sección**, igual que su filtro y su
 drill-down; no por familia.
 
+### Actualización v1.98 — salud ejecutiva v6
+
+`build_office_viva_data` envía `data.health` para que los velocímetros no
+dependan de una aproximación de interfaz. Ventas calcula variación semanal,
+tendencia de ocho semanas, cambio del margen bruto semanal y alertas altas de
+Lucía abiertas. Inventario combina cobertura, porcentaje de aging muerto,
+porcentaje de stock con menos de 30 días y sanidad media de PM. Los pesos son
+35/25/20/20 en ventas y 30/30/20/20 en inventario; cuando una fuente falta se
+renormalizan sin inventar una puntuación. Las zonas continúan siendo 0–40,
+40–70 y 70–100.
+
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. La oficina conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. La oficina sustituye el SVG por una escena isométrica Canvas 2D con mapa textual, BFS y máquina de estado por personaje. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El HUD de referencia usa Pixelify Sans y Nunito, respetando además el tema claro u oscuro de la app.

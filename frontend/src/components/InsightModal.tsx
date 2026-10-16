@@ -3,7 +3,7 @@ import { X, PieChart as PieIcon, List, Download } from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import type { AIInsight, ProductMetrics } from '../services/api';
 import { formatEUR } from '../utils/formatters';
-import * as XLSX from 'xlsx';
+import { downloadXlsx } from '../utils/xlsx';
 
 interface InsightModalProps {
   insight: AIInsight | null;
@@ -43,18 +43,15 @@ export const InsightModal: React.FC<InsightModalProps> = ({ insight, inventory, 
 
   if (!insight) return null;
 
-  const handleExport = () => {
-    const ws = XLSX.utils.json_to_sheet(affectedProducts.map(p => ({
+  const handleExport = async () => {
+    await downloadXlsx(affectedProducts.map(p => ({
       'CodArt': p.cod_art,
       'Nombre': p.nombre_art,
       'Familia': p.familia,
       'Valor Inventario': p.valor_inv,
       'Ventas 90D': p.ventas_90d,
       'Clase ABC': p.matriz_abc
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Productos_Afectados");
-    XLSX.writeFile(wb, `Insight_${insight.tipo}_Data.xlsx`);
+    })), 'Productos_Afectados', `Insight_${insight.tipo}_Data.xlsx`);
   };
 
   return (

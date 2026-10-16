@@ -26,6 +26,9 @@ const periodLabels: Record<DashboardPeriod, string> = {
   '90d': 'Últimos 90 días',
   '30d': 'Últimos 30 días',
 };
+const filterLabels: Record<keyof DashboardFilters, string> = {
+  familia: 'Familia', marca: 'Marca', familia_marca: 'Familia / marca', seccion: 'Sección',
+};
 
 export const Home = () => {
   const navigate = useNavigate();
@@ -72,6 +75,7 @@ export const Home = () => {
       ? (data.inventario.clase_a_total - data.inventario.clase_a_sin_stock) / data.inventario.clase_a_total * 100 : 100;
     return { decline, growth, inactivePct, availabilityA };
   }, [data]);
+  const activeDashboardFilters = Object.entries(filters).filter(([, value]) => Boolean(value)) as [keyof DashboardFilters, string][];
 
   if (loading && !data) {
     return (
@@ -129,7 +133,7 @@ export const Home = () => {
           </div>
         </div>
         <div className="relative mt-7 border-t border-black/[0.08] pt-5 dark:border-slate-800">
-          <div className="mb-3 flex items-center justify-between"><span className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600 dark:text-slate-300"><Filter size={15} strokeWidth={1.75} />Filtros de negocio</span>{Object.values(filters).some(Boolean) && <button onClick={() => { setLoading(true); setFilters({}); }} className="flex min-h-9 items-center gap-1 text-[13px] font-medium text-[#0071E3] hover:underline dark:text-cyan-400"><X size={13} strokeWidth={1.75} />Limpiar filtros</button>}</div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-1.5 text-[13px] font-medium text-slate-600 dark:text-slate-300"><Filter size={15} strokeWidth={1.75} />Filtros de negocio{activeDashboardFilters.length > 0 && ` (${activeDashboardFilters.length})`}</span>{activeDashboardFilters.length > 0 && <button type="button" onClick={() => { setLoading(true); setFilters({}); }} className="flex min-h-9 items-center gap-1 text-[13px] font-medium text-[#0071E3] hover:underline dark:text-cyan-400"><X size={13} strokeWidth={1.75} />Limpiar filtros</button>}</div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {([
               ['familia', 'Todas las familias', data.filtros.opciones.familias],
@@ -138,6 +142,7 @@ export const Home = () => {
               ['seccion', 'Todas las secciones', data.filtros.opciones.secciones],
             ] as [keyof DashboardFilters, string, string[]][]).map(([key, placeholder, options]) => <select key={key} value={filters[key] || ''} onChange={event => changeFilter(key, event.target.value)} className="min-h-11 min-w-0 rounded-[10px] border border-black/[0.12] bg-white px-3.5 text-[13px] text-[#1d1d1f] outline-none transition-colors duration-150 hover:border-black/[0.2] focus:border-[#0071E3] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><option value="">{placeholder}</option>{options.map(item => <option key={item} value={item}>{item}</option>)}</select>)}
           </div>
+          {activeDashboardFilters.length > 0 && <div className="mt-3 flex flex-wrap gap-2" aria-label="Filtros activos">{activeDashboardFilters.map(([key, value]) => <span key={key} className="inline-flex items-center gap-1 rounded-full bg-[#0071E3]/10 px-2.5 py-1 text-[12px] text-[#005bb5] dark:bg-cyan-950/40 dark:text-cyan-300">{filterLabels[key]}: {value}<button type="button" onClick={() => changeFilter(key, '')} aria-label={`Quitar filtro ${filterLabels[key]}`} className="rounded-full p-0.5 hover:bg-[#0071E3]/15"><X size={12} /></button></span>)}</div>}
         </div>
         {loading && <div className="absolute bottom-0 left-0 h-0.5 w-full overflow-hidden bg-blue-100 dark:bg-slate-800"><div className="h-full w-1/2 animate-pulse bg-[#0071E3]" /></div>}
       </header>

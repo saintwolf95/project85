@@ -2,7 +2,7 @@ import React from 'react';
 import type { ProductMetrics } from '../services/api';
 import { formatEUR } from '../utils/formatters';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Download } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { downloadXlsx } from '../utils/xlsx';
 
 interface MatrixDetailProps {
   cellId: string;
@@ -45,8 +45,8 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
     return 0;
   });
 
-  const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(products.map(p => ({
+  const exportToExcel = async () => {
+    await downloadXlsx(products.map(p => ({
       'CodArt': p.cod_art,
       'Nombre': p.nombre_art,
       'Familia': p.familia,
@@ -56,10 +56,7 @@ export const MatrixDetail: React.FC<MatrixDetailProps> = ({ cellId, products }) 
       'Valor Inventario': p.valor_inv,
       'Ventas 90D': p.ventas_90d,
       'Clase ABC': p.matriz_abc
-    })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Productos");
-    XLSX.writeFile(wb, `Matriz_${cellId}_data.xlsx`);
+    })), 'Productos', `Matriz_${cellId}_data.xlsx`);
   };
 
   if (!cellId) {

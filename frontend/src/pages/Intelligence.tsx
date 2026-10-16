@@ -8,7 +8,7 @@ import { InventoryTable } from '../components/InventoryTable';
 import { ChevronLeft, ChevronRight, Search, Filter, AlertTriangle, Download, ArrowRight, Info, X } from 'lucide-react';
 import { MatrixDetail } from '../components/MatrixDetail';
 import { MatrixDetailDashboard } from '../components/MatrixDetailDashboard';
-import * as XLSX from 'xlsx';
+import { downloadXlsx } from '../utils/xlsx';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { ProductModal } from '../components/ProductModal';
 
@@ -149,6 +149,16 @@ export const Intelligence = () => {
     return Object.values(counts).sort((a, b) => b.value - a.value);
   }, [inventoryData]);
 
+  const catalogOptions = useMemo(() => ({
+    productManagers: [...new Set(inventoryData.map(item => item.product_manager).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'es')),
+    sections: [...new Set(inventoryData.map(item => item.seccion).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b, 'es')),
+  }), [inventoryData]);
+  const catalogActiveFilters = [searchTerm.trim(), claseAbc, selectedPM, selectedSection, selectedRisk, minDays, maxDays].filter(value => value !== '').length;
+  const clearCatalogFilters = () => {
+    setSearchTerm(''); setDebouncedSearch(''); setClaseAbc(''); setSelectedPM('');
+    setSelectedSection(''); setSelectedRisk(''); setMinDays(''); setMaxDays(''); setCurrentPage(1);
+  };
+
   useEffect(() => {
     const fetchInventory = async () => {
       try {
@@ -179,7 +189,7 @@ export const Intelligence = () => {
     );
   };
 
-  const executeExport = () => {
+  const executeExport = async () => {
     const dataToExport = inventoryData.map(p => {
       const row: Record<string, string | number | boolean> = {};
       EXPORT_COLUMNS.forEach(col => {
@@ -197,10 +207,7 @@ export const Intelligence = () => {
       return row;
     });
 
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
-    XLSX.writeFile(wb, `Catalogo_Inventario.xlsx`);
+    await downloadXlsx(dataToExport, 'Catalogo', 'Catalogo_Inventario.xlsx');
     setExportModalOpen(false);
   };
 
@@ -299,6 +306,7 @@ export const Intelligence = () => {
         <div className="flex flex-col flex-1 min-h-0 gap-4 animate-in fade-in">
           {/* Barra de filtros */}
           <div className="flex flex-col items-start justify-between gap-5 rounded-[20px] border border-black/[0.08] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_12px_32px_rgba(0,0,0,0.04)] dark:border-slate-800 dark:bg-slate-900 md:items-center shrink-0">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3"><div><h2 className="text-[16px] font-semibold text-[#1d1d1f] dark:text-white">Explorar catálogo</h2><p className="mt-1 text-[12px] text-[#6e6e73] dark:text-slate-400">Los filtros se aplican al catálogo completo cargado para esta empresa.</p></div><div className="flex items-center gap-3"><span className="rounded-full bg-[#0071e3]/10 px-3 py-1 text-[12px] font-medium text-[#0071e3] dark:text-brand-cyan">{catalogActiveFilters} filtros activos</span>{catalogActiveFilters > 0 && <button type="button" onClick={clearCatalogFilters} className="min-h-9 text-[13px] font-medium text-[#0071e3] hover:underline dark:text-brand-cyan">Limpiar filtros</button>}</div></div>
             <div className="flex w-full flex-row flex-wrap gap-3">
               <div className="relative w-full md:w-96">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -337,11 +345,7 @@ export const Intelligence = () => {
                   className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todos los PMs</option>
-                  <option value="JAC">JAC</option>
-                  <option value="AMI">AMI</option>
-                  <option value="LKT">LKT</option>
-                  <option value="UCR">UCR</option>
-                  <option value="TDS">TDS</option>
+                  {catalogOptions.productManagers.map(item => <option key={item} value={item}>{item}</option>)}
                 </select>
               </div>
               <div className="relative w-full md:w-48">
@@ -354,12 +358,7 @@ export const Intelligence = () => {
                   className="min-h-11 w-full appearance-none rounded-[10px] border border-black/[0.12] bg-white py-2 pl-9 pr-4 text-[13px] text-[#1d1d1f] outline-none transition-colors hover:border-black/[0.2] dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 >
                   <option value="">Todas las Secciones</option>
-                  <option value="Informática">Informática</option>
-                  <option value="Telefonía">Telefonía</option>
-                  <option value="Componentes">Componentes</option>
-                  <option value="Audio">Audio</option>
-                  <option value="Accesorios">Accesorios</option>
-                  <option value="General">General</option>
+                  {catalogOptions.sections.map(item => <option key={item} value={item}>{item}</option>)}
                 </select>
               </div>
               <div className="relative w-full md:w-48">

@@ -1,5 +1,11 @@
 # Marginalidad
 
+## Actualización v2.00 — estado analítico explícito
+
+- Los selectores MG/MGD y ventana comunican su estado a tecnologías asistivas,
+  el período declara la métrica activa y un fallo ofrece reintento sin alterar
+  filtros, datos ni cálculo de márgenes.
+
 ## Estado verificado · 08/10/2026 · v1.60
 
 - Verificados `Marginality.tsx`, `MarginEntity.tsx` y `/margin/overview`, `/concentration`, `/detail`, `/bridge`, `/entity/{tipo}/{entity_id}`, `/signals`.

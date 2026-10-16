@@ -1,5 +1,11 @@
 # Intelligence ABCXYZ
 
+## Actualización v2.00 — catálogo recuperable
+
+- PM y sección del Catálogo Interactivo se derivan del inventario cargado de la
+  empresa, no de una lista fija. La barra declara filtros activos y permite
+  restaurar el universo de SKU en una sola acción.
+
 ## Estado verificado · 11/10/2026 · v1.79
 
 - Verificado `Intelligence.tsx`: vista general, catálogo y alertas; matriz y guía visible compartida con Dashboard desde v1.59.

@@ -1,5 +1,11 @@
 # Dashboard
 
+## Actualización v2.00 — contexto de filtros
+
+- La cabecera muestra cuántos filtros gobiernan la lectura y cada criterio
+  activo aparece como etiqueta removible. Limpiar un criterio conserva los
+  demás; los KPIs, gráficos y detalle siguen usando la misma consulta real.
+
 ## Corrección v1.94 — filtros opcionales PostgreSQL
 
 - Los filtros vacíos se envían como `NULL`; las consultas deben tiparlos como `TEXT` antes de compararlos. PostgreSQL no puede inferir el tipo de `:param IS NULL` por sí solo con psycopg y devuelve `AmbiguousParameter`, bloqueando toda la vista.

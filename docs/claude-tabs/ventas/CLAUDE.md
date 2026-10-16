@@ -1,5 +1,11 @@
 # Ventas
 
+## Actualización v2.00 — consulta visible
+
+- La exploración muestra las etiquetas de filtros activos, permite retirar cada
+  una y expone nombre accesible para búsqueda, ordenación y recarga. Los totales
+  continúan representando el conjunto completo filtrado por el servidor.
+
 ## Estado verificado · 11/10/2026 · v1.82
 
 - Ruta: `/sales`; componente: `frontend/src/pages/Sales.tsx`.

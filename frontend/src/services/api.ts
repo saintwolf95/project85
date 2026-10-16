@@ -633,6 +633,7 @@ export const getOfficeVivaFilterOptions = async (): Promise<Record<string, Offic
 export const searchOfficeVivaArticles = async (articleQuery: string): Promise<OfficeVivaFilterOption[]> => (await api.get('/agents/office-viva/filter-options', { params: { article_query: articleQuery } })).data.articulo || [];
 export const getOfficeVivaDrill = async (chart: string, key: string, filters: OfficeVivaFilters = {}) => (await api.get('/agents/office-viva/drill', { params: { chart, key, ...filters } })).data;
 export const updateOfficeVivaAlert = async (signalId: string, payload: { status?: 'abierta' | 'reconocida' | 'resuelta'; owner?: string; feedback?: 'util' | 'no_util' | null }) => (await api.patch(`/agents/signals/${encodeURIComponent(signalId)}/office`, payload)).data;
+export const updateOfficeVivaDeadStockAlert = async (productManager: string, payload: { status?: 'abierta' | 'reconocida' | 'resuelta'; owner?: string; feedback?: 'util' | 'no_util' | null }) => (await api.patch('/agents/office-viva/dead-stock', payload, { params: { product_manager: productManager } })).data;
 export const updateAgentDecisionStep = async (decisionId: string, stepId: number, completado: boolean) => (await api.patch(`/agents/decisions/${encodeURIComponent(decisionId)}/steps/${stepId}`, { completado })).data;
 export const notifyAgentProductManager = async (productManager: string) => (await api.post(`/agents/notifications/product-manager/${encodeURIComponent(productManager)}`)).data;
 export const downloadOfficeVivaDeadInventory = async (): Promise<void> => {

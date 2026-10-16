@@ -36,6 +36,24 @@ porcentaje de stock con menos de 30 días y sanidad media de PM. Los pesos son
 renormalizan sin inventar una puntuación. Las zonas continúan siendo 0–40,
 40–70 y 70–100.
 
+### Actualización v1.99 — cierre operativo y endurecimiento v6
+
+El umbral de stock muerto es único: **más de 180 días sin venta** en señales,
+aging, exportación y drill-down. La antigüedad media se calcula ponderando los
+días sin venta por valor de inventario, y las ocho semanas del KPI de ventas se
+entregan completas. La tarjeta de sanidad muestra la media real de PM.
+
+El historial resumido excluye ejecuciones en curso, usa la duración ya cerrada
+y cuenta las señales creadas durante cada ejecución. Las alertas de stock muerto
+de María se agrupan por PM; sus acciones se aplican al grupo completo y el
+detalle remite al drill de aging.
+
+Las rutas de Oficina Viva validan longitudes de filtros, no consultan el
+autocompletado con menos de dos caracteres, limitan los drills a 30/minuto y
+mantienen parámetros SQL y aislamiento por empresa. CORS falla al iniciar si
+se configura `*` con credenciales, y las respuestas incluyen políticas de
+referencia, permisos y aislamiento de ventana.
+
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. La oficina conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. La oficina sustituye el SVG por una escena isométrica Canvas 2D con mapa textual, BFS y máquina de estado por personaje. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El HUD de referencia usa Pixelify Sans y Nunito, respetando además el tema claro u oscuro de la app.

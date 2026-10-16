@@ -24,7 +24,7 @@ from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
 from ..business_rules import ensure_no_overlap, validate_rule_payload
 from ..agent_execution import ExecutionBusy, read_execution, read_execution_history
-from ..office_viva_service import build_office_viva_data, dead_inventory_rows, office_filter_options, office_viva_drill
+from ..office_viva_service import DEAD_STOCK_DETECTOR, build_office_viva_data, dead_inventory_rows, office_filter_options, office_viva_drill
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -325,11 +325,14 @@ def get_agents_readiness(current_user: Usuario = Depends(get_current_user), db: 
 
 @router.get("/agents/office-viva")
 @limiter.limit("30/minute")
-def get_office_viva(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_office_viva(
+    request: Request, pm: str | None = Query(default=None, max_length=120),
+    seccion: str | None = Query(default=None, max_length=120), marca: str | None = Query(default=None, max_length=120),
+    articulo: str | None = Query(default=None, max_length=120),
+    current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db),
+):
     return build_office_viva_data(
-        db, current_user.empresa_id, pm=request.query_params.get("pm"),
-        seccion=request.query_params.get("seccion"), marca=request.query_params.get("marca"),
-        articulo=request.query_params.get("articulo"),
+        db, current_user.empresa_id, pm=pm, seccion=seccion, marca=marca, articulo=articulo,
     )
 
 
@@ -343,16 +346,17 @@ def get_office_viva_filter_options(
 
 
 @router.get("/agents/office-viva/drill")
-@limiter.limit("60/minute")
+@limiter.limit("30/minute")
 def get_office_viva_drill(
-    request: Request, chart: str = Query(..., max_length=32), key: str = Query(..., max_length=255),
+    request: Request, chart: str = Query(..., min_length=1, max_length=32), key: str = Query(..., min_length=1, max_length=255),
+    pm: str | None = Query(default=None, max_length=120), seccion: str | None = Query(default=None, max_length=120),
+    marca: str | None = Query(default=None, max_length=120), articulo: str | None = Query(default=None, max_length=120),
     current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db),
 ):
     try:
         return office_viva_drill(
             db, current_user.empresa_id, chart=chart, key=key,
-            pm=request.query_params.get("pm"), seccion=request.query_params.get("seccion"),
-            marca=request.query_params.get("marca"), articulo=request.query_params.get("articulo"),
+            pm=pm, seccion=seccion, marca=marca, articulo=articulo,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -365,6 +369,39 @@ def export_office_viva_dead_inventory(current_user: Usuario = Depends(get_curren
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader(); writer.writerows(dead_inventory_rows(db, current_user.empresa_id))
     return Response(output.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=aging_muerto_mas_180_dias.csv"})
+
+
+@router.patch("/agents/office-viva/dead-stock")
+@limiter.limit("20/minute")
+def update_office_viva_dead_stock_group(
+    request: Request, payload: AgentOfficeAlertActionRequest,
+    product_manager: str = Query(..., min_length=1, max_length=120),
+    current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db),
+):
+    """Aplica una acción administrativa al grupo de stock muerto de un PM."""
+    normalized_pm = product_manager.strip()
+    sku_rows = db.query(Producto.sku).filter(
+        Producto.empresa_id == current_user.empresa_id,
+        Producto.product_manager == normalized_pm,
+    ).all()
+    skus = [row[0] for row in sku_rows]
+    signals = db.query(AgentSignal).filter(
+        AgentSignal.empresa_id == current_user.empresa_id,
+        AgentSignal.agente == "maria", AgentSignal.detector == DEAD_STOCK_DETECTOR,
+        AgentSignal.entidad_tipo == "sku", AgentSignal.entidad_id.in_(skus),
+    ).all() if skus else []
+    if not signals:
+        raise HTTPException(status_code=404, detail="No hay alertas de stock muerto para este PM.")
+    for signal in signals:
+        if payload.status is not None:
+            signal.office_status = payload.status
+        if payload.owner is not None:
+            signal.office_owner = payload.owner.strip() or None
+        if payload.feedback is not None:
+            verdict = "util" if payload.feedback == "util" else "no_accionable"
+            db.add(AgentSignalFeedback(empresa_id=current_user.empresa_id, usuario_id=current_user.id, signal_id=signal.id, veredicto=verdict, motivo=None if verdict == "util" else "Marcada como no útil desde Oficina Viva."))
+    db.commit()
+    return {"updated": len(signals)}
 
 
 @router.get("/agents/signals")

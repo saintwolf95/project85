@@ -30,7 +30,7 @@ IMPACTO_TIPO_POR_DETECTOR = {
     "cobertura_vs_lead_time": "en_riesgo",
     "concentracion_clientes": "en_riesgo",
     "exceso_cobertura": "capital",
-    "stock_muerto_90d": "capital",
+    "stock_muerto_180d": "capital",
     "cliente_en_fuga": "en_riesgo",
     "caida_ventas_sku": "realizado",
     "caida_ventas_comercial": "realizado",
@@ -494,17 +494,17 @@ def _inventory_signals(db: Session, empresa_id: int) -> list[dict]:
             without_sales = db.execute(text("SELECT NOT EXISTS (SELECT 1 FROM ventas_historicas v JOIN productos p2 ON p2.id=v.producto_id WHERE p2.empresa_id=:empresa_id AND p2.sku=:sku AND v.fecha_venta >= :desde)"), {"empresa_id": empresa_id, "sku": row["sku"], "desde": snapshot - timedelta(days=180)}).scalar()
             if without_sales:
                 signals.append(_signal("maria", "sku_sin_stock_sin_ventas", "sku", row["sku"], snapshot - timedelta(days=180), snapshot, 2, 0, .9, 0, 1, dict(base, metodo="sin stock y sin ventas en 180 dias; candidato a saneamiento de catálogo")))
-    # Stock muerto frente a ventas de 90 días: el valor es del último snapshot.
+    # Stock muerto frente a ventas de 180 días: el valor es del último snapshot.
     dead = db.execute(text("""
         SELECT p.sku, p.nombre, COALESCE(p.familia,'Sin familia') familia, ih.inventario_eur valor
         FROM inventario_historico ih JOIN productos p ON p.id=ih.producto_id
         WHERE p.empresa_id=:empresa_id AND ih.fecha_inventario=:fecha AND ih.inventario_eur > 1000
           AND NOT EXISTS (SELECT 1 FROM ventas_historicas v WHERE v.producto_id=p.id AND v.fecha_venta >= :desde)
-    """), {"empresa_id": empresa_id, "fecha": snapshot, "desde": snapshot - timedelta(days=90)}).mappings().all()
+    """), {"empresa_id": empresa_id, "fecha": snapshot, "desde": snapshot - timedelta(days=180)}).mappings().all()
     for row in dead:
         value = _number(row["valor"])
-        signals.append(_signal("maria", "stock_muerto_90d", "sku", row["sku"], snapshot - timedelta(days=90), snapshot, 4, value, .9, 0, 1,
-                               {"metodo": "sin ventas en los 90 dias previos con valor de inventario superior a 1.000 EUR", "fecha_snapshot": str(snapshot), "sku": row["sku"], "articulo": row["nombre"], "familia": row["familia"], "valor_inventario_eur": value}))
+        signals.append(_signal("maria", "stock_muerto_180d", "sku", row["sku"], snapshot - timedelta(days=180), snapshot, 4, value, .9, 0, 1,
+                               {"metodo": "sin ventas en los 180 dias previos con valor de inventario superior a 1.000 EUR", "fecha_snapshot": str(snapshot), "sku": row["sku"], "articulo": row["nombre"], "familia": row["familia"], "valor_inventario_eur": value}))
     decline_window = _sales_window(db, empresa_id)
     if decline_window:
         ps, pe, cs, ce, _ = decline_window

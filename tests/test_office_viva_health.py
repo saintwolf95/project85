@@ -1,6 +1,7 @@
 import unittest
+from datetime import date
 
-from app.office_viva_service import _health, _inventory_health, _linear_score
+from app.office_viva_service import DEAD_DAYS, _days_without_sale, _health, _inventory_health, _linear_score, office_filter_options, office_viva_drill
 
 
 class OfficeVivaHealthTests(unittest.TestCase):
@@ -28,6 +29,16 @@ class OfficeVivaHealthTests(unittest.TestCase):
         self.assertEqual([item["label"] for item in result["components"]], [
             "Cobertura", "Aging muerto (>180 d)", "Stock de menos de 30 días", "Sanidad media de PM",
         ])
+
+    def test_aging_sin_venta_supera_el_umbral_unico(self):
+        self.assertEqual(_days_without_sale(date(2026, 10, 16), None), DEAD_DAYS + 1)
+
+    def test_buscador_corto_no_consulta_la_base_de_datos(self):
+        self.assertEqual(office_filter_options(None, 1, "a"), {"articulo": []})
+
+    def test_drill_no_admite_un_grafico_fuera_de_lista(self):
+        with self.assertRaisesRegex(ValueError, "no válido"):
+            office_viva_drill(None, 1, chart="anything", key="x")
 
 
 if __name__ == "__main__":

@@ -12,6 +12,9 @@ from .models import AgentDecision, AgentDecisionStep, AgentExecutionRun, AgentNo
 
 
 OFFICE_FILTER_KEYS = ("pm", "seccion", "marca", "articulo")
+DEAD_DAYS = 180
+DEAD_STOCK_DETECTOR = "stock_muerto_180d"
+MIN_ARTICLE_SEARCH_LENGTH = 2
 PRODUCT_FILTER_SQL = """
  AND (CAST(:pm AS TEXT) IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(CAST(:pm AS TEXT)))
  AND (CAST(:seccion AS TEXT) IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(CAST(:seccion AS TEXT)))
@@ -30,7 +33,8 @@ def office_filter_options(db: Session, empresa_id: int, article_query: str | Non
     """Opciones reales de cartera; los artículos siempre se buscan en servidor."""
     if article_query is not None:
         term = article_query.strip()
-        if not term:
+        # Evita escaneos amplios para un autocompletado de una sola letra.
+        if len(term) < MIN_ARTICLE_SEARCH_LENGTH:
             return {"articulo": []}
         rows = db.execute(text("""
             SELECT p.sku, COALESCE(NULLIF(TRIM(p.nombre), ''), p.sku) nombre
@@ -93,7 +97,8 @@ def _inventory_drill_rows(db: Session, empresa_id: int, filters: dict[str, str |
 
 
 def _days_without_sale(inventory_date: date, last_sale: date | datetime | str | None) -> int:
-    return (inventory_date - _as_date(last_sale)).days if last_sale else 181
+    # Sin una venta registrada solo podemos afirmar que supera el umbral.
+    return (inventory_date - _as_date(last_sale)).days if last_sale else DEAD_DAYS + 1
 
 
 def _inventory_date(db: Session, empresa_id: int) -> date | None:
@@ -176,7 +181,7 @@ def _inventory_health(inventory: dict | None, pms: list[dict]) -> dict | None:
         components.append({"label": "Cobertura", "value": f"{coverage:.0f} días", "score": coverage_score, "weight": .30, "tab": "almacen", "hint": "Ideal entre 20 y 45 días. Por debajo hay riesgo de rotura; por encima, capital inmovilizado."})
         if inventory.get("valueEur"):
             dead_pct = float(inventory.get("deadEur") or 0) / float(inventory["valueEur"]) * 100
-            components.append({"label": f"Aging muerto (>{inventory.get('deadDays', 180)} d)", "value": f"{dead_pct:.1f} %", "score": _linear_score(dead_pct, 15, 0), "weight": .30, "tab": "almacen", "drill": "deadByCat", "hint": "0 % del valor = 100 puntos; 15 % o más = 0 puntos."})
+            components.append({"label": f"Aging muerto (>{inventory.get('deadDays', DEAD_DAYS)} d)", "value": f"{dead_pct:.1f} %", "score": _linear_score(dead_pct, 15, 0), "weight": .30, "tab": "almacen", "drill": "deadByCat", "hint": "0 % del valor = 100 puntos; 15 % o más = 0 puntos."})
         aging = inventory.get("aging") or []
         total_aging = sum(float(item[1] or 0) for item in aging)
         if total_aging and aging:
@@ -192,6 +197,9 @@ def office_viva_drill(db: Session, empresa_id: int, *, chart: str, key: str,
                        pm: str | None = None, seccion: str | None = None,
                        marca: str | None = None, articulo: str | None = None) -> dict:
     """Desglose verificable de cada punto interactivo de Oficina Viva v6."""
+    key = key.strip()
+    if not key:
+        raise ValueError("La clave del desglose es obligatoria.")
     filters = normalize_office_filters(pm=pm, seccion=seccion, marca=marca, articulo=articulo)
     if chart not in {"pmHealth", "pmCov", "deadByCat", "agingBucket", "invWeek", "sales", "salesDelta", "mgd"}:
         raise ValueError("Gráfico de Oficina Viva no válido.")
@@ -221,10 +229,10 @@ def office_viva_drill(db: Session, empresa_id: int, *, chart: str, key: str,
         local_filters = {**filters, "seccion": key} if chart == "deadByCat" and key != "Todas las categorías" else filters
         rows = _inventory_drill_rows(db, empresa_id, local_filters, inventory_date)
         if chart == "deadByCat":
-            rows = [row for row in rows if _days_without_sale(inventory_date, row["ultima_venta"]) > 180]
+            rows = [row for row in rows if _days_without_sale(inventory_date, row["ultima_venta"]) > DEAD_DAYS]
             rows.sort(key=lambda row: float(row["inventario_eur"] or 0), reverse=True)
             return _drill_result(
-                f"Aging muerto · {key}", "Artículos con más valor sin venta durante más de 180 días",
+                f"Aging muerto · {key}", f"Artículos con más valor sin venta durante más de {DEAD_DAYS} días",
                 [{"label": f"{row['sku']} · {row['articulo']}", "value": float(row["inventario_eur"] or 0) / 1000,
                   "sub": f"{_days_without_sale(inventory_date, row['ultima_venta'])} días sin venta"} for row in rows],
                 unit=" k€", digits=1,
@@ -232,7 +240,7 @@ def office_viva_drill(db: Session, empresa_id: int, *, chart: str, key: str,
         def in_bucket(row: dict) -> bool:
             days = _days_without_sale(inventory_date, row["ultima_venta"])
             return ((key == "0-30" and days <= 30) or (key == "31-90" and 31 <= days <= 90)
-                    or (key == "91-180" and 91 <= days <= 180) or (key == ">180" and days > 180))
+                    or (key == f"91-{DEAD_DAYS}" and 91 <= days <= DEAD_DAYS) or (key == f">{DEAD_DAYS}" and days > DEAD_DAYS))
         rows = sorted((row for row in rows if in_bucket(row)), key=lambda row: float(row["inventario_eur"] or 0), reverse=True)
         return _drill_result(
             f"Antigüedad {key}", "Artículos con más valor en este tramo",
@@ -344,7 +352,33 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
     step_map = defaultdict(list)
     for step in steps:
         step_map[step.decision_id].append({"label": step.etiqueta, "done": step.completado, "step_id": step.id})
-    alerts = [{"id": str(row.id), "agent": _agent(row.agente), "sev": _severity(row.severidad), "title": row.detector.replace("_", " ").capitalize(), "detail": f"{row.entidad_tipo or 'Entidad'} · {row.entidad_id or 'Sin detalle'}", "since": row.ultima_deteccion, "status": "resuelta" if row.estado == "resuelta" else row.office_status, "owner": row.office_owner, "feedback": None} for row in signals if _signal_matches_filters(row, metrics, filters)]
+    pm_by_sku = {str(metric.get("cod_art")): metric.get("product_manager") or "Sin PM" for metric in metrics if metric.get("cod_art")}
+    alerts = []
+    dead_stock_groups: dict[str, dict] = {}
+    for row in signals:
+        if not _signal_matches_filters(row, metrics, filters):
+            continue
+        # Las señales heredadas de 90 días se resolverán al siguiente análisis;
+        # no se mezclan mientras tanto con el umbral único de esta vista.
+        if row.detector == "stock_muerto_90d":
+            continue
+        if row.agente == "maria" and row.detector == DEAD_STOCK_DETECTOR:
+            product_manager = pm_by_sku.get(str(row.entidad_id), "Sin PM")
+            group = dead_stock_groups.setdefault(product_manager, {
+                "id": f"dead-stock:{product_manager}", "agent": "maria", "sev": "baja",
+                "title": f"Stock muerto >{DEAD_DAYS} días", "detail": "", "since": row.ultima_deteccion,
+                "status": "resuelta" if row.estado == "resuelta" else row.office_status,
+                "owner": row.office_owner, "feedback": None, "count": 0,
+            })
+            group["count"] += 1
+            group["since"] = max(group["since"], row.ultima_deteccion)
+            if row.severidad > {"baja": 1, "media": 3, "alta": 4}[group["sev"]]:
+                group["sev"] = _severity(row.severidad)
+            continue
+        alerts.append({"id": str(row.id), "agent": _agent(row.agente), "sev": _severity(row.severidad), "title": row.detector.replace("_", " ").capitalize(), "detail": f"{row.entidad_tipo or 'Entidad'} · {row.entidad_id or 'Sin detalle'}", "since": row.ultima_deteccion, "status": "resuelta" if row.estado == "resuelta" else row.office_status, "owner": row.office_owner, "feedback": None})
+    for product_manager, group in dead_stock_groups.items():
+        group["detail"] = f"{product_manager} · {group.pop('count')} artículos sin venta; abre el desglose de aging para ver las referencias."
+        alerts.append(group)
     findings = defaultdict(list)
     for alert in alerts:
         if len(findings[alert["agent"]]) < 3:
@@ -358,11 +392,17 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
         coverage = sum(float(row.get("dias_cobertura") or 0) * float(row.get("valor_inv") or 0) for row in rows) / value if value else 0
         breaks = sum("Riesgo Rotura" in (row.get("riesgos_categorizados") or []) for row in rows)
         over = round(100 * sum(float(row.get("dias_cobertura") or 0) > 90 for row in rows) / len(rows)) if rows else 0
-        dead = sum(float(row.get("ventas_90d") or 0) == 0 and float(row.get("valor_inv") or 0) > 0 for row in rows)
+        dead = 0  # Se completa desde la fecha real de última venta del snapshot.
         score = max(0, min(100, round(100 - min(45, breaks * 8) - min(30, over * .3) - (25 if coverage < 7 else 10 if coverage > 45 else 0))))
-        issues = ([f"{breaks} referencias con riesgo de rotura"] if breaks else []) + ([f"{over} % con cobertura superior a 90 días"] if over else []) + ([f"{dead} referencias sin ventas en 90 días"] if dead else [])
+        # Las métricas de PM no disponen de fecha de última venta; no se
+        # etiquetan como aging muerto para no mezclar el umbral de {DEAD_DAYS} días.
+        issues = ([f"{breaks} referencias con riesgo de rotura"] if breaks else []) + ([f"{over} % con cobertura superior a 90 días"] if over else [])
         pm_health.append({"id": name, "name": name, "skus": len(rows), "cov": round(coverage), "breaks": breaks, "over": over, "dead": dead, "score": score, "issues": issues or ["Sin incidencias prioritarias"]})
-    runs = db.query(AgentExecutionRun).filter(AgentExecutionRun.empresa_id == empresa_id).order_by(AgentExecutionRun.inicio.desc()).limit(10).all()
+    runs = db.query(AgentExecutionRun).filter(
+        AgentExecutionRun.empresa_id == empresa_id,
+        AgentExecutionRun.estado.in_(("completada", "error", "interrumpida")),
+        AgentExecutionRun.fin.isnot(None),
+    ).order_by(AgentExecutionRun.fin.desc()).limit(10).all()
     notified = {}
     for row in db.query(AgentNotificationLog).filter(AgentNotificationLog.empresa_id == empresa_id).order_by(AgentNotificationLog.enviada_en.desc()).all():
         if row.product_manager not in notified:
@@ -370,7 +410,6 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
     if not dashboard.get("ready"):
         return {"alerts": alerts, "decisions": [], "pms": pm_health, "findings": dict(findings), "runs": [], "notified": notified, "inventory": None, "filterOptions": office_filter_options(db, empresa_id)}
     margin = overview(db, empresa_id, "30d", marca=filters["marca"], seccion=filters["seccion"], product_manager=filters["pm"], articulo=filters["articulo"])
-    series = dashboard.get("serie_mensual", [])
     inventory = dashboard["inventario"]
     inventory_date = inventory.get("fecha")
     inventory_payload = None
@@ -383,23 +422,35 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
             ORDER BY ih.fecha_inventario DESC LIMIT 12
         """), {"empresa_id": empresa_id, **filters}).mappings().all()
         movement = db.execute(text(f"""
-            SELECT COALESCE(NULLIF(TRIM(p.seccion), ''), 'Sin sección') seccion, ih.inventario_eur,
-                   MAX(v.fecha_venta) last_sale
+            SELECT COALESCE(NULLIF(TRIM(p.seccion), ''), 'Sin sección') seccion,
+                   COALESCE(NULLIF(TRIM(p.product_manager), ''), 'Sin PM') product_manager,
+                   ih.inventario_eur, MAX(v.fecha_venta) last_sale
             FROM inventario_historico ih JOIN productos p ON p.id = ih.producto_id
             LEFT JOIN ventas_historicas v ON v.producto_id = p.id AND v.fecha_venta <= :inventory_date
             WHERE p.empresa_id = :empresa_id AND ih.fecha_inventario = :inventory_date {PRODUCT_FILTER_SQL}
-            GROUP BY p.seccion, ih.producto_id, ih.inventario_eur
+            GROUP BY p.seccion, p.product_manager, ih.producto_id, ih.inventario_eur
         """), {"empresa_id": empresa_id, "inventory_date": inventory_date, **filters}).mappings().all()
-        buckets = {"0-30": 0.0, "31-90": 0.0, "91-180": 0.0, ">180": 0.0}
+        buckets = {"0-30": 0.0, "31-90": 0.0, f"91-{DEAD_DAYS}": 0.0, f">{DEAD_DAYS}": 0.0}
         dead_by_category = defaultdict(float)
+        dead_by_pm = defaultdict(int)
+        weighted_days = weighted_value = 0.0
         for row in movement:
-            days = (inventory_day - _as_date(row["last_sale"])).days if row["last_sale"] else 181
-            label = "0-30" if days <= 30 else "31-90" if days <= 90 else "91-180" if days <= 180 else ">180"
-            buckets[label] += float(row["inventario_eur"] or 0)
-            if days > 180: dead_by_category[row["seccion"]] += float(row["inventario_eur"] or 0)
+            days = _days_without_sale(inventory_day, row["last_sale"])
+            value = float(row["inventario_eur"] or 0)
+            label = "0-30" if days <= 30 else "31-90" if days <= 90 else f"91-{DEAD_DAYS}" if days <= DEAD_DAYS else f">{DEAD_DAYS}"
+            buckets[label] += value
+            weighted_days += days * value
+            weighted_value += value
+            if days > DEAD_DAYS:
+                dead_by_category[row["seccion"]] += value
+                dead_by_pm[row["product_manager"]] += 1
+        for item in pm_health:
+            item["dead"] = dead_by_pm[item["id"]]
+            if item["dead"]:
+                item["issues"].append(f"{item['dead']} referencias sin venta durante más de {DEAD_DAYS} días")
         trend = [float(row["value"] or 0) for row in reversed(history)] or [float(inventory["valor_eur"])]
         previous_value = trend[-2] if len(trend) > 1 else trend[-1]
-        inventory_payload = {"valueEur": inventory["valor_eur"], "valueDelta": (inventory["valor_eur"] - previous_value) / previous_value * 100 if previous_value else 0, "units": inventory["unidades"], "unitsDelta": 0, "agingDays": 180, "agingDelta": 0, "deadEur": buckets[">180"], "deadDays": 180, "coverageDays": round(sum(item["cov"] * item["skus"] for item in pm_health) / max(1, sum(item["skus"] for item in pm_health))), "updatedAt": inventory_day, "trendEur": trend, "aging": list(buckets.items()), "deadByCat": sorted(dead_by_category.items(), key=lambda item: item[1], reverse=True)[:8]}
+        inventory_payload = {"valueEur": inventory["valor_eur"], "valueDelta": (inventory["valor_eur"] - previous_value) / previous_value * 100 if previous_value else 0, "units": inventory["unidades"], "unitsDelta": 0, "agingDays": round(weighted_days / weighted_value) if weighted_value else 0, "agingDelta": 0, "deadEur": buckets[f">{DEAD_DAYS}"], "deadDays": DEAD_DAYS, "coverageDays": round(sum(item["cov"] * item["skus"] for item in pm_health) / max(1, sum(item["skus"] for item in pm_health))), "updatedAt": inventory_day, "trendEur": trend, "aging": list(buckets.items()), "deadByCat": sorted(dead_by_category.items(), key=lambda item: item[1], reverse=True)[:8]}
     mgd_rows = db.execute(text(f"""
         SELECT COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca') category,
                COALESCE(SUM(v.ingreso_total), 0) sales, COALESCE(SUM(v.margen_destino_eur), 0) mgd
@@ -408,19 +459,28 @@ def build_office_viva_data(db: Session, empresa_id: int, *, pm: str | None = Non
         GROUP BY COALESCE(NULLIF(TRIM(p.marca), ''), 'Sin marca') ORDER BY category
     """), {"empresa_id": empresa_id, "start": dashboard["periodo_actual"]["inicio"],
              "end": dashboard["periodo_actual"]["fin"], **filters}).mappings().all()
-    sales_health, _weekly_sales, _weekly_delta, _margin_delta = _weekly_sales_health(
+    sales_health, weekly_sales, weekly_delta, _margin_delta = _weekly_sales_health(
         db, empresa_id, filters, _as_date(dashboard["periodo_actual"]["fin"]), alerts,
     )
     inventory_health = _inventory_health(inventory_payload, pm_health)
+    pm_average = round(sum(float(item["score"]) for item in pm_health) / len(pm_health)) if pm_health else None
+    run_alerts = {
+        row.run_id: db.query(AgentSignal).filter(
+            AgentSignal.empresa_id == empresa_id,
+            AgentSignal.primera_deteccion >= row.inicio,
+            AgentSignal.primera_deteccion <= row.fin,
+        ).count()
+        for row in runs
+    }
     return {
         "health": {"sales": sales_health, "inventory": inventory_health, "thresholds": [40, 70]},
-        "kpis": {"sales": {"value": dashboard["actual"]["ventas_eur"], "delta": dashboard["variacion"]["ventas_pct"], "spark": [item["ventas_eur"] for item in series]}, "stockHealth": {"value": 100 - 100 * dashboard["inventario"]["clase_a_sin_stock"] / max(1, dashboard["inventario"]["clase_a_total"]), "delta": None}, "margin": {"value": margin["actual"].get("mg_pct"), "delta": margin["variacion"].get("mg_pct"), "spark": [item["mg_pct"] or 0 for item in margin.get("serie_diaria", [])][-8:]}, "alertsSpark": []},
+        "kpis": {"sales": {"value": dashboard["actual"]["ventas_eur"], "delta": weekly_delta, "spark": weekly_sales}, "stockHealth": {"value": pm_average, "delta": None}, "margin": {"value": margin["actual"].get("mg_pct"), "delta": margin["variacion"].get("mg_pct"), "spark": [item["mg_pct"] or 0 for item in margin.get("serie_diaria", [])][-8:]}, "alertsSpark": []},
         "alerts": alerts, "pms": pm_health, "findings": dict(findings),
         "sales": [(row["entidad"], row["ventas_eur"] / 1000, row["variacion_pct"] or 0) for row in dashboard["desglose"]["filas"][:8]],
         "mgWeeks": [item["mg_pct"] or 0 for item in margin.get("serie_diaria", [])][-8:],
         "mgd": [(row["category"], float(row["mgd"] or 0) / float(row["sales"] or 1) * 100) for row in mgd_rows],
         "decisions": [{"id": str(row.id), "title": row.titulo, "why": row.descripcion, "impact": row.metrica_objetivo, "agents": ["ceo"], "status": _office_decision_status(row.estado), "owner": row.responsable, "steps": step_map[row.id]} for row in decisions],
-        "runs": [{"id": row.run_id, "start": row.inicio, "durMin": round((row.duracion_ms or 0) / 60000), "status": "ok" if row.estado == "completada" else "error", "alerts": 0} for row in runs], "notified": notified, "inventory": inventory_payload,
+        "runs": [{"id": row.run_id, "start": row.inicio, "durMin": round((row.duracion_ms or 0) / 60000), "status": "ok" if row.estado == "completada" else "error", "alerts": run_alerts[row.run_id]} for row in runs], "notified": notified, "inventory": inventory_payload,
         "filterOptions": office_filter_options(db, empresa_id), "updated_at": datetime.utcnow(),
     }
 
@@ -442,7 +502,7 @@ def dead_inventory_rows(db: Session, empresa_id: int) -> list[dict]:
     """), {"empresa_id": empresa_id, "inventory_date": inventory_day}).mappings().all()
     result = []
     for row in rows:
-        days = (inventory_day - _as_date(row["last_sale"])).days if row["last_sale"] else 181
-        if days > 180 and float(row["inventario_eur"] or 0) > 0:
+        days = _days_without_sale(inventory_day, row["last_sale"])
+        if days > DEAD_DAYS and float(row["inventario_eur"] or 0) > 0:
             result.append({"sku": row["sku"], "articulo": row["nombre"], "familia": row["family"], "product_manager": row["product_manager"], "unidades": row["unidades_inventario"], "inventario_eur": float(row["inventario_eur"] or 0), "ultima_venta": str(row["last_sale"] or "Sin ventas"), "dias_sin_venta": days})
     return sorted(result, key=lambda item: item["inventario_eur"], reverse=True)

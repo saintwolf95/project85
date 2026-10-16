@@ -144,7 +144,7 @@ def refresh_signal_links(db: Session, empresa_id: int) -> list[AgentSignalLink]:
             if days >= MIN_OVERLAP_DAYS and sku_family.get(excess.entidad_id) == family:
                 links.append(_upsert_link(db, empresa_id, excess, drop, "agrava", "R5_exceso_sobre_familia_en_caida", days, family))
 
-    for dead_stock in by_detector["stock_muerto_90d"]:
+    for dead_stock in by_detector["stock_muerto_180d"]:
         for excess in by_detector["exceso_cobertura"]:
             days = overlap_days(dead_stock, excess)
             if dead_stock.entidad_id == excess.entidad_id and days >= MIN_OVERLAP_DAYS:

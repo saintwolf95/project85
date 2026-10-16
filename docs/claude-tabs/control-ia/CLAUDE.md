@@ -1,5 +1,17 @@
 # Control IA
 
+## Fase 5 v6 — consistencia operativa y seguridad
+
+- El aging muerto usa un único umbral de más de 180 días en detector, oficina,
+  exportación y drill. `agingDays` es una media ponderada por valor, no el
+  umbral; el KPI de stock es la sanidad media de PM y ventas recibe ocho semanas.
+- El resumen del proveedor solo recibe ejecuciones ya terminadas, con duración
+  y señales nuevas reales. Las alertas de stock muerto se agrupan por PM y la
+  acción de administrador se aplica a todas las señales de ese grupo.
+- Filtros y claves de drill están acotados; el buscador de artículos no ejecuta
+  consultas de una letra. Las consultas siguen parametrizadas y aisladas por
+  `empresa_id`; no relajar CORS ni permitir `*` con credenciales.
+
 ## Fase 4 v6 — salud calculada en servidor
 
 - La respuesta de Oficina Viva entrega `health.sales` e `health.inventory`

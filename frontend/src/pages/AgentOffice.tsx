@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Mail, Volume2 } 
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
-import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, getOfficeVivaDrill, notifyAgentProductManager, runAgentAnalysis, searchOfficeVivaArticles, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
+import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, getOfficeVivaDrill, notifyAgentProductManager, runAgentAnalysis, searchOfficeVivaArticles, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert, updateOfficeVivaDeadStockAlert } from '../services/api';
 import type { AgentExecutionHistory, OfficeVivaFilters } from '../services/api';
 import OfficeViva from '../agent-office-viva/OfficeViva';
 import type { AgentId as OfficeVivaAgentId, OfficeActionName, OfficeAgentState, OfficeVivaData } from '../agent-office-viva/vendor/office-viva';
@@ -178,7 +178,12 @@ export const AgentOffice = () => {
   const onOfficeAction = async (name: OfficeActionName, payload: Record<string, unknown>) => {
     if (name === 'alert.update') {
       const patch = (payload.patch || {}) as { status?: 'abierta' | 'reconocida' | 'resuelta'; owner?: string; feedback?: 'util' | 'no_util' | null };
-      await updateOfficeVivaAlert(String(payload.id), patch);
+      const alertId = String(payload.id);
+      if (alertId.startsWith('dead-stock:')) {
+        await updateOfficeVivaDeadStockAlert(alertId.slice('dead-stock:'.length), patch);
+      } else {
+        await updateOfficeVivaAlert(alertId, patch);
+      }
     } else if (name === 'decision.update') {
       const patch = (payload.patch || {}) as Record<string, unknown>;
       const status = patch.status === 'hecha' ? 'completada' : patch.status === 'rechazada' ? 'descartada' : patch.status;

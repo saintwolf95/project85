@@ -135,6 +135,7 @@ def ensure_agent_signals_schema() -> None:
                 WHEN 'concentracion_clientes' THEN 'en_riesgo'
                 WHEN 'exceso_cobertura' THEN 'capital'
                 WHEN 'stock_muerto_90d' THEN 'capital'
+                WHEN 'stock_muerto_180d' THEN 'capital'
                 ELSE 'en_riesgo'
             END
         """))
@@ -351,7 +352,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.98.0",
+    version="1.99.0",
     lifespan=lifespan
 )
 
@@ -415,6 +416,9 @@ async def add_security_headers(request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     return response
 
 DEFAULT_CORS_ORIGINS = (
@@ -432,6 +436,8 @@ CORS_ORIGINS = [
     for origin in os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS)).split(",")
     if origin.strip()
 ]
+if "*" in CORS_ORIGINS:
+    raise RuntimeError("CORS_ORIGINS no puede contener '*' cuando se usan credenciales.")
 
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")

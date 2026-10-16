@@ -2162,6 +2162,12 @@ function createMockData() {
     ].map((d) => ({ id: id('dc'), ...d })),
     runs: [0, 1, 2, 3, 4].map((i) => ({ id: id('rn'), start: new Date(now - (i + 1) * 86400e3 + 3600e3 * 0.3), durMin: 6 + (i * 3) % 4, status: i === 2 ? 'error' : 'ok', alerts: [4, 3, 1, 5, 2][i] })),
     kpis: { sales: { value: 1284000, delta: 3.4, spark: [1.08, 1.15, 1.12, 1.19, 1.17, 1.22, 1.24, 1.28] }, stockHealth: { delta: -3, spark: [74, 72, 70, 71, 68, 66, 65, 62] }, margin: { delta: 0.6 }, alertsSpark: [3, 5, 4, 6, 8, 7, 9, 11] },
+    filterOptions: {
+      pm: ['Droguería y limpieza', 'Bazar y hogar', 'Frescos y refrigerados', 'Alimentación seca', 'Bebidas', 'Perfumería'],
+      seccion: ['Bazar y hogar', 'Alimentación seca', 'Droguería', 'Perfumería', 'Bebidas', 'Frescos'],
+      marca: ['Marca A', 'Marca B', 'Marca C', 'Marca D', 'Marca E'],
+      articulo: Array.from({ length: 120 }, (_, i) => ({ value: `ART-${10400 + i}`, label: `ART-${10400 + i} ${['Cable USB-C', 'Funda', 'Cargador', 'Soporte', 'Hub', 'Ratón'][i % 6]}` })),
+    },
     notified: {},
     inventory: {
       valueEur: 4820000, valueDelta: -1.8, units: 1236400, unitsDelta: -0.9, agingDays: 47, agingDelta: 2,
@@ -2307,17 +2313,21 @@ function renderMenu() {
   const r = { resumen: viewResumen, almacen: viewAlmacen, alertas: viewAlertas, decisiones: viewDecisiones, historial: viewHistorial }[curTab];
   body.innerHTML = r ? r() : viewAgent(curTab);
   body.scrollTop = 0;
+  animateGauges();
 }
 tabsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { curTab = b.dataset.tab; renderMenu(); if (AG[curTab]) emote(AG[curTab], 'smile'); } });
 
 /* ---------- piezas de interfaz ---------- */
 const AGENT_COL = (id) => AG[id]?.color || '#6c6584';
 const chipFor = (a) => `<span class="chip ${a.real.status}">${esc(stateText(a))}</span>`;
-function barsHTML(title, rows, { unit = '', digits = 0, max, colorFn } = {}) {
+function barsHTML(title, rows, { unit = '', digits = 0, max, colorFn, chart, drillTitle } = {}) {
   const m = max ?? Math.max(...rows.map((r) => Math.abs(r[1])), 1);
+  const total = rows.reduce((t, r) => t + (r[1] > 0 ? r[1] : 0), 0);
   return `<h4>${esc(title)}</h4><div class="chart">${rows.map(([l, v]) => {
     const col = colorFn ? colorFn(v) : 'var(--blue)';
-    return `<div class="row"><span>${esc(l)}</span><div class="track"><div class="fill" style="width:${Math.round(Math.abs(v) / m * 100)}%;background:${col}"></div></div><span class="val">${v > 0 && unit.includes('pp') ? '+' : ''}${fmtNum(v, digits)}${unit}</span></div>`;
+    const share = total > 0 && v > 0 && !unit.includes('%') && !unit.includes('d') ? `\n${fmtNum(v / total * 100)} % del total` : '';
+    const tip = `${l}: ${fmtNum(v, digits)}${unit}${share}${chart ? '\nPulsa para ver el detalle' : ''}`;
+    return `<div class="row" data-tip="${esc(tip)}"${chart ? ` data-drill="${esc(JSON.stringify({ chart, key: l, value: v, unit, title: drillTitle || title }))}" tabindex="0" role="button"` : ''}><span>${esc(l)}</span><div class="track"><div class="fill" style="width:${Math.round(Math.abs(v) / m * 100)}%;background:${col}"></div></div><span class="val">${v > 0 && unit.includes('pp') ? '+' : ''}${fmtNum(v, digits)}${unit}</span></div>`;
   }).join('')}</div>`;
 }
 const scoreCol = (v) => (v >= 75 ? 'var(--ok)' : v >= 55 ? 'var(--warn)' : 'var(--err)');
@@ -2354,6 +2364,207 @@ function questHTML(d) {
   </article>`;
 }
 
+/* ---------- salud: velocímetros ---------- */
+const TH = () => DATA.state.health?.thresholds || [40, 70];
+const zoneOf = (s) => (s >= TH()[1] ? 'ok' : s >= TH()[0] ? 'warn' : 'err');
+const ZONE_TXT = { ok: 'Saludable', warn: 'Vigilar', err: 'En riesgo' };
+const ZONE_COL = { ok: '#22a86f', warn: '#e8962a', err: '#e5484d' };
+const lin = (v, a, b) => clamp(((v - a) / (b - a)) * 100, 0, 100);
+function finalizeHealth(comps) {
+  const ok = comps.filter((c) => c.score != null && Number.isFinite(c.score));
+  if (!ok.length) return null;
+  const w = ok.reduce((t, c) => t + c.weight, 0);
+  return { score: Math.round(ok.reduce((t, c) => t + c.score * c.weight, 0) / w), components: ok.map((c) => ({ ...c, weight: c.weight / w })) };
+}
+function inventoryHealth() {
+  const H = DATA.state.health?.inventory; if (H && H.score != null) return H;
+  const inv = DATA.state.inventory, pms = DATA.state.pms, comps = [];
+  if (inv) {
+    const cov = inv.coverageDays;
+    if (cov != null) comps.push({ label: 'Cobertura', value: `${fmtNum(cov, 0)} días`, score: cov < 20 ? lin(cov, 0, 20) : cov <= 45 ? 100 : lin(cov, 120, 45), weight: 0.3, tab: 'almacen', hint: 'Ideal entre 20 y 45 días. Por debajo hay riesgo de rotura; por encima, capital inmovilizado.' });
+    if (inv.valueEur) { const dp = inv.deadEur / inv.valueEur * 100; comps.push({ label: `Aging muerto (>${inv.deadDays} d)`, value: `${fmtNum(dp)} %`, score: lin(dp, 15, 0), weight: 0.3, tab: 'almacen', drill: 'deadByCat', hint: '0 % del valor = 100 puntos; 15 % o más = 0 puntos.' }); }
+    const tot = (inv.aging || []).reduce((t, a) => t + a[1], 0);
+    if (tot) { const fr = inv.aging[0][1] / tot * 100; comps.push({ label: 'Stock de menos de 30 días', value: `${fmtNum(fr, 0)} %`, score: lin(fr, 20, 60), weight: 0.2, tab: 'almacen', hint: '60 % o más del valor con menos de 30 días = 100 puntos; 20 % o menos = 0.' }); }
+  }
+  if (pms.length) { const avg = pms.reduce((t, x) => t + x.score, 0) / pms.length; comps.push({ label: 'Sanidad media de PM', value: `${fmtNum(avg, 0)}/100`, score: avg, weight: 0.2, tab: 'maria', hint: 'Media de la salud de las carteras de PM que revisa María.' }); }
+  return finalizeHealth(comps);
+}
+function salesHealth() {
+  const H = DATA.state.health?.sales; if (H && H.score != null) return H;
+  const K = DATA.state.kpis || {}, comps = [];
+  if (K.sales?.delta != null) comps.push({ label: 'Variación semanal de ventas', value: `${K.sales.delta >= 0 ? '+' : ''}${fmtNum(K.sales.delta)} %`, score: lin(K.sales.delta, -10, 10), weight: 0.35, tab: 'lucia', hint: '−10 % o peor = 0 puntos; sin cambio = 50; +10 % o mejor = 100.' });
+  const sp = K.sales?.spark;
+  if (sp && sp.length >= 3 && sp[0]) { const ch = (sp.at(-1) - sp[0]) / Math.abs(sp[0]) * 100; comps.push({ label: `Tendencia ${sp.length} semanas`, value: `${ch >= 0 ? '+' : ''}${fmtNum(ch)} %`, score: lin(ch, -15, 15), weight: 0.25, tab: 'lucia', hint: 'Cambio entre la primera y la última semana: −15 % = 0 puntos; +15 % = 100.' }); }
+  if (K.margin?.delta != null) comps.push({ label: 'Evolución del margen bruto', value: `${K.margin.delta >= 0 ? '+' : ''}${fmtNum(K.margin.delta)} pts`, score: lin(K.margin.delta, -2, 2), weight: 0.2, tab: 'mattia', hint: '−2 puntos o peor = 0; +2 puntos o mejor = 100.' });
+  const al = DATA.state.alerts.filter((a) => a.agent === 'lucia' && a.sev === 'alta' && a.status !== 'resuelta').length;
+  if (DATA.state.alerts.length) comps.push({ label: 'Alertas altas de ventas abiertas', value: String(al), score: lin(al, 10, 0), weight: 0.2, tab: 'alertas', hint: 'Ninguna = 100 puntos; 10 o más = 0.' });
+  return finalizeHealth(comps);
+}
+const HEALTH = { sales: { title: 'Salud de ventas', fn: salesHealth }, inventory: { title: 'Salud del inventario', fn: inventoryHealth } };
+function gaugeSVG(score, id) {
+  const R = 118, cx = 150, cy = 150, [t1, t2] = TH();
+  const pt = (s, r = R) => { const a = Math.PI * (1 - s / 100); return [cx + r * Math.cos(a), cy - r * Math.sin(a)]; };
+  const arc = (a, b, r = R) => { const [x0, y0] = pt(a, r), [x1, y1] = pt(b, r); return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+  const seg = (a, b, col, z) => `<path class="g-seg" d="${arc(a, b)}" stroke="${col}" stroke-width="24" fill="none" data-tip="${esc(`Zona ${z === 'err' ? 'roja' : z === 'warn' ? 'amarilla' : 'verde'} (${a}-${b}): ${ZONE_TXT[z].toLowerCase()}`)}"/>`;
+  const ticks = [0, 25, 50, 75, 100].map((s) => { const [x0, y0] = pt(s, R - 18), [x1, y1] = pt(s, R - 26); return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="var(--muted)" stroke-width="3"/>`; }).join('');
+  return `<svg viewBox="0 0 300 172" role="img" aria-label="Indicador ${score} sobre 100">
+    <path d="${arc(0, 100)}" stroke="var(--line)" stroke-width="32" fill="none"/>
+    ${seg(0, t1, '#e5484d', 'err')}${seg(t1, t2, '#e8962a', 'warn')}${seg(t2, 100, '#22a86f', 'ok')}${ticks}
+    <text x="22" y="170" font-size="13" font-weight="800" fill="var(--muted)">0</text><text x="266" y="170" font-size="13" font-weight="800" fill="var(--muted)">100</text>
+    <g class="g-needle" data-to="${(score / 100) * 180}" style="transform:rotate(0deg)" data-tip="${esc(`Puntuación: ${score}/100 · ${ZONE_TXT[zoneOf(score)]}`)}">
+      <polygon points="${cx},${cy - 7} ${cx - R + 26},${cy} ${cx},${cy + 7}" fill="var(--ink)"/>
+    </g>
+    <circle cx="${cx}" cy="${cy}" r="12" fill="var(--panel)" stroke="var(--line)" stroke-width="4"/>
+  </svg>`;
+}
+function gaugeHTML(kind) {
+  const h = HEALTH[kind].fn(), title = HEALTH[kind].title;
+  if (!h) return `<div class="box gauge"><div><h3>${title}</h3><p class="empty">Sin datos suficientes para calcularla.</p></div></div>`;
+  const z = zoneOf(h.score);
+  return `<div class="box gauge"><div class="g-dial" data-gauge="${kind}" tabindex="0" role="button" aria-label="${title}: ${h.score} sobre 100. Ver cómo se calcula">${gaugeSVG(h.score, kind)}</div>
+    <div class="g-side"><h3>${title} <small>${h.components.length} factores</small></h3>
+      <div class="g-score"><strong style="color:${ZONE_COL[z]}">${h.score}</strong><span>/100</span><span class="chip ${z === 'ok' ? 'done' : z === 'err' ? 'error' : 'warnc'}">${ZONE_TXT[z]}</span></div>
+      <div class="g-comp">${h.components.map((c) => `<div class="g-row" data-tip="${esc(`${c.label}: ${c.value}\n${c.hint || ''}\nPeso ${Math.round(c.weight * 100)} % · ${Math.round(c.score)} puntos`)}" ${c.tab || c.drill ? `data-act="${c.drill ? 'drillc' : 'tab'}" data-id="${c.drill || c.tab}" tabindex="0" role="button"` : ''}>
+        <span>${esc(c.label)}</span><span class="g-mini"><i style="width:${Math.round(c.score)}%;background:${ZONE_COL[zoneOf(c.score)]}"></i></span><b>${esc(c.value)}</b></div>`).join('')}</div>
+      <button class="btn sm" data-gauge="${kind}">Cómo se calcula</button></div></div>`;
+}
+function animateGauges() {
+  requestAnimationFrame(() => requestAnimationFrame(() => ROOT.querySelectorAll('.g-needle').forEach((n) => { n.style.transform = `rotate(${n.dataset.to}deg)`; })));
+}
+
+/* ---------- tooltip global ---------- */
+const tipEl = $('tip');
+let tipOwner = null;
+function placeTip(e) {
+  const r = ROOT.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let x = e.clientX - r.left + 14, y = e.clientY - r.top + 16;
+  if (x + w > r.width - 8) x = e.clientX - r.left - w - 12;
+  if (y + h > r.height - 8) y = e.clientY - r.top - h - 12;
+  tipEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+}
+ROOT.addEventListener('pointerover', (e) => {
+  const t = e.target.closest?.('[data-tip]');
+  if (!t || !ROOT.contains(t)) return;
+  tipOwner = t; tipEl.textContent = t.getAttribute('data-tip'); tipEl.classList.add('show'); placeTip(e);
+});
+ROOT.addEventListener('pointermove', (e) => { if (tipOwner) placeTip(e); });
+ROOT.addEventListener('pointerout', (e) => { if (tipOwner && !tipOwner.contains(e.relatedTarget)) { tipOwner = null; tipEl.classList.remove('show'); } });
+ROOT.addEventListener('focusin', (e) => {
+  const t = e.target.closest?.('[data-tip]'); if (!t) return;
+  const b = t.getBoundingClientRect(), r = ROOT.getBoundingClientRect();
+  tipOwner = t; tipEl.textContent = t.getAttribute('data-tip'); tipEl.classList.add('show');
+  tipEl.style.transform = `translate(${Math.round(b.left - r.left)}px, ${Math.round(b.bottom - r.top + 8)}px)`;
+});
+ROOT.addEventListener('focusout', () => { tipOwner = null; tipEl.classList.remove('show'); });
+
+/* ---------- ventana de detalle (desglose) ---------- */
+const pop = $('pop'), popBody = $('popBody');
+const CHART_DIM = { pmHealth: 'pm', pmCov: 'pm', deadByCat: 'seccion', mgd: 'seccion', ...(OPT.chartDims || {}) };
+let popReturn = null;
+function closePop() { pop.hidden = true; popReturn?.focus?.(); }
+$('popClose').addEventListener('click', closePop);
+pop.addEventListener('click', (e) => { if (e.target === pop) closePop(); });
+pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closePop(); } });
+function openPopHTML(html) { popReturn = document.activeElement; popBody.innerHTML = html; pop.hidden = false; $('popClose').focus(); }
+function showGaugePop(kind) {
+  const h = HEALTH[kind].fn(); if (!h) return;
+  const [t1, t2] = TH(), z = zoneOf(h.score);
+  openPopHTML(`<h3 id="popTitle" class="pop-title">${HEALTH[kind].title}: <span style="color:${ZONE_COL[z]}">${h.score}/100</span> · ${ZONE_TXT[z]}</h3>
+    <p class="note" style="margin-top:4px">Media ponderada de ${h.components.length} factores. Zonas: rojo 0-${t1}, amarillo ${t1}-${t2}, verde ${t2}-100.</p>
+    <table><thead><tr><th>Factor</th><th>Valor</th><th>Peso</th><th>Puntos</th><th>Aporta</th></tr></thead><tbody>
+    ${h.components.map((c) => `<tr><td><b>${esc(c.label)}</b><br><small class="muted">${esc(c.hint || '')}</small></td><td>${esc(c.value)}</td><td>${Math.round(c.weight * 100)} %</td><td><span class="score"><span class="track"><span class="fill" style="width:${Math.round(c.score)}%;background:${ZONE_COL[zoneOf(c.score)]}"></span></span><b>${Math.round(c.score)}</b></span></td><td>${fmtNum(c.score * c.weight, 1)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="a-act" style="grid-column:auto;margin-top:12px">${[...new Set(h.components.map((c) => c.tab).filter(Boolean))].map((t) => `<button class="btn sm" data-act="tab" data-id="${t}">Ir a ${esc(TABS.find((x) => x.id === t)?.label || AG[t]?.name || t)}</button>`).join('')}</div>`);
+}
+async function showDrill(d) {
+  const dim = CHART_DIM[d.chart], dimDef = FILTER_DIMS.find((f) => f.key === dim);
+  const head = `<h3 id="popTitle" class="pop-title">${esc(d.title || 'Detalle')}: ${esc(d.key)}</h3>
+    <p class="note" style="margin-top:4px">Valor: <b>${fmtNum(d.value, d.unit === ' M€' ? 2 : 0)}${esc(d.unit || '')}</b>${Object.keys(FILT).length ? ` · Con filtros: ${esc(filterText())}` : ''}</p>`;
+  const actions = `<div class="a-act" style="grid-column:auto;margin-top:12px">${dimDef ? `<button class="btn sm primary" data-pact="filter" data-dim="${dim}" data-val="${esc(d.key)}">Filtrar por ${esc(dimDef.label)}: ${esc(d.key)}</button>` : ''}<button class="btn sm" data-pact="close">Cerrar</button></div>`;
+  openPopHTML(head + '<div id="drillRows"><p class="empty">Cargando detalle…</p></div>' + actions);
+  let res = null;
+  try { res = OPT.onDrill ? await OPT.onDrill({ chart: d.chart, key: d.key, filters: { ...FILT } }) : OPT.demo ? demoDrill(d) : null; } catch (err) { OPT.onError?.(err); }
+  const box = $('drillRows'); if (!box) return;
+  if (!res || !res.rows?.length) { box.innerHTML = '<p class="empty">No hay más detalle disponible para este punto.</p>'; return; }
+  box.innerHTML = `${res.title ? `<h4>${esc(res.title)}</h4>` : ''}` + barsHTML(res.subtitle || 'Desglose', res.rows.map((r) => [r.label, r.value]), { unit: res.unit || '', digits: res.digits ?? 0, colorFn: () => 'var(--blue)' })
+    + (res.rows.some((r) => r.sub) ? `<p class="note">${res.rows.filter((r) => r.sub).slice(0, 3).map((r) => `${esc(r.label)}: ${esc(r.sub)}`).join(' · ')}</p>` : '');
+}
+pop.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pact]'); if (!b) return;
+  if (b.dataset.pact === 'close') closePop();
+  if (b.dataset.pact === 'filter') { FILT[b.dataset.dim] = b.dataset.val; closePop(); applyFilters(); }
+});
+function demoDrill(d) {
+  seed = Math.abs([...String(d.key)].reduce((h, c) => h * 31 + c.charCodeAt(0), 7)) % 2147483646 + 1;
+  const n = 6, parts = Array.from({ length: n }, () => 0.3 + srand()); const tot = parts.reduce((a, b) => a + b, 0);
+  const base = Math.abs(d.value) || 100;
+  return { title: 'Artículos que más pesan', subtitle: `Top ${n} artículos`, unit: d.unit || '', digits: d.unit === ' M€' ? 2 : 0,
+    rows: parts.map((p, i) => ({ label: `ART-${10400 + Math.floor(srand() * 900)} ${['Cable USB-C', 'Funda', 'Cargador', 'Soporte', 'Hub', 'Ratón'][i % 6]}`, value: Math.round(base * p / tot * 100) / 100, sub: `${Math.floor(20 + srand() * 300)} días sin venta` })).sort((a, b) => b.value - a.value) };
+}
+
+/* ---------- filtros por dimensión ---------- */
+const FILTER_DIMS = OPT.filters || [{ key: 'pm', label: 'PM' }, { key: 'seccion', label: 'Sección' }, { key: 'marca', label: 'Marca' }, { key: 'articulo', label: 'Artículo', search: true }];
+let FILT = {};
+const fbar = $('fbar'), fToggle = $('fToggle'), fCount = $('fCount');
+const optList = (key) => (DATA.state.filterOptions?.[key] || []).map((o) => (typeof o === 'string' ? { value: o, label: o } : o));
+const filterText = () => FILTER_DIMS.filter((d) => FILT[d.key]).map((d) => `${d.label}: ${optList(d.key).find((o) => o.value === FILT[d.key])?.label || FILT[d.key]}`).join(' · ');
+function renderFilters() {
+  fbar.innerHTML = `${FILTER_DIMS.map((d) => d.search
+    ? `<label>${esc(d.label)}<input type="search" data-fdim="${d.key}" list="fl-${d.key}" placeholder="Buscar ${esc(d.label.toLowerCase())}…" value="${esc(FILT[d.key] || '')}" autocomplete="off"><datalist id="fl-${d.key}">${optList(d.key).slice(0, 200).map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}</datalist></label>`
+    : `<label>${esc(d.label)}<select data-fdim="${d.key}"><option value="">Todos</option>${optList(d.key).map((o) => `<option value="${esc(o.value)}" ${FILT[d.key] === o.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`).join('')}
+    <div class="f-actions"><button class="btn sm primary" data-fact="apply">Aplicar</button><button class="btn sm" data-fact="clear">Limpiar</button></div>
+    ${Object.keys(FILT).length ? `<div class="fchips">${FILTER_DIMS.filter((d) => FILT[d.key]).map((d) => `<button class="chip fchip" data-fact="drop" data-dim="${d.key}" aria-label="Quitar filtro ${esc(d.label)}">${esc(d.label)}: ${esc(optList(d.key).find((o) => o.value === FILT[d.key])?.label || FILT[d.key])} ✕</button>`).join('')}</div>` : ''}`;
+  const n = Object.keys(FILT).length;
+  fCount.hidden = !n; fCount.textContent = n === 1 ? '1 filtro activo' : `${n} filtros activos`;
+  fToggle.textContent = fbar.hidden ? 'Filtros' : 'Ocultar filtros';
+}
+fToggle.addEventListener('click', () => { fbar.hidden = !fbar.hidden; fToggle.setAttribute('aria-expanded', String(!fbar.hidden)); renderFilters(); if (!fbar.hidden) fbar.querySelector('select,input')?.focus(); });
+fbar.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-fact]'); if (!b) return;
+  if (b.dataset.fact === 'apply') { FILT = {}; fbar.querySelectorAll('[data-fdim]').forEach((el) => { if (el.value) FILT[el.dataset.fdim] = el.value; }); applyFilters(); }
+  if (b.dataset.fact === 'clear') { FILT = {}; applyFilters(); }
+  if (b.dataset.fact === 'drop') { delete FILT[b.dataset.dim]; applyFilters(); }
+});
+fbar.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-fdim]')) { e.preventDefault(); fbar.querySelector('[data-fact="apply"]').click(); } });
+let searchT = 0;
+fbar.addEventListener('input', (e) => {
+  const el = e.target; if (!el.matches('input[data-fdim]') || !OPT.onFilterSearch) return;
+  clearTimeout(searchT);
+  searchT = setTimeout(async () => {
+    try {
+      const opts = await OPT.onFilterSearch(el.dataset.fdim, el.value);
+      const dl = $(`fl-${el.dataset.fdim}`);
+      if (dl) dl.innerHTML = (opts || []).slice(0, 200).map((o) => (typeof o === 'string' ? { value: o, label: o } : o)).map((o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('');
+    } catch (err) { OPT.onError?.(err); }
+  }, 250);
+});
+function applyFilters() {
+  renderFilters();
+  feed(Object.keys(FILT).length ? `Filtros: ${filterText()}` : 'Sin filtros');
+  if (OPT.demo) demoApplyFilters();
+  try { OPT.onFilterChange?.({ ...FILT }); } catch (err) { OPT.onError?.(err); }
+  renderVineta(); refreshMenu();
+}
+let demoBase = null;
+function demoApplyFilters() {
+  const st = DATA.state;
+  if (!demoBase) demoBase = structuredClone({ kpis: st.kpis, inventory: st.inventory, pms: st.pms, sales: st.sales, mgd: st.mgd });
+  const b = structuredClone(demoBase), keys = Object.keys(FILT);
+  if (keys.length) {
+    seed = Math.abs([...JSON.stringify(FILT)].reduce((h, c) => h * 31 + c.charCodeAt(0), 7)) % 2147483646 + 1;
+    const f = 0.15 + srand() * 0.5;
+    b.kpis.sales.value = Math.round(b.kpis.sales.value * f); b.kpis.sales.delta = Math.round((srand() * 24 - 12) * 10) / 10;
+    b.kpis.sales.spark = b.kpis.sales.spark.map((v) => v * f * (0.85 + srand() * 0.3));
+    b.kpis.margin.delta = Math.round((srand() * 4 - 2) * 10) / 10;
+    for (const k of ['valueEur', 'units', 'deadEur']) b.inventory[k] = Math.round(b.inventory[k] * f);
+    b.inventory.trend = b.inventory.trend.map((v) => v * f); b.inventory.aging = b.inventory.aging.map(([l, v, c]) => [l, v * f * (0.6 + srand() * 0.8), c]);
+    b.inventory.coverageDays = Math.round(10 + srand() * 80); b.inventory.deadByCat = b.inventory.deadByCat.map(([l, v]) => [l, Math.round(v * f)]);
+    if (FILT.pm) b.pms = b.pms.filter((x) => x.name === FILT.pm);
+    b.sales = b.sales.map(([l, v, d]) => [l, Math.round(v * f), Math.round((d + srand() * 6 - 3) * 10) / 10]);
+  }
+  Object.assign(st, b);
+}
+
 /* ---------- pestañas ---------- */
 function viewResumen() {
   const s = DATA.state, open = openAlerts();
@@ -2361,14 +2572,15 @@ function viewResumen() {
   const pmScore = s.pms.length ? Math.round(s.pms.reduce((t, p) => t + p.score, 0) / s.pms.length) : null;
   const health = K.stockHealth?.value ?? pmScore, margin = K.margin?.value ?? s.mgWeeks.at(-1);
   const kpis = [
-    { tab: 'lucia', l: 'Ventas de la semana', v: K.sales ? fmtEur(K.sales.value) : '—', d: K.sales?.delta ?? null, sp: normSpark(K.sales?.spark) },
-    { tab: 'maria', l: 'Salud del stock', v: health != null ? `${Math.round(health)}/100` : '—', d: K.stockHealth?.delta ?? null, sp: normSpark(K.stockHealth?.spark) },
-    { tab: 'mattia', l: 'Margen bruto', v: margin != null ? `${fmtNum(margin)} %` : '—', d: K.margin?.delta ?? null, sp: normSpark(K.margin?.spark || s.mgWeeks) },
-    { tab: 'alertas', l: 'Alertas abiertas', v: String(open), d: null, sp: normSpark(K.alertsSpark) },
+    { tab: 'lucia', l: 'Ventas de la semana', v: K.sales ? fmtEur(K.sales.value) : '—', d: K.sales?.delta ?? null, sp: normSpark(K.sales?.spark), raw: K.sales?.spark },
+    { tab: 'maria', l: 'Sanidad media de PM', v: health != null ? `${Math.round(health)}/100` : '—', d: K.stockHealth?.delta ?? null, sp: normSpark(K.stockHealth?.spark), raw: K.stockHealth?.spark },
+    { tab: 'mattia', l: 'Margen bruto', v: margin != null ? `${fmtNum(margin)} %` : '—', d: K.margin?.delta ?? null, sp: normSpark(K.margin?.spark || s.mgWeeks), raw: K.margin?.spark || s.mgWeeks },
+    { tab: 'alertas', l: 'Alertas abiertas', v: String(open), d: null, sp: normSpark(K.alertsSpark), raw: K.alertsSpark },
   ];
   const urgent = s.alerts.filter((a) => a.status !== 'resuelta' && a.sev === 'alta').slice(0, 4);
   const last = s.runs[0];
-  return `<div class="grid g4">${kpis.map((k) => `<button class="box kpi" data-act="tab" data-id="${k.tab}"><div class="l">${esc(k.l)}</div><div class="v">${esc(k.v)}</div>${k.d === null ? '<span class="delta">&nbsp;</span>' : `<span class="delta ${k.d >= 0 ? 'up' : 'down'}">${k.d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(k.d))}${k.tab === 'maria' ? ' pts' : ' %'} vs semana anterior</span>`}<div class="spark">${k.sp.map((v) => `<i style="height:${v}%"></i>`).join('')}</div></button>`).join('')}</div>
+  return `<div class="grid g2 gauges">${gaugeHTML('sales')}${gaugeHTML('inventory')}</div>
+  <div class="grid g4">${kpis.map((k) => `<button class="box kpi" data-act="tab" data-id="${k.tab}" data-tip="${esc(`${k.l}: ${k.v}${k.d != null ? ` (${k.d >= 0 ? '+' : ''}${fmtNum(k.d)} vs semana anterior)` : ''}\nPulsa para abrir su pestaña`)}"><div class="l">${esc(k.l)}</div><div class="v">${esc(k.v)}</div>${k.d === null ? '<span class="delta">&nbsp;</span>' : `<span class="delta ${k.d >= 0 ? 'up' : 'down'}">${k.d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(k.d))}${k.tab === 'maria' ? ' pts' : ' %'} vs semana anterior</span>`}<div class="spark">${k.sp.map((v, i) => `<i style="height:${v}%" data-tip="${esc(`${k.l}, semana ${i - k.sp.length + 1 || 'actual'}${k.raw && k.raw[i] != null ? `: ${fmtNum(k.raw[i], 2)}` : ''}`)}"></i>`).join('')}</div></button>`).join('')}</div>
   <div class="grid g2" style="margin-top:14px">
     <div class="box"><h3>Lo más urgente <small>${urgent.length} de prioridad alta</small></h3>${urgent.length ? `<ul class="alerts">${urgent.map((a) => alertHTML(a, true)).join('')}</ul>` : '<p class="empty">No hay alertas de prioridad alta. Buen trabajo.</p>'}</div>
     <div class="grid" style="align-content:start">
@@ -2382,9 +2594,9 @@ function viewAgent(id) {
   const a = AG[id], s = DATA.state, al = s.alerts.filter((x) => x.agent === id);
   const openN = al.filter((x) => x.status !== 'resuelta').length;
   let stats = '';
-  if (id === 'maria') stats = barsHTML('Salud del stock por PM (0-100)', s.pms.map((p) => [p.name, p.score]), { max: 100, colorFn: (v) => scoreCol(v) }) + barsHTML('Cobertura media (días)', s.pms.map((p) => [p.name, p.cov]), { unit: ' d', colorFn: (v) => (v < 7 ? 'var(--err)' : v > 35 ? 'var(--warn)' : 'var(--ok)') });
-  if (id === 'lucia') stats = barsHTML('Ventas por cadena (miles de €)', s.sales.map((r) => [r[0], r[1]])) + barsHTML('Variación frente a la semana anterior', s.sales.map((r) => [r[0], r[2]]), { unit: ' %', digits: 1, colorFn: (v) => (v < 0 ? 'var(--err)' : 'var(--ok)') });
-  if (id === 'mattia') stats = `<h4>Margen bruto, últimas 8 semanas</h4><div class="spark" style="height:70px">${normSpark(s.mgWeeks).map((h, i) => `<i style="height:${h}%" title="${fmtNum(s.mgWeeks[i])} %"></i>`).join('')}</div>` + barsHTML('MGD por categoría', s.mgd, { unit: ' %', digits: 1, max: 35, colorFn: (v) => (v < 17 ? 'var(--warn)' : 'var(--ok)') });
+  if (id === 'maria') stats = barsHTML('Salud del stock por PM (0-100)', s.pms.map((p) => [p.name, p.score]), { max: 100, colorFn: (v) => scoreCol(v), chart: 'pmHealth' }) + barsHTML('Cobertura media (días)', s.pms.map((p) => [p.name, p.cov]), { chart: 'pmCov', unit: ' d', colorFn: (v) => (v < 7 ? 'var(--err)' : v > 35 ? 'var(--warn)' : 'var(--ok)') });
+  if (id === 'lucia') stats = barsHTML('Ventas por cadena (miles de €)', s.sales.map((r) => [r[0], r[1]]), { chart: 'sales' }) + barsHTML('Variación frente a la semana anterior', s.sales.map((r) => [r[0], r[2]]), { chart: 'salesDelta', unit: ' %', digits: 1, colorFn: (v) => (v < 0 ? 'var(--err)' : 'var(--ok)') });
+  if (id === 'mattia') stats = `<h4>Margen bruto, últimas 8 semanas</h4><div class="spark" style="height:70px">${normSpark(s.mgWeeks).map((h, i) => `<i style="height:${h}%" data-tip="${esc(`Semana ${i - s.mgWeeks.length + 1 || 'actual'}: ${fmtNum(s.mgWeeks[i])} % de margen bruto`)}"></i>`).join('')}</div>` + barsHTML('MGD por categoría', s.mgd, { chart: 'mgd', unit: ' %', digits: 1, max: 35, colorFn: (v) => (v < 17 ? 'var(--warn)' : 'var(--ok)') });
   if (id === 'ceo') stats = barsHTML('Alertas abiertas por agente', AG_LIST.map((x) => [x.name, openAlerts(x.id)]), { colorFn: () => 'var(--blue)' }) + barsHTML('Decisiones por estado', [['Propuestas', 'propuesta'], ['Aceptadas', 'aceptada'], ['En curso', 'en_curso'], ['Hechas', 'hecha']].map(([l, k]) => [l, s.decisions.filter((d) => d.status === k).length]), { colorFn: () => 'var(--ok)' });
   const pmTable = id !== 'maria' ? '' : `<div class="box" style="margin-top:14px"><h3>Sanidad del stock por PM <small>Revisión de María en el último análisis</small></h3>
     <div style="overflow-x:auto"><table><thead><tr><th>Cartera del PM</th><th>Salud</th><th>Referencias</th><th>Cobertura</th><th>Roturas</th><th>Sobrestock</th><th>Sin venta 90 d</th><th></th></tr></thead><tbody>
@@ -2395,6 +2607,7 @@ function viewAgent(id) {
   const ceoBox = id !== 'ceo' ? '' : `<div class="box" style="margin-top:14px"><h3>Decisiones propuestas <small>${s.decisions.filter((d) => d.status === 'propuesta').length} pendientes</small></h3><div class="grid g2">${s.decisions.filter((d) => d.status === 'propuesta' || d.status === 'aceptada').map(questHTML).join('') || '<p class="empty">Nada pendiente.</p>'}</div></div>`;
   return `<div class="agent-head"><img alt="" src="${portrait(a, 64)}"><div class="grow"><h3>${esc(a.name)}</h3><div class="role">${esc(a.role)}</div></div>${chipFor(a)}
       <button class="btn" data-act="chat" data-id="${id}">Hablar con ${esc(a.name)}</button><button class="btn" data-act="exp" data-id="${id}">${id === 'ceo' ? 'Informe ejecutivo' : 'Ver expediente'}</button></div>
+    ${id === 'lucia' ? `<div class="grid g2 gauges">${gaugeHTML('sales')}<div class="box"><h3>Ventas, últimas semanas <small>pasa el ratón por cada barra</small></h3>${(() => { const sp = s.kpis?.sales?.spark || []; return sp.length ? `<div class="spark" style="height:150px">${normSpark(sp).map((h, i) => `<i style="height:${h}%" data-tip="${esc(`${i === sp.length - 1 ? 'Esta semana' : `Hace ${sp.length - 1 - i} semanas`}: ${fmtNum(sp[i], 2)}${i ? `\n${sp[i] >= sp[i - 1] ? '▲' : '▼'} ${fmtNum(Math.abs((sp[i] - sp[i - 1]) / (sp[i - 1] || 1) * 100))} % frente a la semana previa` : ''}`)}"></i>`).join('')}</div>` : '<p class="empty">Sin serie semanal.</p>'; })()}</div></div>` : ''}
     <div class="grid g2"><div class="box"><h3>Alertas <small>${openN} abiertas</small></h3>${al.length ? `<ul class="alerts">${al.map((x) => alertHTML(x)).join('')}</ul>` : '<p class="empty">Sin alertas.</p>'}</div>
       <div class="box"><h3>Estadísticas</h3>${stats}</div></div>
     ${pmTable}${ceoBox}
@@ -2411,11 +2624,12 @@ function trendSVG(vals, h = 46, labels = false) {
   return `<svg viewBox="0 0 ${W2} ${h}" preserveAspectRatio="${labels ? 'xMidYMid meet' : 'none'}" shape-rendering="crispEdges" role="img" aria-label="Tendencia del inventario en euros, de ${fmtNum(vals[0], 2)} a ${fmtNum(vals.at(-1), 2)} millones">
     <polygon points="${area}" fill="rgba(61,110,245,.14)"/><polyline points="${line}" fill="none" stroke="#3d6ef5" stroke-width="3" stroke-linejoin="round"/>
     <rect x="${last[0] - 4}" y="${last[1] - 4}" width="8" height="8" fill="#ffffff" stroke="#2a2140" stroke-width="2"/>
+    ${pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="${labels ? 9 : 6}" fill="transparent" data-tip="${esc(`${i === n - 1 ? 'Esta semana' : `Hace ${n - 1 - i} semanas`}: ${fmtNum(vals[i], 2)} M€${i ? `\n${vals[i] >= vals[i - 1] ? '▲' : '▼'} ${fmtNum(Math.abs((vals[i] - vals[i - 1]) / vals[i - 1] * 100))} % frente a la semana previa` : ''}`)}" data-drill="${esc(JSON.stringify({ chart: 'invWeek', key: i === n - 1 ? 'Esta semana' : `Hace ${n - 1 - i} semanas`, value: vals[i], unit: ' M€', title: 'Inventario en euros' }))}"/>`).join('')}
     ${labels ? pts.map((p, i) => i % 3 === 0 || i === n - 1 ? `<text x="${Math.min(Math.max(p[0], 16), W2 - 16)}" y="${Math.max(p[1] - 9, 12)}" font-size="12" font-weight="700" text-anchor="middle" fill="#6c6584">${fmtNum(vals[i], 2)}</text>` : '').join('') : ''}</svg>`;
 }
 function agingBar(inv) {
   const total = inv.aging.reduce((t, a) => t + a[1], 0);
-  return `<div class="v-aging" role="img" aria-label="Reparto del stock por antigüedad">${inv.aging.map(([l, v, c]) => `<span style="width:${(v / total * 100).toFixed(1)}%;background:${c}" title="${esc(l)}: ${fmtEur(v)}"></span>`).join('')}</div>
+  return `<div class="v-aging" role="img" aria-label="Reparto del stock por antigüedad">${inv.aging.map(([l, v, c]) => `<span style="width:${(v / total * 100).toFixed(1)}%;background:${c}" data-tip="${esc(`${l}: ${fmtEur(v)} (${fmtNum(v / total * 100)} %)\nPulsa para ver el detalle`)}" data-drill="${esc(JSON.stringify({ chart: 'agingBucket', key: l, value: v / 1000, unit: '', title: 'Antigüedad del stock (miles de €)' }))}"></span>`).join('')}</div>
     <div class="v-legend">${inv.aging.map(([l, v, c]) => `<span><i style="background:${c}"></i>${esc(l)} ${Math.round(v / total * 100)} %</span>`).join('')}</div>`;
 }
 function viewAlmacen() {
@@ -2423,14 +2637,12 @@ function viewAlmacen() {
   if (!inv) return '<p class="empty">Aún no hay snapshot de inventario.</p>';
   const deadPct = inv.deadEur / inv.valueEur * 100;
   const k = (l, v, d, unit, goodDown) => `<div class="box kpi" style="cursor:default"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div>${d === null ? '<span class="delta">&nbsp;</span>' : `<span class="delta ${(goodDown ? d <= 0 : d >= 0) ? 'up' : 'down'}">${d >= 0 ? '▲' : '▼'} ${fmtNum(Math.abs(d))}${unit} vs semana anterior</span>`}</div>`;
-  return `<div class="grid g4">${k('Inventario hoy', fmtM(inv.valueEur), inv.valueDelta, ' %', true)}${k('Unidades en stock', new Intl.NumberFormat('es-ES').format(inv.units), inv.unitsDelta, ' %', true)}${k('Aging medio', `${inv.agingDays} días`, inv.agingDelta, ' d', true)}${k(`Aging muerto (>${inv.deadDays} d)`, fmtEur(inv.deadEur), null)}</div>
+  return `<div class="grid g2 gauges">${gaugeHTML('inventory')}<div class="box trend-big"><h3>Inventario en euros <small>Últimas ${inv.trend.length} semanas, en millones · pasa el ratón por los puntos</small></h3>${trendSVG(inv.trend, 170, true)}</div></div>
+  <div class="grid g4">${k('Inventario hoy', fmtM(inv.valueEur), inv.valueDelta, ' %', true)}${k('Unidades en stock', new Intl.NumberFormat('es-ES').format(inv.units), inv.unitsDelta, ' %', true)}${k('Aging medio', `${inv.agingDays} días`, inv.agingDelta, ' d', true)}${k(`Aging muerto (>${inv.deadDays} d)`, fmtEur(inv.deadEur), null)}</div>
     <div class="grid g2" style="margin-top:14px">
-      <div class="box trend-big"><h3>Inventario en euros <small>Últimas 12 semanas, en millones</small></h3>${trendSVG(inv.trend, 170, true)}</div>
       <div class="box"><h3>Antigüedad del stock <small>${fmtNum(deadPct)} % muerto</small></h3>${agingBar(inv)}
-        ${barsHTML('Valor por tramo (miles de €)', inv.aging.map(([l, v]) => [l, v / 1000]), { colorFn: (v) => (v < 400 ? 'var(--err)' : 'var(--blue)') })}</div>
-    </div>
-    <div class="grid g2" style="margin-top:14px">
-      <div class="box"><h3>Aging muerto por categoría</h3>${barsHTML('Miles de €', inv.deadByCat.map(([l, v]) => [l, v / 1000]), { colorFn: () => 'var(--err)' })}</div>
+        ${barsHTML('Valor por tramo (miles de €)', inv.aging.map(([l, v]) => [l, v / 1000]), { chart: 'agingBucket', colorFn: (v) => (v < 400 ? 'var(--err)' : 'var(--blue)') })}</div>
+      <div class="box"><h3>Aging muerto por categoría</h3>${barsHTML('Miles de €', inv.deadByCat.map(([l, v]) => [l, v / 1000]), { chart: 'deadByCat', drillTitle: 'Aging muerto (miles de €)', colorFn: () => 'var(--err)' })}</div>
       <div class="box"><h3>Acciones</h3>
         <p class="note" style="margin-top:0">Snapshot de inventario cargado ${esc(ago(inv.updatedAt))}. Cobertura media: ${inv.coverageDays} días.</p>
         <div class="a-act" style="grid-column:auto">
@@ -2467,11 +2679,15 @@ function viewHistorial() {
 
 /* ---------- acciones: tocan los datos y la oficina reacciona ---------- */
 body.addEventListener('click', async (e) => {
+  const g = e.target.closest('[data-gauge]'); if (g) { showGaugePop(g.dataset.gauge); return; }
+  const dr = !e.target.closest('[data-act]') && e.target.closest('[data-drill]');
+  if (dr) { try { showDrill(JSON.parse(dr.getAttribute('data-drill'))); } catch { /* nada */ } return; }
   const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
   const act = b.dataset.act, idv = b.dataset.id, s = DATA.state;
   const al = s.alerts.find((x) => x.id === idv);
   switch (act) {
-    case 'tab': curTab = idv; renderMenu(); return;
+    case 'tab': curTab = idv; if (!pop.hidden) closePop(); renderMenu(); return;
+    case 'drillc': { const inv = DATA.state.inventory; if (idv === 'deadByCat' && inv) showDrill({ chart: 'deadByCat', key: 'Todas las categorías', value: inv.deadEur / 1000, unit: '', title: 'Aging muerto (miles de €)' }); return; }
     case 'filter': filt[b.dataset.k] = b.dataset.v; renderMenu(); return;
     case 'pm': openPm = openPm === idv ? null : idv; renderMenu(); return;
     case 'chat': openChatWith(idv); react(idv, 'ok', '¡Te escucho!'); return;
@@ -2491,6 +2707,12 @@ body.addEventListener('click', async (e) => {
   }
   refreshMenu();
 });
+body.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const t = e.target.closest('[data-drill],[data-gauge],.g-row[data-act]');
+  if (t && t.tagName !== 'BUTTON') { e.preventDefault(); t.click(); }
+});
+pop.addEventListener('click', (e) => { const b = e.target.closest('[data-act="tab"]'); if (b) { curTab = b.dataset.id; closePop(); renderMenu(); } });
 body.addEventListener('change', async (e) => {
   const c = e.target.closest('[data-act="step"]'); if (!c) return;
   const before = DATA.state.decisions.find((d) => d.id === c.dataset.id).status;
@@ -2517,7 +2739,7 @@ function renderVineta() {
       <div><dt>Aging muerto</dt><dd>${fmtEur(inv.deadEur)} · ${fmtNum(deadPct)} %</dd></div>
       <div><dt>Cobertura</dt><dd>${inv.coverageDays} días</dd></div>
     </dl>${agingBar(inv)}
-    <button class="btn sm primary" id="vOpen">Ver almacén</button>`;
+    ${Object.keys(FILT).length ? `<p class="note" style="margin:0 0 8px">Filtrado: ${esc(filterText())}</p>` : ''}<button class="btn sm primary" id="vOpen">Ver almacén</button>`;
   $('vOpen').addEventListener('click', () => openMenu('almacen'));
 }
 function setVinetaMin(min) {
@@ -2556,6 +2778,8 @@ const API = {
   openMenu, closeMenu,
   setTheme(theme) { if (theme === 'auto') delete container.dataset.theme; else container.dataset.theme = theme; },
   setReadOnly(v) { OPT.readOnly = !!v; refreshMenu(); },
+  setFilters(f = {}) { FILT = Object.fromEntries(Object.entries(f).filter(([, v]) => v)); renderFilters(); renderVineta(); refreshMenu(); },
+  getFilters() { return { ...FILT }; },
   setCanRun(v) { OPT.canRun = !!v; $('run').closest('.top-right').style.display = v ? '' : 'none'; },
   destroy() {
     destroyed = true; cancelAnimationFrame(rafId);
@@ -2611,13 +2835,17 @@ const MARKUP = `<div class="app" id="app">
 
   <div class="menu" id="menu" hidden role="dialog" aria-modal="true" aria-labelledby="menuTitle">
     <div class="panel menu-frame">
-      <div class="menu-head"><h2 id="menuTitle">Centro de mando</h2><div class="tabs" role="tablist" id="tabs"></div></div>
+      <div class="menu-head"><h2 id="menuTitle">Centro de mando</h2><div class="tabs" role="tablist" id="tabs"></div>
+        <div class="head-tools"><span class="fcount" id="fCount" hidden></span><button class="btn sm" id="fToggle" aria-expanded="false" aria-controls="fbar">Filtros</button></div></div>
       <button class="btn close menu-close" id="menuClose" aria-label="Cerrar menú">✕</button>
+      <div class="fbar" id="fbar" hidden></div>
       <div class="menu-body" id="menuBody" role="tabpanel"></div>
+      <div class="pop" id="pop" hidden><div class="panel pop-card" role="dialog" aria-modal="true" aria-labelledby="popTitle"><button class="btn close" id="popClose" aria-label="Cerrar detalle">✕</button><div id="popBody"></div></div></div>
     </div>
   </div>
 
   <div class="panel banner" id="banner" role="status"><strong>Informe ejecutivo listo</strong><p>El CEO ha consolidado los hallazgos de inventario, ventas y finanzas.</p><button class="btn primary" id="bannerBtn">Ver decisiones</button></div>
   <div class="panel toast" id="toast" role="status"></div>
+  <div class="tip" id="tip" role="tooltip"></div>
 </div>
 `;

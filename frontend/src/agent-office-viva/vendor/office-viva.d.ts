@@ -52,7 +52,28 @@ export interface Inventory {
   deadByCat: [label: string, eur: number][];
 }
 
+export interface HealthComponent {
+  label: string; value: string;   // texto mostrado, p. ej. «38 días»
+  score: number;                   // 0-100
+  weight: number;                  // peso relativo (se normaliza)
+  hint?: string;                   // cómo se puntúa (tooltip)
+  tab?: 'resumen' | 'almacen' | AgentId | 'alertas' | 'decisiones' | 'historial';
+}
+/** Si no se envía, el módulo calcula la salud con los datos disponibles (ver PROMPT-v6). */
+export interface Health { score: number; components: HealthComponent[]; }
+
+export type FilterOption = string | { value: string; label: string };
+
+/** Respuesta del desglose al pulsar un punto de un gráfico. */
+export interface DrillResult {
+  title?: string; subtitle?: string; unit?: string; digits?: number;
+  rows: { label: string; value: number; sub?: string }[];
+}
+export type ChartId = 'pmHealth' | 'pmCov' | 'sales' | 'salesDelta' | 'mgd' | 'agingBucket' | 'deadByCat' | 'invWeek';
+
 export interface OfficeVivaData {
+  health?: { sales?: Health; inventory?: Health; thresholds?: [number, number] };   // umbrales por defecto [40, 70]
+  filterOptions?: Record<string, FilterOption[]>;                                   // opciones de cada filtro
   kpis?: { sales?: KpiSeries; stockHealth?: KpiSeries; margin?: KpiSeries; alertsSpark?: number[] } | null;
   alerts?: OfficeAlert[];
   pms?: PmHealth[];
@@ -83,6 +104,16 @@ export interface OfficeVivaOptions {
   onOpenChat?: (agentId: AgentId) => void;
   onOpenInforme?: () => void;
   onError?: (err: unknown) => void;
+  /** Filtros del Centro de mando. Por defecto: PM, Sección, Marca y Artículo (con búsqueda). */
+  filters?: { key: string; label: string; search?: boolean }[];
+  /** Se llama al aplicar filtros: la app vuelve a pedir los datos filtrados y llama a setData. */
+  onFilterChange?: (filters: Record<string, string>) => void;
+  /** Búsqueda para filtros con search: true (p. ej. artículos). */
+  onFilterSearch?: (key: string, text: string) => Promise<FilterOption[]>;
+  /** Desglose al pulsar un punto de un gráfico (tooltips y popup). */
+  onDrill?: (q: { chart: ChartId; key: string; filters: Record<string, string> }) => Promise<DrillResult | null>;
+  /** Qué filtro ofrece cada gráfico en su popup («Filtrar por …»). */
+  chartDims?: Partial<Record<ChartId, string>>;
 }
 
 export interface OfficeVivaApi {
@@ -94,6 +125,8 @@ export interface OfficeVivaApi {
   setTheme(theme: 'light' | 'dark' | 'auto'): void;
   setReadOnly(readOnly: boolean): void;
   setCanRun(canRun: boolean): void;
+  setFilters(filters: Record<string, string>): void;
+  getFilters(): Record<string, string>;
   destroy(): void;
 }
 

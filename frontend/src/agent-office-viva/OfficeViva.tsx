@@ -7,6 +7,7 @@ import './vendor/office-viva.css';
 export interface OfficeVivaProps extends OfficeVivaOptions {
   agents?: OfficeAgentState[];     // estado real (cada poll)
   data?: OfficeVivaData;           // datos del Centro de mando y del almacén
+  activeFilters?: Record<string, string>;  // opcional: filtros fijados desde fuera
   className?: string;
   onReady?: (api: OfficeVivaApi) => void;
 }
@@ -29,6 +30,10 @@ export default function OfficeViva(props: OfficeVivaProps) {
       onOpenChat: (id) => latest.current.onOpenChat?.(id),
       onOpenInforme: () => latest.current.onOpenInforme?.(),
       onError: (err) => latest.current.onError?.(err),
+      filters: p.filters, chartDims: p.chartDims,
+      onFilterChange: (f) => latest.current.onFilterChange?.(f),
+      onFilterSearch: p.onFilterSearch ? (k, t) => latest.current.onFilterSearch?.(k, t) ?? Promise.resolve([]) : undefined,
+      onDrill: p.onDrill ? (q) => latest.current.onDrill?.(q) ?? Promise.resolve(null) : undefined,
     });
     api.current = office;
     if (p.agents) office.syncAgents(p.agents);
@@ -42,6 +47,7 @@ export default function OfficeViva(props: OfficeVivaProps) {
   useEffect(() => { api.current?.setCanRun(props.canRun !== false); }, [props.canRun]);
   useEffect(() => { if (props.agents) api.current?.syncAgents(props.agents); }, [props.agents]);
   useEffect(() => { if (props.data) api.current?.setData(props.data); }, [props.data]);
+  useEffect(() => { if (props.activeFilters) api.current?.setFilters(props.activeFilters); }, [props.activeFilters]);
 
   return <div ref={host} className={props.className} style={{ width: '100%', height: '100%' }} />;
 }

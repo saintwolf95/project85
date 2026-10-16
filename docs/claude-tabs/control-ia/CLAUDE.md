@@ -1,5 +1,13 @@
 # Control IA
 
+## Fase 1 v6 — módulo cerrado
+
+- Se sustituyeron literalmente `OfficeViva.tsx` y los tres archivos de
+  `agent-office-viva/vendor/` por la entrega v6. Las reglas de `.menu`,
+  `.hotbar` y `.vineta` quedan acotadas a `.fm-office`; no se encontraron
+  coincidencias de esas clases fuera del módulo. Los filtros, el desglose y
+  la salud real se reservan para las fases posteriores.
+
 ## Estado verificado · 16/10/2026 · v1.92
 
 - Relevo para continuar la oficina desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. Fases 1 y 2 aprobadas e implementadas; detenerse antes de la fase 3 para revisión.

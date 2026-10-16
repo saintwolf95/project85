@@ -1,5 +1,15 @@
 # Control IA
 
+## Fase 3 v6 — desglose interactivo verificable
+
+- `GET /agents/office-viva/drill` recibe `chart`, `key` y los filtros activos,
+  y devuelve como máximo diez filas. Cubre salud/cobertura de PM, stock muerto
+  por sección, tramo de antigüedad, histórico de inventario por sección, ventas
+  y variación por cliente, y MGD por marca.
+- Cada consulta usa datos de la empresa activa y parámetros tipados; conserva
+  los filtros de la oficina. Los resultados muestran artículo o dimensión,
+  valor y contexto operativo (cobertura, días sin venta, ventas o MGD).
+
 ## Fase 2 v6 — filtros reales del Centro de mando
 
 - `GET /agents/office-viva` acepta `pm`, `seccion`, `marca` y `articulo`

@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Mail, Volume2 } 
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
-import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, notifyAgentProductManager, runAgentAnalysis, searchOfficeVivaArticles, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
+import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, getOfficeVivaDrill, notifyAgentProductManager, runAgentAnalysis, searchOfficeVivaArticles, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
 import type { AgentExecutionHistory, OfficeVivaFilters } from '../services/api';
 import OfficeViva from '../agent-office-viva/OfficeViva';
 import type { AgentId as OfficeVivaAgentId, OfficeActionName, OfficeAgentState, OfficeVivaData } from '../agent-office-viva/vendor/office-viva';
@@ -240,6 +240,7 @@ export const AgentOffice = () => {
           chartDims={OFFICE_CHART_DIMS}
           onFilterChange={onOfficeFilterChange}
           onFilterSearch={(key, value) => key === 'articulo' ? searchOfficeVivaArticles(value) : Promise.resolve([])}
+          onDrill={({ chart, key, filters }) => getOfficeVivaDrill(chart, key, { ...officeFilters, ...filters })}
           onRunRequested={() => start()}
           onOpenExpediente={(agentId) => navigate(agentUrl(agentId))}
           onOpenChat={(agentId) => navigate(`/ai-control/analistas?agent=${agentId}&view=chat`)}

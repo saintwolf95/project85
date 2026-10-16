@@ -15,6 +15,16 @@ pertenecen a la selección. Las opciones PM, sección y marca provienen de
 consulta. La respuesta contiene `filterOptions` y los gráficos ofrecen el
 filtro dimensional coherente (PM, sección o marca).
 
+### Actualización v1.97 — desglose de gráficos v6
+
+La oficina llama a `GET /agents/office-viva/drill` al pulsar un punto de un
+gráfico. La ruta devuelve un `DrillResult` de hasta diez filas y conserva los
+filtros activos de PM, sección, marca y SKU. Los desgloses de almacén usan el
+último snapshot disponible y el umbral de 180 días; los de ventas comparan las
+dos ventanas de 30 días y MGD se ordena por el porcentaje ponderado de cada
+artículo. El aging muerto se agrupa por **sección**, igual que su filtro y su
+drill-down; no por familia.
+
 Relevo práctico para continuar por fases desde otro equipo: `docs/RELEVO_OFICINA_AGENTES.md`. No altera el contrato de ejecución descrito aquí. Desde v1.65, una pérdida de conexión neutraliza la escena y conserva el último estado únicamente como referencia fechada hasta reconectar. La oficina conserva historial durable, telemetría de tokens sin contenido y avisos opcionales apagados por defecto.
 
 La entrada es `/ai-control` (Hoy); el gabinete vive en `/ai-control/analistas` y la oficina en `/ai-control/oficina`. La oficina sustituye el SVG por una escena isométrica Canvas 2D con mapa textual, BFS y máquina de estado por personaje. Los cuatro agentes reales son María, Lucía, Mattia y CEO. La escena contiene puestos, mesa de consolidación, zona de dirección, café, baño, sofá, impresora, pizarra, ventanas y marca Five Minutes. El HUD de referencia usa Pixelify Sans y Nunito, respetando además el tema claro u oscuro de la app.

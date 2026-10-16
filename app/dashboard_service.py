@@ -39,10 +39,10 @@ BREAKDOWN_DIMENSIONS = {
     ),
 }
 FILTER_SQL = """
- AND (:familia IS NULL OR LOWER(COALESCE(p.familia, '')) = LOWER(:familia))
- AND (:marca IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(:marca))
- AND (:familia_marca IS NULL OR LOWER(COALESCE(p.familia_marca, '')) = LOWER(:familia_marca))
- AND (:seccion IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(:seccion))
+ AND (CAST(:familia AS TEXT) IS NULL OR LOWER(COALESCE(p.familia, '')) = LOWER(CAST(:familia AS TEXT)))
+ AND (CAST(:marca AS TEXT) IS NULL OR LOWER(COALESCE(p.marca, '')) = LOWER(CAST(:marca AS TEXT)))
+ AND (CAST(:familia_marca AS TEXT) IS NULL OR LOWER(COALESCE(p.familia_marca, '')) = LOWER(CAST(:familia_marca AS TEXT)))
+ AND (CAST(:seccion AS TEXT) IS NULL OR LOWER(COALESCE(p.seccion, '')) = LOWER(CAST(:seccion AS TEXT)))
 """
 _dashboard_cache = TTLCache(maxsize=256, ttl=300)
 _dashboard_cache_lock = RLock()

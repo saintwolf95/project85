@@ -1,5 +1,9 @@
 # Dashboard
 
+## Corrección v1.94 — filtros opcionales PostgreSQL
+
+- Los filtros vacíos se envían como `NULL`; las consultas deben tiparlos como `TEXT` antes de compararlos. PostgreSQL no puede inferir el tipo de `:param IS NULL` por sí solo con psycopg y devuelve `AmbiguousParameter`, bloqueando toda la vista.
+
 ## Estado verificado · 08/10/2026 · v1.60
 
 - Verificado `Home.tsx`: dos vistas (resumen/detalle), filtros acumulativos y agregaciones desde `getExecutiveDashboard`. La matriz incorpora la leyenda y prioridades v1.59.

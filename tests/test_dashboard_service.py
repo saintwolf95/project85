@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy import create_engine, text
 
 from app.dashboard_service import (
+    FILTER_SQL,
     _breakdown,
     _filter_options,
     _month_starts,
@@ -39,6 +40,13 @@ class FakeDashboardSession:
 
 
 class DashboardPeriodTests(unittest.TestCase):
+    def test_filtros_opcionales_tipan_los_parametros_nulos(self):
+        """PostgreSQL exige un tipo para los parámetros None de los filtros."""
+        self.assertIn("CAST(:familia AS TEXT)", FILTER_SQL)
+        self.assertIn("CAST(:marca AS TEXT)", FILTER_SQL)
+        self.assertIn("CAST(:familia_marca AS TEXT)", FILTER_SQL)
+        self.assertIn("CAST(:seccion AS TEXT)", FILTER_SQL)
+
     def test_fytd_compara_mismos_dias_del_ejercicio_anterior(self):
         current_start, current_end, previous_start, previous_end = comparison_window(
             date(2026, 8, 24), "fytd"

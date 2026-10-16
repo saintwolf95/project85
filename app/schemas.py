@@ -144,6 +144,23 @@ class AgentDecisionUpdateRequest(BaseModel):
     resultado_texto: Optional[str] = Field(default=None, max_length=5000)
 
 
+class AgentDecisionStepUpdateRequest(BaseModel):
+    completado: bool
+
+
+class AgentNotificationRecipientRequest(BaseModel):
+    product_manager: Optional[str] = Field(default=None, max_length=255)
+    nombre: str = Field(..., min_length=1, max_length=255)
+    email: str = Field(..., min_length=3, max_length=320)
+    activo: bool = True
+
+
+class AgentOfficeAlertActionRequest(BaseModel):
+    status: Optional[Literal["abierta", "reconocida", "resuelta"]] = None
+    owner: Optional[str] = Field(default=None, max_length=255)
+    feedback: Optional[Literal["util", "no_util"]] = None
+
+
 class BusinessRuleRequest(BaseModel):
     clave: Literal["lead_time_dias", "margen_objetivo_pct", "cliente_estrategico", "sku_discontinuado", "familia_estacional", "umbral_detector"]
     ambito_tipo: Literal["empresa", "familia", "sku", "cliente", "comercial"]

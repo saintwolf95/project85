@@ -13,6 +13,7 @@ import { AiCopilot } from './pages/AiCopilot';
 import { AiControlPanel } from './pages/AiControlPanel';
 import { AiControlDecisions, AiControlEpisodeDetail, AiControlSignalDetail, AiControlToday } from './pages/AiControlToday';
 import { AiControlBusinessRules } from './pages/AiControlBusinessRules';
+import { AiControlNotifications } from './pages/AiControlNotifications';
 import { AiControlGuide } from './pages/AiControlGuide';
 import { DataEngineering } from './pages/DataEngineering';
 import { DataImportGuide } from './pages/DataImportGuide';
@@ -55,6 +56,7 @@ function App() {
             <Route path="ai-control/episodio/:id" element={<AiControlEpisodeDetail />} />
             <Route path="ai-control/decisiones" element={<AiControlDecisions />} />
             <Route path="ai-control/reglas" element={<AiControlBusinessRules />} />
+            <Route path="ai-control/avisos" element={<AiControlNotifications />} />
             <Route path="ai-control/guia" element={<AiControlGuide />} />
             <Route path="marginalidad" element={<Marginality />} />
             <Route path="marginalidad/:tipo/:id" element={<MarginEntity />} />

@@ -1,15 +1,21 @@
 import json
+import csv
+from io import StringIO
+import os
+import re
+import smtplib
 from datetime import datetime, timedelta
+from email.message import EmailMessage
 from statistics import median
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 import logging
 from ..database import get_db
-from ..models import AgentDecision, AgentEpisode, AgentSettings, AgentInsights, AgentSignal, AgentSignalFeedback, AgentSignalLink, Empresa, EmpresaReglaNegocio, Usuario, UsuarioOnboarding, UsuarioOnboardingEvento
+from ..models import AgentDecision, AgentDecisionStep, AgentEpisode, AgentSettings, AgentInsights, AgentNotificationLog, AgentNotificationRecipient, AgentSignal, AgentSignalFeedback, AgentSignalLink, Empresa, EmpresaReglaNegocio, Producto, Usuario, UsuarioOnboarding, UsuarioOnboardingEvento
 from ..api.deps import get_current_user, get_current_active_admin
-from ..schemas import AgentDecisionCreateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentSignalFeedbackRequest, BusinessRuleRequest, OnboardingProgressRequest
+from ..schemas import AgentDecisionCreateRequest, AgentDecisionStepUpdateRequest, AgentDecisionUpdateRequest, AgentDiscardRequest, AgentInsightResponse, AgentInvestigationRequest, AgentNotificationRecipientRequest, AgentOfficeAlertActionRequest, AgentSignalFeedbackRequest, BusinessRuleRequest, OnboardingProgressRequest
 from ..agents_service import ensure_daily_agent_insight, execute_agents_workflow, get_daily_agent_insight
 from ..agent_metrics import build_agent_dossier, build_agent_followups, build_company_data_readiness
 from ..agent_studies import ALLOWED_STUDY_AGENTS, ensure_agent_study_snapshot
@@ -18,6 +24,7 @@ from ..agent_investigations import run_investigation
 from ..agent_correlation import serialize_episode
 from ..business_rules import ensure_no_overlap, validate_rule_payload
 from ..agent_execution import ExecutionBusy, read_execution, read_execution_history
+from ..office_viva_service import build_office_viva_data, dead_inventory_rows
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -69,7 +76,7 @@ def _serialize_signal(db: Session, signal: AgentSignal) -> dict:
         "evidencia": signal.evidencia, "estado": signal.estado, "episodio_id": signal.episodio_id,
         "primera_deteccion": signal.primera_deteccion, "ultima_deteccion": signal.ultima_deteccion,
         "descartada_por": signal.descartada_por, "descartada_motivo": signal.descartada_motivo,
-        "descartada_en": signal.descartada_en,
+        "descartada_en": signal.descartada_en, "office_status": signal.office_status, "office_owner": signal.office_owner,
         "enlaces": [{"id": link.id, "origen_id": link.signal_origen_id, "destino_id": link.signal_destino_id, "tipo_relacion": link.tipo_relacion, "regla": link.regla, "solape_dias": link.solape_dias, "detalle": link.detalle} for link in links],
         "feedback": [{"id": row.id, "usuario_id": row.usuario_id, "veredicto": row.veredicto, "motivo": row.motivo, "created_at": row.created_at} for row in feedback],
     }
@@ -316,6 +323,21 @@ def get_agents_readiness(current_user: Usuario = Depends(get_current_user), db: 
     return build_company_data_readiness(db, current_user.empresa_id)
 
 
+@router.get("/agents/office-viva")
+@limiter.limit("30/minute")
+def get_office_viva(request: Request, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    return build_office_viva_data(db, current_user.empresa_id)
+
+
+@router.get("/agents/office-viva/inventory-export")
+def export_office_viva_dead_inventory(current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    output = StringIO()
+    fields = ["sku", "articulo", "familia", "product_manager", "unidades", "inventario_eur", "ultima_venta", "dias_sin_venta"]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader(); writer.writerows(dead_inventory_rows(db, current_user.empresa_id))
+    return Response(output.getvalue(), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=aging_muerto_mas_180_dias.csv"})
+
+
 @router.get("/agents/signals")
 @limiter.limit("30/minute")
 def list_signals(
@@ -486,6 +508,115 @@ def update_decision(request: Request, decision_id: int, payload: AgentDecisionUp
     db.commit()
     db.refresh(decision)
     return _serialize_decision(decision)
+
+
+@router.get("/agents/decisions/{decision_id}/steps")
+def list_decision_steps(decision_id: int, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    _decision_or_404(db, current_user.empresa_id, decision_id)
+    rows = db.query(AgentDecisionStep).filter(AgentDecisionStep.empresa_id == current_user.empresa_id, AgentDecisionStep.decision_id == decision_id).order_by(AgentDecisionStep.orden).all()
+    return {"items": [{"id": row.id, "label": row.etiqueta, "done": row.completado} for row in rows]}
+
+
+@router.patch("/agents/decisions/{decision_id}/steps/{step_id}")
+def update_decision_step(decision_id: int, step_id: int, payload: AgentDecisionStepUpdateRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    decision = _decision_or_404(db, current_user.empresa_id, decision_id)
+    step = db.query(AgentDecisionStep).filter(AgentDecisionStep.id == step_id, AgentDecisionStep.empresa_id == current_user.empresa_id, AgentDecisionStep.decision_id == decision.id).first()
+    if not step:
+        raise HTTPException(status_code=404, detail="Paso no encontrado")
+    step.completado = payload.completado
+    if payload.completado and db.query(AgentDecisionStep).filter(AgentDecisionStep.empresa_id == current_user.empresa_id, AgentDecisionStep.decision_id == decision.id, AgentDecisionStep.completado.is_(False), AgentDecisionStep.id != step.id).count() == 0:
+        decision.estado, decision.cerrada_en = "completada", datetime.utcnow()
+    elif not payload.completado and decision.estado == "completada":
+        decision.estado, decision.cerrada_en = "en_curso", None
+    db.commit()
+    return {"id": step.id, "label": step.etiqueta, "done": step.completado, "decision_status": decision.estado}
+
+
+@router.patch("/agents/signals/{signal_id}/office")
+def update_signal_from_office(signal_id: int, payload: AgentOfficeAlertActionRequest, current_user: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
+    signal = _signal_or_404(db, current_user.empresa_id, signal_id)
+    if payload.status is not None:
+        signal.office_status = payload.status
+    if payload.owner is not None:
+        signal.office_owner = payload.owner.strip() or None
+    if payload.feedback is not None:
+        verdict = "util" if payload.feedback == "util" else "no_accionable"
+        db.add(AgentSignalFeedback(empresa_id=current_user.empresa_id, usuario_id=current_user.id, signal_id=signal.id, veredicto=verdict, motivo=None if verdict == "util" else "Marcada como no útil desde Oficina Viva."))
+    db.commit()
+    return _serialize_signal(db, signal)
+
+
+def _recipient_payload(row: AgentNotificationRecipient) -> dict:
+    return {"id": row.id, "product_manager": row.product_manager, "nombre": row.nombre, "email": row.email, "activo": row.activo}
+
+
+@router.get("/agents/notification-recipients")
+def list_notification_recipients(current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    rows = db.query(AgentNotificationRecipient).filter(AgentNotificationRecipient.empresa_id == current_user.empresa_id).order_by(AgentNotificationRecipient.product_manager, AgentNotificationRecipient.nombre).all()
+    return {"items": [_recipient_payload(row) for row in rows]}
+
+
+@router.get("/agents/notification-recipients/product-managers")
+def list_notification_product_managers(current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    rows = db.query(Producto.product_manager).filter(Producto.empresa_id == current_user.empresa_id, Producto.product_manager.isnot(None), Producto.product_manager != "").distinct().order_by(Producto.product_manager).all()
+    return {"items": [row[0] for row in rows]}
+
+
+@router.post("/agents/notification-recipients")
+def create_notification_recipient(payload: AgentNotificationRecipientRequest, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    email = payload.email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email):
+        raise HTTPException(status_code=422, detail="Correo electrónico no válido")
+    pm = (payload.product_manager or "").strip() or None
+    row = AgentNotificationRecipient(empresa_id=current_user.empresa_id, product_manager=pm, nombre=payload.nombre.strip(), email=email, activo=payload.activo)
+    db.add(row)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ese destinatario ya está configurado para esta cartera")
+    db.refresh(row)
+    return _recipient_payload(row)
+
+
+@router.delete("/agents/notification-recipients/{recipient_id}")
+def delete_notification_recipient(recipient_id: int, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    row = db.query(AgentNotificationRecipient).filter(AgentNotificationRecipient.id == recipient_id, AgentNotificationRecipient.empresa_id == current_user.empresa_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Destinatario no encontrado")
+    db.delete(row); db.commit()
+    return {"deleted": recipient_id}
+
+
+@router.post("/agents/notifications/product-manager/{product_manager}")
+def notify_product_manager(product_manager: str, current_user: Usuario = Depends(get_current_active_admin), db: Session = Depends(get_db)):
+    pm = product_manager.strip()
+    if not pm:
+        raise HTTPException(status_code=422, detail="Cartera de PM no válida")
+    rows = db.query(AgentNotificationRecipient).filter(AgentNotificationRecipient.empresa_id == current_user.empresa_id, AgentNotificationRecipient.activo.is_(True), (AgentNotificationRecipient.product_manager == pm) | (AgentNotificationRecipient.product_manager.is_(None))).all()
+    recipients = sorted({row.email for row in rows})
+    if not recipients:
+        raise HTTPException(status_code=422, detail="No hay destinatarios configurados para esta cartera")
+    host = os.getenv("SMTP_HOST", "").strip()
+    sender = os.getenv("SMTP_FROM", "").strip()
+    if not host or not sender:
+        raise HTTPException(status_code=503, detail="El correo no está configurado. Define SMTP_HOST y SMTP_FROM antes de enviar avisos.")
+    message = EmailMessage()
+    message["Subject"] = f"Five Minutes · revisión solicitada · {pm}"
+    message["From"], message["To"] = sender, ", ".join(recipients)
+    message.set_content(f"Se ha solicitado una revisión de la cartera de Product Manager «{pm}» desde Oficina Viva. Accede a Five Minutes para revisar los datos y las acciones abiertas.")
+    try:
+        with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587")), timeout=15) as smtp:
+            if os.getenv("SMTP_STARTTLS", "true").lower() in {"1", "true", "yes"}: smtp.starttls()
+            user, password = os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASSWORD", "")
+            if user: smtp.login(user, password)
+            smtp.send_message(message)
+    except Exception as error:
+        logger.exception("No se pudo enviar el aviso de PM")
+        raise HTTPException(status_code=502, detail="No se pudo enviar el aviso por correo") from error
+    db.add(AgentNotificationLog(empresa_id=current_user.empresa_id, product_manager=pm, destinatarios=json.dumps(recipients), enviada_por=current_user.id))
+    db.commit()
+    return {"product_manager": pm, "sent_at": datetime.utcnow(), "recipients": len(recipients)}
 
 
 @router.get("/agents/quality")

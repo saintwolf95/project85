@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Volume2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Bell, History, Mail, Volume2 } from 'lucide-react';
 import { useAgentExecution } from '../hooks/useAgentExecution';
 import { useAuth } from '../context/useAuth';
 import { useTheme } from '../context/useTheme';
-import { getAgentExecutionHistory, runAgentAnalysis } from '../services/api';
+import { downloadOfficeVivaDeadInventory, getAgentExecutionHistory, getOfficeVivaData, notifyAgentProductManager, runAgentAnalysis, updateAgentDecision, updateAgentDecisionStep, updateOfficeVivaAlert } from '../services/api';
 import type { AgentExecutionHistory } from '../services/api';
 import OfficeViva from '../agent-office-viva/OfficeViva';
-import type { AgentId as OfficeVivaAgentId, OfficeAgentState } from '../agent-office-viva/vendor/office-viva';
+import type { AgentId as OfficeVivaAgentId, OfficeActionName, OfficeAgentState, OfficeVivaData } from '../agent-office-viva/vendor/office-viva';
 import type { AgentId } from '../agent-office/model';
 import { ROSTER } from '../agent-office/model';
 import './AgentOffice.css';
@@ -67,6 +67,7 @@ export const AgentOffice = () => {
   const [runResult, setRunResult] = useState('');
   const [history, setHistory] = useState<AgentExecutionHistory[]>([]);
   const [historyError, setHistoryError] = useState('');
+  const [officeData, setOfficeData] = useState<OfficeVivaData>();
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('office-sound') === 'true');
   const [browserNotifications, setBrowserNotifications] = useState(() => localStorage.getItem('office-browser-notifications') === 'true' && Notification.permission === 'granted');
   const previousRunStateRef = useRef<string | null>(null);
@@ -93,6 +94,23 @@ export const AgentOffice = () => {
       .then(items => { setHistory(items); setHistoryError(''); })
       .catch(() => setHistoryError('No se pudo cargar el historial de ejecuciones.'));
   }, [execution?.run_id, execution?.estado]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const pollOfficeData = async () => {
+      try {
+        const data = await getOfficeVivaData();
+        if (!cancelled) setOfficeData(data);
+      } catch {
+        if (!cancelled) setRunError('No se pudo actualizar el Centro de mando de la oficina.');
+      } finally {
+        if (!cancelled) timer = setTimeout(pollOfficeData, 30_000);
+      }
+    };
+    void pollOfficeData();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, []);
 
   useEffect(() => {
     if (!execution) return;
@@ -140,11 +158,32 @@ export const AgentOffice = () => {
     if (!enabled) setHistoryError('El navegador no concedió permiso para mostrar avisos.');
   };
 
+  const onOfficeAction = async (name: OfficeActionName, payload: Record<string, unknown>) => {
+    if (name === 'alert.update') {
+      const patch = (payload.patch || {}) as { status?: 'abierta' | 'reconocida' | 'resuelta'; owner?: string; feedback?: 'util' | 'no_util' | null };
+      await updateOfficeVivaAlert(String(payload.id), patch);
+    } else if (name === 'decision.update') {
+      const patch = (payload.patch || {}) as Record<string, unknown>;
+      const status = patch.status === 'hecha' ? 'completada' : patch.status === 'rechazada' ? 'descartada' : patch.status;
+      await updateAgentDecision(Number(payload.id), { estado: status as 'propuesta' | 'aceptada' | 'en_curso' | 'completada' | 'descartada' | undefined, responsable: typeof patch.owner === 'string' ? patch.owner : undefined });
+    } else if (name === 'decision.step') {
+      const decision = officeData?.decisions?.find(item => item.id === String(payload.id));
+      const step = decision?.steps[Number(payload.index)] as ({ step_id?: number; done: boolean } | undefined);
+      if (!step?.step_id) throw new Error('La decisión no tiene un paso persistido.');
+      await updateAgentDecisionStep(String(payload.id), step.step_id, Boolean(payload.done));
+    } else if (name === 'pm.notify') {
+      await notifyAgentProductManager(String(payload.pmId));
+    } else if (name === 'inventory.export') {
+      await downloadOfficeVivaDeadInventory();
+    }
+    setOfficeData(await getOfficeVivaData());
+  };
+
   return <div className="agent-office">
     <div className="agent-office-shell">
       <header className="agent-office-heading">
         <div><p>Equipo de análisis · Five Minutes</p><h1>Oficina de analistas</h1></div>
-        <nav aria-label="Navegación de Control IA"><Link to="/ai-control"><ArrowLeft size={16} />Prioridades de hoy</Link><Link to="/ai-control/analistas">Gabinete <ArrowUpRight size={15} /></Link></nav>
+        <nav aria-label="Navegación de Control IA"><Link to="/ai-control"><ArrowLeft size={16} />Prioridades de hoy</Link><Link to="/ai-control/analistas">Gabinete <ArrowUpRight size={15} /></Link>{canRun && <Link to="/ai-control/avisos"><Mail size={15} />Avisos PM</Link>}</nav>
       </header>
       {(runError || runResult) && <p className={`agent-office-status ${runError ? 'is-error' : 'is-success'}`} role="status">{runError || runResult}</p>}
       <section className="agent-office-viva-stage" aria-label="Oficina isométrica de agentes">
@@ -155,10 +194,12 @@ export const AgentOffice = () => {
           readOnly={readOnly}
           agents={officeAgents}
           stages={OFFICE_STAGES}
+          data={officeData}
           onRunRequested={() => start()}
           onOpenExpediente={(agentId) => navigate(agentUrl(agentId))}
           onOpenChat={(agentId) => navigate(`/ai-control/analistas?agent=${agentId}&view=chat`)}
           onOpenInforme={() => navigate(agentUrl('ceo'))}
+          onAction={onOfficeAction}
           onError={() => setRunError('La oficina no pudo completar la acción solicitada. Revisa el Gabinete de Analistas IA.')}
         />
       </section>

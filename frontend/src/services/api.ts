@@ -626,6 +626,15 @@ export const getAgentExecutionHistory = async (limit = 20): Promise<AgentExecuti
   const response = await api.get('/agents/executions/history', { params: { limit } });
   return response.data;
 };
+export const getOfficeVivaData = async () => (await api.get('/agents/office-viva')).data;
+export const updateOfficeVivaAlert = async (signalId: string, payload: { status?: 'abierta' | 'reconocida' | 'resuelta'; owner?: string; feedback?: 'util' | 'no_util' | null }) => (await api.patch(`/agents/signals/${encodeURIComponent(signalId)}/office`, payload)).data;
+export const updateAgentDecisionStep = async (decisionId: string, stepId: number, completado: boolean) => (await api.patch(`/agents/decisions/${encodeURIComponent(decisionId)}/steps/${stepId}`, { completado })).data;
+export const notifyAgentProductManager = async (productManager: string) => (await api.post(`/agents/notifications/product-manager/${encodeURIComponent(productManager)}`)).data;
+export const downloadOfficeVivaDeadInventory = async (): Promise<void> => {
+  const response = await api.get('/agents/office-viva/inventory-export', { responseType: 'blob' });
+  const url = window.URL.createObjectURL(response.data);
+  const link = document.createElement('a'); link.href = url; link.download = 'aging_muerto_mas_180_dias.csv'; link.click(); window.URL.revokeObjectURL(url);
+};
 
 export const ensureDailyAgentReport = async (): Promise<AgentInsight> => {
   const response = await api.post('/agents/daily/ensure');
@@ -782,6 +791,11 @@ export const createAgentFeedback = async (signalId: number, veredicto: 'util' | 
 export const discardAgentSignal = async (signalId: number, motivo: string, veredicto: 'no_accionable' | 'falso_positivo' = 'no_accionable') => api.post(`/agents/signals/${signalId}/discard`, { motivo, veredicto });
 export const createAgentDecision = async (payload: { episodio_id?: number; signal_id?: number; titulo: string; descripcion?: string; responsable?: string; metrica_objetivo?: string; horizonte_fecha: string }) => (await api.post('/agents/decisions', payload)).data;
 export const updateAgentDecision = async (decisionId: number, payload: Partial<Pick<AgentDecisionRecord, 'estado' | 'responsable' | 'metrica_objetivo' | 'valor_objetivo' | 'horizonte_fecha' | 'resultado_texto'>>) => (await api.patch(`/agents/decisions/${decisionId}`, payload)).data;
+export interface AgentNotificationRecipient { id: number; product_manager: string | null; nombre: string; email: string; activo: boolean; }
+export const getAgentNotificationRecipients = async (): Promise<{ items: AgentNotificationRecipient[] }> => (await api.get('/agents/notification-recipients')).data;
+export const getAgentNotificationProductManagers = async (): Promise<{ items: string[] }> => (await api.get('/agents/notification-recipients/product-managers')).data;
+export const createAgentNotificationRecipient = async (payload: Omit<AgentNotificationRecipient, 'id'>) => (await api.post('/agents/notification-recipients', payload)).data;
+export const deleteAgentNotificationRecipient = async (recipientId: number) => api.delete(`/agents/notification-recipients/${recipientId}`);
 export interface BusinessRuleRecord { id: number; clave: string; ambito_tipo: string; ambito_id?: string | null; valor_num?: number | null; valor_texto?: string | null; valor_json?: string | null; vigente_desde: string; vigente_hasta?: string | null; }
 export const getBusinessRules = async (): Promise<{ items: BusinessRuleRecord[] }> => (await api.get('/agents/business-rules')).data;
 export const createBusinessRule = async (payload: Omit<BusinessRuleRecord, 'id'>) => (await api.post('/agents/business-rules', payload)).data;

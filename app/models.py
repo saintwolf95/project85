@@ -324,6 +324,8 @@ class AgentSignal(Base):
     descartada_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     descartada_motivo = Column(Text, nullable=True)
     descartada_en = Column(DateTime, nullable=True)
+    office_status = Column(String(20), nullable=False, default="abierta")
+    office_owner = Column(String(255), nullable=True)
 
 
 class AgentSignalLink(Base):
@@ -397,6 +399,46 @@ class AgentDecision(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     cerrada_en = Column(DateTime, nullable=True)
+
+
+class AgentDecisionStep(Base):
+    """Paso verificable de una decisión; no se infiere del texto del informe."""
+    __tablename__ = "agent_decision_steps"
+    __table_args__ = (UniqueConstraint("decision_id", "orden", name="uq_agent_decision_step_order"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    decision_id = Column(Integer, ForeignKey("agent_decisions.id", ondelete="CASCADE"), nullable=False, index=True)
+    orden = Column(Integer, nullable=False)
+    etiqueta = Column(String(500), nullable=False)
+    completado = Column(Boolean, nullable=False, default=False)
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AgentNotificationRecipient(Base):
+    """Destinatario configurado por administración para los avisos de una cartera PM."""
+    __tablename__ = "agent_notification_recipients"
+    __table_args__ = (UniqueConstraint("empresa_id", "product_manager", "email", name="uq_agent_notification_recipient"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    product_manager = Column(String(255), nullable=True, index=True)
+    nombre = Column(String(255), nullable=False)
+    email = Column(String(320), nullable=False)
+    activo = Column(Boolean, nullable=False, default=True)
+    creado_en = Column(DateTime, default=datetime.utcnow, nullable=False)
+    actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class AgentNotificationLog(Base):
+    __tablename__ = "agent_notification_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    empresa_id = Column(Integer, ForeignKey("empresas.id"), nullable=False, index=True)
+    product_manager = Column(String(255), nullable=False, index=True)
+    destinatarios = Column(Text, nullable=False)
+    enviada_por = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    enviada_en = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 class EmpresaEstadisticas(Base):
     __tablename__ = "empresa_estadisticas"

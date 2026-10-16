@@ -414,3 +414,10 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - `AgentOffice.tsx` transforma el estado confirmado de `useAgentExecution` en `OfficeAgentState[]` para María, Lucía, Mattia y CEO. Los estados del backend se limitan a `idle`, `working`, `done` y `error` dentro del módulo, sin inventar progreso ni datos de negocio.
 - Las etapas registradas en `app/agents_service.py` se declaran en orden para cada agente. La etapa activa y la última tarea son mensajes genéricos; no muestran clientes, SKU, importes ni hallazgos en la escena.
 - Los sondeos con el mismo estado reutilizan el mismo array de agentes; el módulo solo anima cambios confirmados. Inicio de análisis, permisos de administrador y navegación a expediente, chat e informe ejecutivo conservan sus callbacks React existentes.
+
+## Actualización v1.91 — Centro de mando y avisos de Oficina Viva (Fase 3)
+
+- `/agents/office-viva` compone señales, decisiones, ejecuciones, dashboard y marginalidad de 30 días para el módulo cerrado. No usa datos simulados dentro de la ruta real; actualiza cada 30 segundos.
+- El aging del almacén se define por días desde la última venta: 0–30, 31–90, 91–180 y más de 180. La exportación CSV contiene solo referencias con inventario positivo y más de 180 días sin venta. La cobertura agregada se pondera por valor de inventario.
+- `agent_notification_recipients` permite a un administrador definir destinatarios globales o por Product Manager en `/ai-control/avisos`; `agent_notification_logs` conserva el envío. Los avisos usan `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_STARTTLS`; si falta configuración, la acción falla sin marcarse como enviada.
+- Los pasos de decisión se persisten en `agent_decision_steps`. El estado de gestión visual de una señal y su responsable se guardan aparte de su estado determinista, por lo que una acción humana no puede alterar la detección.

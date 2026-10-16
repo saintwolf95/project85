@@ -85,6 +85,8 @@ def ensure_agent_signals_schema() -> None:
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_por INTEGER"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_motivo TEXT"))
         connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS descartada_en TIMESTAMP"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS office_status VARCHAR(20) NOT NULL DEFAULT 'abierta'"))
+        connection.execute(text("ALTER TABLE agent_signals ADD COLUMN IF NOT EXISTS office_owner VARCHAR(255)"))
         connection.execute(text("""
             UPDATE agent_signals
             SET impacto_tipo = CASE detector
@@ -215,6 +217,9 @@ async def lifespan(app: FastAPI):
     models.AgentExecutionRun.__table__.create(bind=engine, checkfirst=True)
     models.AgentExecutionMember.__table__.create(bind=engine, checkfirst=True)
     models.LlmUsageEvent.__table__.create(bind=engine, checkfirst=True)
+    models.AgentDecisionStep.__table__.create(bind=engine, checkfirst=True)
+    models.AgentNotificationRecipient.__table__.create(bind=engine, checkfirst=True)
+    models.AgentNotificationLog.__table__.create(bind=engine, checkfirst=True)
     daily_task = None
     if ENABLE_DAILY_AGENT_REPORTS:
         from .daily_agents import daily_reports_loop
@@ -308,7 +313,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="1.90.0",
+    version="1.91.0",
     lifespan=lifespan
 )
 

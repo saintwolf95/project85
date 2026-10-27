@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.05
+## Estado verificado · 27/10/2026 · v2.06
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -122,6 +122,13 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 Actualización v2.05: inicio parcial del punto 1. Preguntas de ventas con dos o más de «clientes», «secciones», «familias», «marcas», «productos/artículos/referencias/SKU» o comerciales (asignado al cliente o de factura) ejecutan total y bloques separados usando el período y filtros compartidos. Si no se identifica el tipo de comercial, se pide aclaración. Los fallos aparecen explícitamente por bloque. Los desgloses combinados por meses y los rankings ascendentes se declaran no implementados en vez de omitirse o ordenarse incorrectamente. Se pueden combinar ventas, unidades, margen bruto y MGD; porcentajes de margen combinados requieren una pregunta separada. El caso de una sola dimensión mantiene la ruta anterior. Los límites explícitos por dimensión se conservan en el contrato y se aplican a SQL, con un máximo de 50; si no se indica uno se muestran hasta 20. XLSX/PDF reutilizan exactamente los bloques calculados y sus estados en un bundle firmado. El total muestra fechas extremas y días con registros, sin tratar la ausencia de movimientos diarios como prueba de un hueco de importación. Cuando no hay ningún registro en uno de los períodos se muestra N/D y no se calcula la variación; detectar la cobertura parcial sigue pendiente. Las siguientes fases siguen pendientes.
 
 En comparaciones multidimensionales, los extremos de los registros se contrastan con las posiciones relativas de cada período. Si no coinciden, no se publica ni exporta una variación: se informa que puede ser consecuencia de actividad comercial o carga incompleta. Esto es una comprobación conservadora, no prueba de datos ausentes ni de integridad; el importador aún no registra cobertura certificada por fecha.
+
+## Actualización v2.06 — avance de los puntos 1 y 2
+
+- Las consultas múltiples admiten el desglose mensual junto a otras dimensiones: máximo 50 meses sin comparación o 12 al comparar; se informa si el rango excede el límite. Los meses ausentes no se rellenan como cero. Continúan pendientes los rankings ascendentes combinados y la certificación de cobertura.
+- La pregunta gerencial se compara por defecto con el mismo tramo del año anterior y recorta el período al último día con ventas disponible; una comparación explícita se respeta. Las preguntas con filtros que el dossier global no aplica no deben usarlo. El resumen presenta hasta seis tarjetas: ventas, variación porcentual cuando es evaluable, MG, MGD, unidades y clientes activos identificados. Clientes activos: cliente distinto con al menos una venta positiva, sin contar la clave `SIN-CLIENTE`. El usuario ve fechas y último día con registros.
+- Las tablas de clientes y productos se ordenan por venta actual; la de secciones recoge las diez menores variaciones. Proceden del dossier parametrizado. Si el resumen o un bloque falla, se informa en lugar de sustituirlo por cero. Ante tramos no equivalentes o base anterior no positiva no se publica una variación ni una interpretación comparativa. La coincidencia de extremos no garantiza que no existan huecos de importación.
+- Esta actualización es parcial: las tarjetas todavía no se fuerzan para cada tipo de consulta ni se completan las demás fases del plan. Verificar el despliegue antes de darla por activa.
 
 ### Límites confirmados en código
 

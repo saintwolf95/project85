@@ -180,7 +180,10 @@ def crear_plan_analitico_ventas(intento: Any) -> PlanAnaliticoVentas | None:
         return None
 
     inicio, fin = intento.fecha_inicio, intento.fecha_fin
-    inicio_anterior, fin_anterior = _rango_anterior(intento.periodo, inicio, fin)
+    if intento.fecha_inicio_comparacion and intento.fecha_fin_comparacion:
+        inicio_anterior, fin_anterior = intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion
+    else:
+        inicio_anterior, fin_anterior = _rango_anterior(intento.periodo, inicio, fin)
     inicio_abc, fin_abc = rango_clasificacion_abc(fin)
     parametros = {
         "fecha_inicio": inicio,
@@ -201,9 +204,15 @@ def crear_plan_analitico_ventas(intento: Any) -> PlanAnaliticoVentas | None:
             f"""
                 SELECT {ventas}, {unidades}, {margen}, {mgd},
                        COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END) AS productos_actuales,
-                       COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.producto_id END) AS productos_anteriores
+                       COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.producto_id END) AS productos_anteriores,
+                       COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin AND vh.ingreso_total > 0 AND c.cliente_pk <> 'SIN-CLIENTE' THEN vh.cliente_id END) AS clientes_activos,
+                       MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_minima_actual,
+                       MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_maxima_actual,
+                       MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.fecha_venta END) AS fecha_minima_anterior,
+                       MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.fecha_venta END) AS fecha_maxima_anterior
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
+                LEFT JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id
                 WHERE p.empresa_id = :empresa_id AND {alcance}
             """,
             parametros,
@@ -242,6 +251,34 @@ def crear_plan_analitico_ventas(intento: Any) -> PlanAnaliticoVentas | None:
             parametros,
         ))
     consultas.extend((
+        ConsultaAnalitica(
+            "clientes_comparativa",
+            f"""
+                SELECT COALESCE(c.cliente_pk || ' · ' || c.nombre, c.cliente_pk, c.nombre, 'Sin identificar') AS agrupacion,
+                       {ventas}
+                FROM ventas_historicas vh
+                JOIN productos p ON p.id = vh.producto_id
+                LEFT JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id
+                WHERE p.empresa_id = :empresa_id AND {alcance}
+                GROUP BY c.cliente_pk, c.nombre
+                ORDER BY ventas_periodo_actual DESC, agrupacion ASC
+                LIMIT 10
+            """,
+            parametros,
+        ),
+        ConsultaAnalitica(
+            "top_productos",
+            f"""
+                SELECT p.sku, COALESCE(p.nombre, 'Sin nombre') AS nombre, {ventas}
+                FROM ventas_historicas vh
+                JOIN productos p ON p.id = vh.producto_id
+                WHERE p.empresa_id = :empresa_id AND {alcance}
+                GROUP BY p.sku, p.nombre
+                ORDER BY ventas_periodo_actual DESC, p.sku ASC
+                LIMIT 10
+            """,
+            parametros,
+        ),
         ConsultaAnalitica(
             "top_caidas_sku",
             f"""{crear_cte_abc_ventas()}

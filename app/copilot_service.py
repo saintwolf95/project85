@@ -69,11 +69,11 @@ def build_metrics_marker(raw_data: Any, sql_query: str = "") -> str:
         summary = rows[0]
         numeric_data = {
             "ventas_eur": summary.get("ventas_periodo_actual"),
-            "variacion_ventas_eur": summary.get("ventas_variacion_absoluta"),
-            "variacion_ventas_pct": summary.get("ventas_variacion_pct"),
+            "variacion_ventas_pct": summary.get("ventas_variacion_pct") if summary.get("comparacion_verificada") and (summary.get("ventas_periodo_anterior") or 0) > 0 else None,
             "margen_eur": summary.get("margen_periodo_actual"),
-            "variacion_margen_pct": summary.get("margen_variacion_pct"),
-            "sku_con_venta": summary.get("productos_actuales"),
+            "mgd_eur": summary.get("mgd_periodo_actual"),
+            "ventas_unidades": summary.get("unidades_periodo_actual"),
+            "clientes_activos": summary.get("clientes_activos"),
         }
         numeric_data = {
             key: float(value)
@@ -799,15 +799,19 @@ def process_copilot_chat(
             cobertura_actual = cobertura_anterior = False
             tramos_equivalentes = False
             for dimension in (None, *intento.dimensiones):
-                etiqueta = {None: "Total", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias", "marca": "Marcas", "sku": "Productos", "comercial_cliente": "Comerciales asignados", "comercial_factura": "Comerciales de factura"}[dimension]
-                limite_dimension = intento.limites_dimensiones.get(dimension, 20) if dimension else None
+                etiqueta = {None: "Total", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias", "marca": "Marcas", "sku": "Productos", "comercial_cliente": "Comerciales asignados", "comercial_factura": "Comerciales de factura", "mes": "Meses"}[dimension]
+                limite_dimension = (50 if dimension == "mes" else intento.limites_dimensiones.get(dimension, 20)) if dimension else None
                 subintento = replace(intento, agrupacion=dimension, dimensiones=(), limite=limite_dimension)
                 try:
+                    if dimension == "mes":
+                        meses_actuales = (intento.fecha_fin.year - intento.fecha_inicio.year) * 12 + intento.fecha_fin.month - intento.fecha_inicio.month + 1
+                        if meses_actuales > (12 if intento.comparacion else 50):
+                            raise ValueError("La serie mensual requiere un período más corto")
                     sql, parametros = crear_consulta_semantica(subintento)
                     if dimension and dimension != "sku":
                         # El top se ordena por valor del período actual y se
                         # limita en SQL, no tras recortar las primeras 1.000 filas.
-                        if intento.comparacion:
+                        if intento.comparacion and dimension != "mes":
                             sql = re.sub(r"ORDER BY variacion_pct DESC\s*$", "ORDER BY periodo_actual DESC, agrupacion ASC", sql, flags=re.IGNORECASE)
                         sql = sql.rstrip() + " LIMIT :limite_dimension"
                         parametros = {**parametros, "limite_dimension": limite_dimension}
@@ -819,9 +823,12 @@ def process_copilot_chat(
                     # Una consulta fallida deja abortada la transacción en PostgreSQL.
                     db.rollback()
                     estados.append({"Bloque": etiqueta, "Estado": "Error de cálculo"})
-                    lineas.append(f"### {etiqueta}\n\nNo se pudo calcular este bloque; inténtalo de nuevo. No se ha considerado como cero.")
+                    detalle = " La serie mensual admite hasta 12 meses en una comparativa o 50 sin comparación." if dimension == "mes" else ""
+                    lineas.append(f"### {etiqueta}\n\nNo se pudo calcular este bloque; inténtalo de nuevo. No se ha considerado como cero.{detalle}")
                     continue
                 filas = filas or []
+                if dimension == "mes" and not intento.comparacion and intento.medida == "ventas_unidades":
+                    filas = [dict(fila, ventas_unidades=fila.get("unidades")) for fila in filas]
                 if intento.comparacion:
                     if dimension is None and filas:
                         cobertura_actual = bool(filas[0].get("registros_actuales"))
@@ -889,6 +896,15 @@ def process_copilot_chat(
                             diferencia = float(actual) - float(anterior)
                             porcentaje = f"{diferencia / abs(float(anterior)) * 100:.2f} %".replace(".", ",") if anterior else "N/D (base cero)"
                             lineas.append(f"| {nombre} | {mostrar_numero(actual)} | {mostrar_numero(anterior)} | {mostrar_numero(diferencia)} | {porcentaje} |")
+                elif dimension == "mes":
+                    lineas.append("### Meses")
+                    if not filas:
+                        lineas.append("Sin registros mensuales en el período solicitado.")
+                    else:
+                        lineas.append("| Mes | Valor |\n| --- | ---: |")
+                        for fila in filas:
+                            lineas.append(f"| {fila.get('agrupacion')} | {mostrar_numero(fila.get(intento.medida))} |")
+                        lineas.append("Solo se muestran meses con registros; un mes ausente no se interpreta automáticamente como cero.")
                 elif dimension == "sku":
                     lineas.append("### Productos\n\n" + renderizar_ranking_sku(filas or [], intento.medida, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion))
                 else:
@@ -1006,15 +1022,35 @@ def process_copilot_chat(
         from .analitica_ventas import crear_plan_analitico_ventas, es_pregunta_gerencial
 
         usar_plan_analitico = (
-            bool(get_copilot_model_profile(model_preference)["advanced"])
-            and intento.tipo in {"ventas", "rentabilidad"}
+            intento.tipo in {"ventas", "rentabilidad"}
             and intento.agrupacion not in {"cliente", "tipo_cliente", "comercial_cliente", "comercial_factura", "kd"}
+            and not any(clave not in {"fecha_inicio", "fecha_fin", "fecha_inicio_comparacion", "fecha_fin_comparacion"} for clave in intento.parametros)
             # El dossier global es para diagnósticos gerenciales. Las preguntas
             # de seguimiento deben ejecutar su desglose parametrizado, no repetir
             # el informe anterior ignorando filtro, SKU o agrupación solicitados.
             and es_pregunta_gerencial(user_message)
         )
         if usar_plan_analitico:
+            from .copilot_orchestrator import detectar_comparacion, _periodo_interanual_equivalente
+            if not detectar_comparacion(user_message) and intento.fecha_inicio and intento.fecha_fin:
+                corte_sql = """
+                    SELECT MAX(vh.fecha_venta) AS fecha_ultima
+                    FROM ventas_historicas vh JOIN productos p ON p.id = vh.producto_id
+                    WHERE p.empresa_id = :empresa_id AND vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin
+                """
+                cortes, error_corte = execute_sql(db, corte_sql, empresa_id, {"fecha_inicio": intento.fecha_inicio, "fecha_fin": intento.fecha_fin}, trusted_query=True)
+                if error_corte:
+                    db.rollback()
+                    return "No pude verificar la última fecha de ventas; no he calculado una comparación con un corte supuesto."
+                valor_corte = (cortes or [{}])[0].get("fecha_ultima")
+                if valor_corte:
+                    try:
+                        fecha_corte = date.fromisoformat(str(valor_corte)[:10])
+                    except ValueError:
+                        return "No pude interpretar la última fecha de ventas; no he calculado una comparación con un corte supuesto."
+                    intento = replace(intento, fecha_fin=fecha_corte, parametros={**intento.parametros, "fecha_fin": fecha_corte})
+                inicio_yoy, fin_yoy = _periodo_interanual_equivalente(intento.fecha_inicio, intento.fecha_fin)
+                intento = replace(intento, comparacion=True, fecha_inicio_comparacion=inicio_yoy, fecha_fin_comparacion=fin_yoy)
             plan_analitico = crear_plan_analitico_ventas(intento)
             if plan_analitico:
                 inicio_plan = time.perf_counter()
@@ -1041,9 +1077,41 @@ def process_copilot_chat(
                     if error:
                         logger.warning("No se pudo ejecutar el bloque analitico %s: %s", consulta.nombre, error)
                         bloques_fallidos.append(consulta.nombre)
+                        db.rollback()
                         continue
                     dossier["resultados"][consulta.nombre] = datos
                 if dossier["resultados"]:
+                    if "resumen" in bloques_fallidos or not dossier["resultados"].get("resumen"):
+                        return "No pude calcular el resumen general. No se ha considerado que las ventas sean cero; inténtalo de nuevo."
+                    resumen_filas = dossier["resultados"].get("resumen") or []
+                    resumen = resumen_filas[0] if resumen_filas else {}
+                    def fecha_evidencia(valor: Any) -> date | None:
+                        try:
+                            return date.fromisoformat(str(valor)[:10]) if valor else None
+                        except ValueError:
+                            return None
+                    inicio_real = fecha_evidencia(resumen.get("fecha_minima_actual"))
+                    fin_real = fecha_evidencia(resumen.get("fecha_maxima_actual"))
+                    inicio_prev = fecha_evidencia(resumen.get("fecha_minima_anterior"))
+                    fin_prev = fecha_evidencia(resumen.get("fecha_maxima_anterior"))
+                    fechas_equivalentes = bool(
+                        inicio_real and fin_real and inicio_prev and fin_prev
+                        and (inicio_real - plan_analitico.periodo_actual[0]).days == (inicio_prev - plan_analitico.periodo_anterior[0]).days
+                        and (plan_analitico.periodo_actual[1] - fin_real).days == (plan_analitico.periodo_anterior[1] - fin_prev).days
+                    )
+                    comparacion_verificada = fechas_equivalentes and (resumen.get("ventas_periodo_anterior") or 0) > 0
+                    resumen["comparacion_verificada"] = comparacion_verificada
+                    marker = build_metrics_marker(dossier) if inicio_real else ""
+                    fechas = (
+                        f"**Período solicitado:** {plan_analitico.periodo_actual[0]:%d-%m-%Y} – {plan_analitico.periodo_actual[1]:%d-%m-%Y}. "
+                        f"**Último día con registros en el período:** {fin_real:%d-%m-%Y}. "
+                        f"**Comparado con:** {plan_analitico.periodo_anterior[0]:%d-%m-%Y} – {plan_analitico.periodo_anterior[1]:%d-%m-%Y}."
+                        if fin_real else "No hay registros de ventas en el período solicitado; no se considera que las ventas sean cero."
+                    )
+                    aviso = "Las fechas registradas no certifican una carga completa; pueden existir días sin movimientos o huecos de importación. Los clientes activos identificados son clientes distintos con al menos una venta positiva; se excluye la clave SIN-CLIENTE."
+                    if not comparacion_verificada:
+                        motivo = "La venta comparable es cero o negativa; no se presenta una variación porcentual sin revisar esa base." if fechas_equivalentes else "No se presenta la variación ni los impulsores comparativos porque faltan registros o los tramos registrados no coinciden; puede deberse a actividad comercial o a una carga incompleta."
+                        return "\n\n".join(parte for parte in (marker, fechas, aviso, motivo) if parte)
                     respuesta = interpret_results(
                         history,
                         "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
@@ -1063,7 +1131,30 @@ def process_copilot_chat(
                         ",".join(bloques_fallidos) or "ninguno",
                         round((time.perf_counter() - inicio_plan) * 1000),
                     )
-                    return "\n\n".join(parte for parte in (respuesta, seguimiento, informe) if parte)
+                    respuesta = re.sub(r"<!-- copilot_metrics: [A-Za-z0-9+/=]+ -->", "", respuesta).strip()
+                    tablas = []
+                    for clave, titulo, campo in (
+                        ("clientes_comparativa", "Clientes · top 10 por ventas actuales", "agrupacion"),
+                        ("impulsores_seccion", "Secciones · 10 menores variaciones", "agrupacion"),
+                        ("top_productos", "Productos · top 10 por ventas actuales", "sku"),
+                    ):
+                        filas_tabla = dossier["resultados"].get(clave)
+                        if filas_tabla is None:
+                            tablas.append(f"### {titulo}\n\nNo se pudo calcular este bloque; no se considera que sus ventas sean cero.")
+                            continue
+                        if not filas_tabla:
+                            tablas.append(f"### {titulo}\n\nSin registros para los períodos consultados.")
+                            continue
+                        lineas_tabla = [f"### {titulo}", "| Elemento | Actual | Comparable | Diferencia |", "| --- | ---: | ---: | ---: |"]
+                        for fila in filas_tabla:
+                            nombre = str(fila.get(campo) or "Sin identificar").replace("|", "\\|")
+                            if campo == "sku":
+                                nombre += " · " + str(fila.get("nombre") or "Sin nombre").replace("|", "\\|")
+                            def eur(valor: Any) -> str:
+                                return f"{float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
+                            lineas_tabla.append(f"| {nombre} | {eur(fila.get('ventas_periodo_actual'))} | {eur(fila.get('ventas_periodo_anterior'))} | {eur(fila.get('ventas_variacion_absoluta'))} |")
+                        tablas.append("\n".join(lineas_tabla))
+                    return "\n\n".join(parte for parte in (marker, fechas, aviso, respuesta, *tablas, seguimiento, informe) if parte)
 
         sql_query, query_params = crear_consulta_semantica(intento)
         raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)

@@ -11,7 +11,7 @@ from .analitica_ventas import crear_cte_abc_ventas, es_pregunta_gerencial, rango
 
 
 ZONA_NEGOCIO = ZoneInfo("Europe/Madrid")
-DIMENSIONES_MULTIPLES = frozenset({"cliente", "seccion", "familia", "marca", "sku", "comercial_cliente", "comercial_factura"})
+DIMENSIONES_MULTIPLES = frozenset({"cliente", "seccion", "familia", "marca", "sku", "comercial_cliente", "comercial_factura", "mes"})
 
 
 @dataclass(frozen=True)
@@ -329,7 +329,7 @@ def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, d
 def detectar_comparacion(texto: str) -> bool:
     normalizado = normalizar_texto(texto)
     return _contiene(normalizado, (
-        "comparar", "compara", "comparalo", "compararlo", "comparacion", "frente a", "frente al", "respecto a", "respecto al", "contra", "diferencias", "vs", "variacion", "crecimiento", "tendencia", "evolucion"
+        "comparar", "compara", "comparado", "comparada", "comparalo", "compararlo", "comparacion", "frente a", "frente al", "respecto a", "respecto al", "contra", "diferencias", "vs", "variacion", "crecimiento", "tendencia", "evolucion", "mes anterior", "mes pasado", "periodo anterior"
     ))
 
 

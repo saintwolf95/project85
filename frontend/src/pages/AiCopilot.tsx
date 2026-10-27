@@ -94,6 +94,7 @@ const METRIC_LABELS: Record<string, string> = {
   sku_con_venta: 'SKU con venta',
   productos: 'Productos',
   clientes: 'Clientes',
+  clientes_activos: 'Clientes activos identificados',
   productos_alerta: 'Productos en alerta',
   productos_sobrestock: 'Productos con sobrestock',
 };
@@ -101,7 +102,7 @@ const METRIC_LABELS: Record<string, string> = {
 const formatMetricValue = (key: string, value: number, formato?: CopilotMetricPayload['formato']) => {
   const isPercent = key.includes('pct') || key.includes('_pp') || formato === 'porcentaje' && key.includes('periodo');
   if (isPercent) return `${value.toLocaleString('es-ES', { maximumFractionDigits: 2 })}%`;
-  if (key === 'productos' || key === 'sku_con_venta' || key.includes('unidades') || formato === 'unidades') {
+  if (key === 'productos' || key === 'sku_con_venta' || key === 'clientes_activos' || key.includes('unidades') || formato === 'unidades') {
     return value.toLocaleString('es-ES', { maximumFractionDigits: 0 });
   }
   if (formato === 'eur' || /(eur|ventas|beneficio|margen|inventario|variacion)/.test(key)) {
@@ -123,7 +124,7 @@ const CopilotMetricCards = ({ content }: { content: string }) => {
         return (
           <div key={key} className="rounded-[12px] border border-black/[0.08] bg-white px-3.5 py-3 dark:border-slate-700 dark:bg-slate-900/50">
             <p className="text-[11px] font-medium text-[#6e6e73] dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
-            <p className={`ai-tnum mt-1 text-[15px] font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-[#1d1d1f] dark:text-white'}`}>
+            <p className={`ai-tnum mt-1 text-[18px] font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-[#1d1d1f] dark:text-white'}`}>
               {formatMetricValue(key, value, payload.formato)}
             </p>
           </div>

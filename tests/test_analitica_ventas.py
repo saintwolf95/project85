@@ -209,6 +209,7 @@ class AnaliticaVentasTests(unittest.TestCase):
                     "ventas_periodo_anterior": 1000000,
                     "ventas_variacion_absoluta": -52400,
                     "ventas_variacion_pct": -5.24,
+                    "comparacion_verificada": True,
                     "margen_variacion_absoluta": -8200,
                 }],
                 "impulsores_familia": [{
@@ -364,7 +365,7 @@ Sin detalle.
 
         plan = crear_plan_analitico_ventas(intento)
         self.assertIsNotNone(plan)
-        self.assertEqual(len(plan.consultas), 9)
+        self.assertEqual(len(plan.consultas), 11)
         with motor.begin() as conexion:
             resultados = {
                 consulta_analitica.nombre: conexion.execute(

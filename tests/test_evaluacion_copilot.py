@@ -448,10 +448,13 @@ class EvaluacionCopilotTests(unittest.TestCase):
         def ejecutar_sql_ficticio(*args, **kwargs):
             llamadas_sql.append((args, kwargs))
             self.assertNotIn("usage_context", kwargs)
-            return [{"ventas_periodo_actual": 120}], None
+            if "AS fecha_ultima" in args[1]:
+                return [{"fecha_ultima": "2026-10-27"}], None
+            return [{"ventas_periodo_actual": 120, "ventas_periodo_anterior": 100, "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-27", "fecha_minima_anterior": "2026-09-01", "fecha_maxima_anterior": "2026-09-27"}], None
 
         with (
-            patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan),
+            patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)),
+            patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan) as crear_plan,
             patch("app.copilot_context.construir_resumen_operativo", return_value=""),
             patch("app.copilot_service.execute_sql", side_effect=ejecutar_sql_ficticio),
             patch("app.copilot_service.interpret_results", return_value="Respuesta verificada") as interpretar,
@@ -463,9 +466,62 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 model_preference="terra",
             )
 
-        self.assertEqual(len(llamadas_sql), 1)
+        self.assertEqual(len(llamadas_sql), 2)
         self.assertIn("Respuesta verificada", respuesta)
         self.assertEqual(interpretar.call_args.kwargs["usage_context"]["empresa_id"], 1)
+        self.assertEqual(crear_plan.call_args.args[0].fecha_inicio_comparacion, date(2025, 10, 1))
+        self.assertEqual(crear_plan.call_args.args[0].fecha_fin_comparacion, date(2025, 10, 27))
+
+    def test_resumen_gerencial_no_inventa_variacion_si_falta_comparable(self):
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+
+        plan = SimpleNamespace(
+            periodo_actual=(date(2026, 10, 1), date(2026, 10, 27)),
+            periodo_anterior=(date(2025, 10, 1), date(2025, 10, 27)),
+            consultas=(SimpleNamespace(nombre="resumen", sql="SELECT 1", parametros={}),),
+        )
+        fila = {"ventas_periodo_actual": 120, "ventas_periodo_anterior": 0, "ventas_variacion_pct": 0,
+                "margen_periodo_actual": 20, "mgd_periodo_actual": 15, "unidades_periodo_actual": 3,
+                "clientes_activos": 2, "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-27"}
+        with (patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)),
+              patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan),
+              patch("app.copilot_context.construir_resumen_operativo", return_value=""),
+              patch("app.copilot_service.execute_sql", side_effect=lambda _db, sql, *_args, **_kw: ([{"fecha_ultima": "2026-10-27"}], None) if "AS fecha_ultima" in sql else ([fila], None)),
+              patch("app.copilot_service.interpret_results") as interpretar):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "¿Cómo va la empresa este mes?"}], 7)
+        interpretar.assert_not_called()
+        self.assertIn("Último día con registros", respuesta)
+        self.assertIn("No se presenta la variación", respuesta)
+        self.assertNotIn("variacion_ventas_pct", respuesta)
+        import base64, json, re
+        match = re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", respuesta)
+        metricas = json.loads(base64.b64decode(match.group(1)))['data']
+        self.assertEqual(metricas['ventas_eur'], 120)
+        self.assertEqual(metricas['clientes_activos'], 2)
+        self.assertNotIn('variacion_ventas_pct', metricas)
+
+    def test_resumen_gerencial_compara_hasta_ultimo_dia_disponible(self):
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+        plan = SimpleNamespace(periodo_actual=(date(2026, 10, 1), date(2026, 10, 24)),
+                               periodo_anterior=(date(2025, 10, 1), date(2025, 10, 24)),
+                               consultas=(SimpleNamespace(nombre="resumen", sql="SELECT 1", parametros={}),))
+        fila = {"ventas_periodo_actual": 120, "ventas_periodo_anterior": 100,
+                "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-24",
+                "fecha_minima_anterior": "2025-10-01", "fecha_maxima_anterior": "2025-10-24"}
+        with (patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)),
+              patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan) as crear_plan,
+              patch("app.copilot_context.construir_resumen_operativo", return_value=""),
+              patch("app.copilot_service.execute_sql", side_effect=lambda _db, sql, *_args, **_kw: ([{"fecha_ultima": "2026-10-24"}], None) if "AS fecha_ultima" in sql else ([fila], None)),
+              patch("app.copilot_service.interpret_results", return_value="Respuesta")):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "¿Cómo va la empresa este mes?"}], 7)
+        enviado = crear_plan.call_args.args[0]
+        self.assertEqual(enviado.fecha_fin, date(2026, 10, 24))
+        self.assertEqual(enviado.fecha_fin_comparacion, date(2025, 10, 24))
+        self.assertIn("24-10-2026", respuesta)
 
     def test_resumen_multidimensional_incluye_todos_los_bloques_y_reporta_fallos(self):
         class SesionFicticia:
@@ -519,6 +575,7 @@ class EvaluacionCopilotTests(unittest.TestCase):
             respuesta_filtrada = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 de la familia 'Inexistente' por clientes y top 10 productos"}], 7)
             respuesta_comercial_factura = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con clientes y comerciales de factura"}], 7)
             respuesta_comercial_asignado = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con clientes y comerciales asignados"}], 7)
+            respuesta_mensual = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas mensuales desde 01/05/2026 hasta 31/05/2026 con clientes"}], 7)
         self.assertIn("Cliente A", respuesta)
         self.assertIn("Sección A", respuesta)
         self.assertIn("Producto A", respuesta)
@@ -551,6 +608,10 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertNotIn("Factura B", respuesta_comercial_factura)
         self.assertIn("Comercial Asignado A", respuesta_comercial_asignado)
         self.assertNotIn("No se pudo calcular", respuesta_comercial_asignado)
+        self.assertIn("### Meses", respuesta_mensual)
+        self.assertIn("2026-05", respuesta_mensual)
+        self.assertIn("### Clientes", respuesta_mensual)
+        self.assertNotIn("No se pudo calcular", respuesta_mensual)
 
     def test_limites_independientes_se_persisten_en_el_contrato(self):
         from app.copilot_orchestrator import restaurar_intento
@@ -580,7 +641,6 @@ class EvaluacionCopilotTests(unittest.TestCase):
     def test_dimensiones_no_implementadas_se_declaran_sin_omitirlas(self):
         for texto, dimension in (
             ("Ventas de este mes con clientes y comerciales", "comercial"),
-            ("Ventas mensuales de este año fiscal por clientes", "meses"),
         ):
             with self.subTest(texto=texto):
                 intento, aclaracion = analizar_intencion([{"role": "user", "content": texto}])

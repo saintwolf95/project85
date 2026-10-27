@@ -595,16 +595,15 @@ def renderizar_ranking_sku(
                 f"{formato(variacion)} | {_porcentaje(porcentaje)} |"
             )
     else:
-        lineas.extend((
-            "| Referencia | Producto | Familia | Ventas | MG | MGD | MG % |",
-            "| --- | --- | --- | ---: | ---: | ---: | ---: |",
-        ))
+        if medida == "ventas_unidades":
+            lineas.extend(("| Referencia | Producto | Familia | Unidades | Ventas | MG | MGD |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"))
+        else:
+            lineas.extend(("| Referencia | Producto | Familia | Ventas | MG | MGD | MG % |", "| --- | --- | --- | ---: | ---: | ---: | ---: |"))
         for fila in filas:
-            lineas.append(
-                f"| {fila.get('referencia') or 'Sin referencia'} | {fila.get('producto') or 'Sin nombre'} | "
-                f"{fila.get('familia') or 'Sin familia'} | {_eur(fila.get('ventas_eur'))} | "
-                f"{_eur(fila.get('margen_eur'))} | {_eur(fila.get('mgd_eur'))} | {_porcentaje(fila.get('margen_pct'))} |"
-            )
+            if medida == "ventas_unidades":
+                lineas.append(f"| {fila.get('referencia') or 'Sin referencia'} | {fila.get('producto') or 'Sin nombre'} | {fila.get('familia') or 'Sin familia'} | {_entero(fila.get('ventas_unidades'))} | {_eur(fila.get('ventas_eur'))} | {_eur(fila.get('margen_eur'))} | {_eur(fila.get('mgd_eur'))} |")
+            else:
+                lineas.append(f"| {fila.get('referencia') or 'Sin referencia'} | {fila.get('producto') or 'Sin nombre'} | {fila.get('familia') or 'Sin familia'} | {_eur(fila.get('ventas_eur'))} | {_eur(fila.get('margen_eur'))} | {_eur(fila.get('mgd_eur'))} | {_porcentaje(fila.get('margen_pct'))} |")
     lineas.append(f"\n- **Referencias mostradas:** {len(filas)} · ordenadas por **{etiqueta.lower()}**.")
     return "\n".join(lineas)
 
@@ -686,6 +685,7 @@ def renderizar_desglose_agrupado(
     comparacion: bool = False,
     inicio_anterior: date | None = None,
     fin_anterior: date | None = None,
+    limite: int = 20,
 ) -> str:
     """Tabla determinista para dimensiones comerciales de cualquier cardinalidad."""
     etiqueta = _etiqueta_medida(medida)
@@ -697,7 +697,7 @@ def renderizar_desglose_agrupado(
         copia = dict(fila)
         copia["valor"] = _numero(copia.get(medida))
         preparadas.append(copia)
-    visibles = _filas_desglose_visibles(preparadas, comparacion)
+    visibles = _filas_desglose_visibles(preparadas, comparacion, limite)
     if not visibles:
         return (
             f"**{etiqueta} por {dimension.lower()}**\n\n"

@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.04
+## Estado verificado · 27/10/2026 · v2.05
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -118,6 +118,10 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - Editar prepara una copia en el editor y explica que se enviará como pregunta nueva. Permite cancelar; cambiar de chat limpia la edición. Antes de reemplazar un borrador se solicita confirmación.
 
 ## Diagnóstico y plan propuesto — pendiente de implementación
+
+Actualización v2.05: inicio parcial del punto 1. Preguntas de ventas con dos o más de «clientes», «secciones», «familias», «marcas», «productos/artículos/referencias/SKU» o comerciales (asignado al cliente o de factura) ejecutan total y bloques separados usando el período y filtros compartidos. Si no se identifica el tipo de comercial, se pide aclaración. Los fallos aparecen explícitamente por bloque. Los desgloses combinados por meses y los rankings ascendentes se declaran no implementados en vez de omitirse o ordenarse incorrectamente. Se pueden combinar ventas, unidades, margen bruto y MGD; porcentajes de margen combinados requieren una pregunta separada. El caso de una sola dimensión mantiene la ruta anterior. Los límites explícitos por dimensión se conservan en el contrato y se aplican a SQL, con un máximo de 50; si no se indica uno se muestran hasta 20. XLSX/PDF reutilizan exactamente los bloques calculados y sus estados en un bundle firmado. El total muestra fechas extremas y días con registros, sin tratar la ausencia de movimientos diarios como prueba de un hueco de importación. Cuando no hay ningún registro en uno de los períodos se muestra N/D y no se calcula la variación; detectar la cobertura parcial sigue pendiente. Las siguientes fases siguen pendientes.
+
+En comparaciones multidimensionales, los extremos de los registros se contrastan con las posiciones relativas de cada período. Si no coinciden, no se publica ni exporta una variación: se informa que puede ser consecuencia de actividad comercial o carga incompleta. Esto es una comprobación conservadora, no prueba de datos ausentes ni de integridad; el importador aún no registra cobertura certificada por fecha.
 
 ### Límites confirmados en código
 

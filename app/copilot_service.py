@@ -7,6 +7,8 @@ import hashlib
 import hmac
 import json
 import time
+from dataclasses import replace
+from datetime import date
 from numbers import Number
 from typing import Any
 from openai import OpenAI
@@ -698,6 +700,7 @@ def process_copilot_chat(
     model_preference: str = "terra",
     contexto: str = "",
     contexto_intencion: dict[str, Any] | None = None,
+    _intento_forzado: Any = None,
 ) -> str:
     if not history:
         return "No hay historial de mensajes."
@@ -710,6 +713,8 @@ def process_copilot_chat(
     from .copilot_business_tools import buscar_senales, descomponer_variacion, semantic_context, serie_temporal
 
     intento, aclaracion = analizar_intencion(history, contexto_intencion)
+    if _intento_forzado is not None:
+        intento, aclaracion = _intento_forzado, None
     if aclaracion:
         return aclaracion
 
@@ -739,6 +744,162 @@ def process_copilot_chat(
     contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
+        if intento.dimensiones:
+            if intento.orden == "asc":
+                return "Todavía no puedo ordenar conjuntamente los desgloses multidimensionales por mayores caídas o menores valores. Solicita cada ranking por separado para no obtener un orden incorrecto."
+            if intento.metricas_solicitadas:
+                if re.search(r"(?:%\s*(?:mgd?|margen)|(?:mgd?|margen)\s*%|porcentaje\s+(?:de\s+)?(?:mgd?|margen))", normalized_message):
+                    return "En el análisis multidimensional aún no puedo combinar porcentajes de margen con otras métricas. Indica cada importe por separado o solicita el porcentaje en otra pregunta."
+                etiquetas = {"ventas_eur": "Ventas", "ventas_unidades": "Unidades", "margen_eur": "Margen bruto", "mgd_eur": "MGD"}
+                respuestas, bloques = [], {}
+                periodo_actual, periodo_anterior = {}, {}
+                for metrica in intento.metricas_solicitadas:
+                    subintento = replace(intento, medida=metrica, metricas_solicitadas=())
+                    respuesta_metrica = process_copilot_chat(db, history, empresa_id, model_preference, contexto, contexto_intencion, _intento_forzado=subintento)
+                    informe_metrica = extract_signed_report_artifact(respuesta_metrica)
+                    respuestas.append(f"## {etiquetas[metrica]}\n\n{REPORT_MARKER_PATTERN.sub('', respuesta_metrica).strip()}")
+                    if informe_metrica:
+                        periodo_actual = informe_metrica.get("periodo_actual", {})
+                        periodo_anterior = informe_metrica.get("periodo_anterior", {})
+                        for nombre, valor in informe_metrica.get("resultados", {}).items():
+                            bloques[f"{metrica}_{nombre}"] = valor
+                    else:
+                        bloques[f"{metrica}_estado"] = [{"Bloque": etiquetas[metrica], "Estado": "No se pudo preparar"}]
+                informe = {"periodo_actual": periodo_actual, "periodo_anterior": periodo_anterior, "resultados": bloques}
+                return "\n\n".join([*respuestas, build_report_artifact_marker(informe)])
+            # Las tablas son deterministas: ninguna dimensión solicitada queda
+            # a discreción del modelo ni desaparece por el ranking de SKU.
+            if intento.medida not in {"ventas_eur", "ventas_unidades", "margen_eur", "mgd_eur"}:
+                return "Para este resumen con varias dimensiones, indica una métrica: ventas, unidades, margen bruto o MGD."
+            from .analitica_ventas import renderizar_desglose_agrupado, renderizar_ranking_sku
+
+            def mostrar_numero(valor: Any) -> str:
+                numero = float(valor or 0)
+                texto = f"{numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                return texto if intento.medida == "ventas_unidades" else f"{texto} €"
+
+            def fecha_corta(valor: Any) -> str:
+                if not valor:
+                    return "sin registros"
+                texto = str(valor)[:10]
+                try:
+                    return date.fromisoformat(texto).strftime("%d-%m-%Y")
+                except ValueError:
+                    return "fecha no disponible"
+
+            def fecha_sql(valor: Any) -> date | None:
+                try:
+                    return date.fromisoformat(str(valor)[:10]) if valor else None
+                except (TypeError, ValueError):
+                    return None
+
+            lineas = [f"## Resumen por dimensiones\n\nPeríodo solicitado: **{intento.fecha_inicio:%d-%m-%Y} – {intento.fecha_fin:%d-%m-%Y}**."]
+            resultados: dict[str, Any] = {}
+            estados: list[dict[str, str]] = []
+            cobertura_actual = cobertura_anterior = False
+            tramos_equivalentes = False
+            for dimension in (None, *intento.dimensiones):
+                etiqueta = {None: "Total", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias", "marca": "Marcas", "sku": "Productos", "comercial_cliente": "Comerciales asignados", "comercial_factura": "Comerciales de factura"}[dimension]
+                limite_dimension = intento.limites_dimensiones.get(dimension, 20) if dimension else None
+                subintento = replace(intento, agrupacion=dimension, dimensiones=(), limite=limite_dimension)
+                try:
+                    sql, parametros = crear_consulta_semantica(subintento)
+                    if dimension and dimension != "sku":
+                        # El top se ordena por valor del período actual y se
+                        # limita en SQL, no tras recortar las primeras 1.000 filas.
+                        if intento.comparacion:
+                            sql = re.sub(r"ORDER BY variacion_pct DESC\s*$", "ORDER BY periodo_actual DESC, agrupacion ASC", sql, flags=re.IGNORECASE)
+                        sql = sql.rstrip() + " LIMIT :limite_dimension"
+                        parametros = {**parametros, "limite_dimension": limite_dimension}
+                    filas, error = execute_sql(db, sql, empresa_id, parametros, trusted_query=True)
+                except Exception:
+                    logger.exception("[COPILOT MULTIDIMENSION] Error preparando bloque %s", etiqueta)
+                    filas, error = None, "Error al preparar el bloque"
+                if error:
+                    # Una consulta fallida deja abortada la transacción en PostgreSQL.
+                    db.rollback()
+                    estados.append({"Bloque": etiqueta, "Estado": "Error de cálculo"})
+                    lineas.append(f"### {etiqueta}\n\nNo se pudo calcular este bloque; inténtalo de nuevo. No se ha considerado como cero.")
+                    continue
+                filas = filas or []
+                if intento.comparacion:
+                    if dimension is None and filas:
+                        cobertura_actual = bool(filas[0].get("registros_actuales"))
+                        cobertura_anterior = bool(filas[0].get("registros_anteriores"))
+                        primera_actual = fecha_sql(filas[0].get("fecha_minima_actual"))
+                        ultima_actual = fecha_sql(filas[0].get("fecha_maxima_actual"))
+                        primera_anterior = fecha_sql(filas[0].get("fecha_minima_anterior"))
+                        ultima_anterior = fecha_sql(filas[0].get("fecha_maxima_anterior"))
+                        if primera_actual and ultima_actual and primera_anterior and ultima_anterior:
+                            tramos_equivalentes = (
+                                (primera_actual - intento.fecha_inicio).days == (primera_anterior - intento.fecha_inicio_comparacion).days
+                                and (intento.fecha_fin - ultima_actual).days == (intento.fecha_fin_comparacion - ultima_anterior).days
+                            )
+                    corregidas = []
+                    for fila in filas:
+                        fila = dict(fila)
+                        if not cobertura_actual:
+                            fila["periodo_actual"] = None
+                        if not cobertura_anterior:
+                            fila["periodo_anterior"] = None
+                        if not cobertura_actual or not cobertura_anterior or not tramos_equivalentes:
+                            fila["variacion_absoluta"] = fila["variacion_pct"] = None
+                        elif fila.get("periodo_anterior") == 0:
+                            fila["variacion_pct"] = None
+                        corregidas.append(fila)
+                    filas = corregidas
+                resultados[dimension or "total"] = filas
+                estados.append({"Bloque": etiqueta, "Estado": "Calculado" if filas else "Sin filas"})
+                if dimension is None:
+                    fila = (filas or [{}])[0]
+                    inicio_registrado = fecha_corta(fila.get("fecha_minima_actual"))
+                    fin_registrado = fecha_corta(fila.get("fecha_maxima_actual"))
+                    if fila.get("fecha_minima_actual") and fila.get("fecha_maxima_actual"):
+                        lineas.append(f"**Registros del período actual:** {inicio_registrado} – {fin_registrado} · {fila.get('dias_con_registros_actual', 'N/D')} días con ventas registradas.")
+                    if intento.comparacion and fila.get("fecha_minima_anterior") and fila.get("fecha_maxima_anterior"):
+                        lineas.append(f"**Registros del período comparable:** {fecha_corta(fila.get('fecha_minima_anterior'))} – {fecha_corta(fila.get('fecha_maxima_anterior'))} · {fila.get('dias_con_registros_anterior', 'N/D')} días con ventas registradas.")
+                    if fila.get("fecha_minima_actual") or fila.get("fecha_minima_anterior"):
+                        lineas.append("La primera y la última fecha registradas no garantizan una carga completa; puede haber días sin movimientos o huecos de importación.")
+                    if intento.comparacion:
+                        actual, anterior = fila.get("periodo_actual"), fila.get("periodo_anterior")
+                        total_actual = mostrar_numero(actual) if cobertura_actual else "N/D (sin registros)"
+                        total_anterior = mostrar_numero(anterior) if cobertura_anterior else "N/D (sin registros)"
+                        variacion = mostrar_numero(fila.get("variacion_absoluta")) if cobertura_actual and cobertura_anterior and tramos_equivalentes else "N/D"
+                        lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Comparable: **{total_anterior}** · Variación absoluta: **{variacion}**.")
+                        if not cobertura_actual or not cobertura_anterior:
+                            lineas.append("No se puede comparar: no hay registros de ventas en al menos uno de los períodos; no es posible confirmar si hubo una carga completa.")
+                        elif not tramos_equivalentes:
+                            lineas.append("Los tramos con ventas registradas no coinciden dentro de ambos períodos. La diferencia podría deberse a actividad comercial o a una carga incompleta; no se calcula la variación hasta contrastar la cobertura.")
+                    elif not fila.get("productos"):
+                        lineas.append(f"### {etiqueta}\n\nNo hay registros de venta en el período solicitado; no se asume un total cero.")
+                    else:
+                        lineas.append(f"### {etiqueta}\n\n{intento.medida.replace('_', ' ').title()}: **{mostrar_numero(fila.get(intento.medida))}**.")
+                elif intento.comparacion:
+                    lineas.append(f"### {etiqueta}\n\nComparable: **{intento.fecha_inicio_comparacion:%d-%m-%Y} – {intento.fecha_fin_comparacion:%d-%m-%Y}**.")
+                    if not filas:
+                        lineas.append("Sin registros para esta dimensión en los períodos consultados.")
+                        continue
+                    lineas.append("| Elemento | Actual | Comparable | Variación | Variación % |\n| --- | ---: | ---: | ---: | ---: |")
+                    for fila in filas:
+                        nombre = str(fila.get("referencia") or fila.get("agrupacion") or "Sin identificar").replace("|", "\\|")
+                        actual, anterior = fila.get("periodo_actual"), fila.get("periodo_anterior")
+                        if actual is None or anterior is None or not tramos_equivalentes:
+                            lineas.append(f"| {nombre} | {mostrar_numero(actual) if actual is not None else 'N/D'} | {mostrar_numero(anterior) if anterior is not None else 'N/D'} | N/D | N/D |")
+                        else:
+                            diferencia = float(actual) - float(anterior)
+                            porcentaje = f"{diferencia / abs(float(anterior)) * 100:.2f} %".replace(".", ",") if anterior else "N/D (base cero)"
+                            lineas.append(f"| {nombre} | {mostrar_numero(actual)} | {mostrar_numero(anterior)} | {mostrar_numero(diferencia)} | {porcentaje} |")
+                elif dimension == "sku":
+                    lineas.append("### Productos\n\n" + renderizar_ranking_sku(filas or [], intento.medida, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion))
+                else:
+                    lineas.append(f"### {etiqueta}\n\n" + renderizar_desglose_agrupado(filas, intento.medida, dimension, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion, limite=limite_dimension))
+            resultados["estado_bloques"] = estados
+            informe = {
+                "periodo_actual": {"inicio": intento.fecha_inicio.isoformat(), "fin": intento.fecha_fin.isoformat()},
+                "periodo_anterior": {"inicio": intento.fecha_inicio_comparacion.isoformat(), "fin": intento.fecha_fin_comparacion.isoformat()} if intento.comparacion else {},
+                "resultados": resultados,
+            }
+            return "\n\n".join([*lineas, build_report_artifact_marker(informe)])
         if intento.medida == "resumen_financiero" or (intento.agrupacion == "mes" and intento.comparacion):
             sql_query, query_params = crear_consulta_semantica(intento)
             raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)

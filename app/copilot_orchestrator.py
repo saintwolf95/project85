@@ -11,6 +11,7 @@ from .analitica_ventas import crear_cte_abc_ventas, es_pregunta_gerencial, rango
 
 
 ZONA_NEGOCIO = ZoneInfo("Europe/Madrid")
+DIMENSIONES_MULTIPLES = frozenset({"cliente", "seccion", "familia", "marca", "sku", "comercial_cliente", "comercial_factura"})
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,9 @@ class IntentoSemantico:
     limite: int | None = None
     orden: str = "desc"
     ajuste_fecha: str | None = None
+    dimensiones: tuple[str, ...] = ()
+    limites_dimensiones: dict[str, int] = field(default_factory=dict)
+    metricas_solicitadas: tuple[str, ...] = ()
 
 
 def serializar_intento(intento: IntentoSemantico | None) -> dict[str, Any] | None:
@@ -55,6 +59,9 @@ def serializar_intento(intento: IntentoSemantico | None) -> dict[str, Any] | Non
         "limite": intento.limite,
         "orden": intento.orden,
         "ajuste_fecha": intento.ajuste_fecha,
+        "dimensiones": list(intento.dimensiones),
+        "limites_dimensiones": intento.limites_dimensiones,
+        "metricas_solicitadas": list(intento.metricas_solicitadas),
     }
 
 
@@ -92,6 +99,9 @@ def restaurar_intento(datos: dict[str, Any] | None) -> IntentoSemantico | None:
         limite=datos.get("limite") if isinstance(datos.get("limite"), int) else None,
         orden=datos.get("orden") if datos.get("orden") in {"asc", "desc"} else "desc",
         ajuste_fecha=datos.get("ajuste_fecha") if isinstance(datos.get("ajuste_fecha"), str) else None,
+        dimensiones=tuple(d for d in datos.get("dimensiones", []) if d in DIMENSIONES_MULTIPLES) if isinstance(datos.get("dimensiones"), list) else (),
+        limites_dimensiones={k: v for k, v in (datos.get("limites_dimensiones") or {}).items() if k in DIMENSIONES_MULTIPLES and isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 50} if isinstance(datos.get("limites_dimensiones"), dict) else {},
+        metricas_solicitadas=tuple(m for m in datos.get("metricas_solicitadas", []) if m in {"ventas_eur", "ventas_unidades", "margen_eur", "mgd_eur"}) if isinstance(datos.get("metricas_solicitadas"), list) else (),
     )
 
 
@@ -432,6 +442,55 @@ def detectar_agrupacion(texto: str) -> str | None:
     return None
 
 
+def detectar_dimensiones_multiples(texto: str) -> tuple[str, ...]:
+    """Reconoce las dimensiones explícitas de un resumen multidimensional."""
+    texto = normalizar_texto(texto)
+    texto = re.sub(r"\b(?:numero|cantidad|conteo)\s+de\s+skus?\s+(?:con\s+venta|vendidos?)\b", "", texto)
+    comercial_factura = r"\bcomerciales?\s+(?:de\s+)?factura\b"
+    comercial_cliente = r"\bcomerciales?\s+(?:asignad[oa]s?|del?\s+cliente)\b|\bnombres?\s+comerciales?\b"
+    texto_sin_tipo_comercial = re.sub(f"(?:{comercial_factura}|{comercial_cliente})", "", texto)
+    patrones = (
+        ("cliente", r"\bclientes\b|\b(?:por|cada)\s+cliente\b"),
+        ("seccion", r"\bsecciones\b|\b(?:por|cada)\s+seccion\b"),
+        ("familia", r"\bfamilias\b|\b(?:por|cada)\s+familia\b"),
+        ("marca", r"\bmarcas\b|\b(?:por|cada)\s+marca\b"),
+        ("sku", r"\b(?:productos|articulos|referencias|skus?)\b|\b(?:por|cada)\s+(?:producto|articulo|referencia)\b"),
+        ("comercial_factura", comercial_factura),
+        ("comercial_cliente", comercial_cliente),
+        ("mes", r"\b(?:por|cada)\s+mes(?:es)?\b|\bmensuales\b"),
+    )
+    dimensiones = tuple(nombre for nombre, patron in patrones if re.search(patron, texto))
+    if re.search(r"\b(?:por|cada|y|con)\s+comerciales?\b", texto_sin_tipo_comercial):
+        dimensiones += ("comercial",)
+    return dimensiones if len(dimensiones) > 1 else ()
+
+
+def detectar_limites_dimensiones(texto: str) -> dict[str, int]:
+    """Vincula cada top a su dimensión, no a las demás tablas."""
+    texto = normalizar_texto(texto)
+    nombres = {"cliente": r"clientes?", "seccion": r"seccion(?:es)?", "familia": r"familias?", "marca": r"marcas?", "sku": r"(?:productos?|articulos?|referencias?|skus?)", "comercial_factura": r"comerciales?\s+(?:de\s+)?factura", "comercial_cliente": r"comerciales?\s+(?:asignad[oa]s?|del?\s+cliente)"}
+    limites = {}
+    for dimension, sustantivo in nombres.items():
+        coincidencia = re.search(rf"\b(?:top|primeros?|primeras?|mejores?|mayores?|peores?)\s*(\d{{1,2}})\s+(?:de\s+)?{sustantivo}\b", texto)
+        if coincidencia:
+            limites[dimension] = min(max(int(coincidencia.group(1)), 1), 50)
+    return limites
+
+
+def detectar_metricas_multiples(texto: str) -> tuple[str, ...]:
+    texto = normalizar_texto(texto)
+    metricas = []
+    if _contiene(texto, ("ventas", "venta", "facturacion", "ingresos")):
+        metricas.append("ventas_eur")
+    if _contiene(texto, ("unidades", "cantidad vendida")):
+        metricas.append("ventas_unidades")
+    if _contiene(texto, ("mgd", "margen en destino", "margen destino")):
+        metricas.append("mgd_eur")
+    if _contiene(texto, ("mg", "margen bruto", "beneficio")) or re.search(r"\bmargen\b(?!\s+(?:en\s+)?destino)", texto):
+        metricas.append("margen_eur")
+    return tuple(metricas) if len(metricas) > 1 else ()
+
+
 def detectar_filtros(texto: str) -> dict[str, str]:
     """Extrae filtros concretos que se convierten siempre en parametros SQL."""
     filtros: dict[str, str] = {}
@@ -585,6 +644,7 @@ def analizar_intencion(
 
     actual = mensajes_usuario[-1]
     texto_analizado = actual
+    dimensiones = detectar_dimensiones_multiples(actual)
     comparacion_fiscal = _resolver_comparacion_fiscal(actual)
     if comparacion_fiscal:
         (
@@ -645,10 +705,21 @@ def analizar_intencion(
         if medida:
             texto_analizado = f"{anterior} {actual}"
 
+    if not dimensiones and len(mensajes_usuario) > 1 and not intento_anterior:
+        dimensiones = detectar_dimensiones_multiples(texto_analizado)
+
     if not medida:
         if _es_pregunta_agregada(actual):
             return None, "¿Quieres analizar ventas en euros, unidades vendidas o inventario en euros?"
         return None, None
+
+    no_implementadas = [d for d in dimensiones if d not in DIMENSIONES_MULTIPLES]
+    if no_implementadas and tipo in ("ventas", "rentabilidad"):
+        nombres = {"comercial": "comerciales", "mes": "meses"}
+        pendientes = ", ".join(nombres[d] for d in no_implementadas)
+        if "comercial" in no_implementadas:
+            return None, "¿Quieres el desglose por comercial asignado al cliente o por comercial de factura? Indícalo para no confundir ambos datos."
+        return None, f"Todavía no puedo incluir {pendientes} junto con los demás desgloses en una sola respuesta. Pídelo por separado para no omitir ningún bloque."
 
     filtros = detectar_filtros(texto_analizado)
     if intento_anterior:
@@ -675,6 +746,8 @@ def analizar_intencion(
         return None, "Las dimensiones de cliente, KD y comercial están asociadas a ventas. ¿Quieres analizar las ventas en euros para ese desglose?"
 
     agrupacion_actual = detectar_agrupacion(actual)
+    if intento_anterior and intento_anterior.dimensiones and not dimensiones and not agrupacion_actual:
+        dimensiones = intento_anterior.dimensiones
     if intento_anterior:
         agrupacion = agrupacion_actual or intento_anterior.agrupacion
     else:
@@ -764,6 +837,12 @@ def analizar_intencion(
         limite=limite,
         orden=orden,
         ajuste_fecha=ajuste_fecha,
+        dimensiones=dimensiones if tipo in ("ventas", "rentabilidad") else (),
+        limites_dimensiones=(
+            {**(intento_anterior.limites_dimensiones if intento_anterior else {}), **detectar_limites_dimensiones(actual if intento_anterior else texto_analizado)}
+            if dimensiones else {}
+        ),
+        metricas_solicitadas=(detectar_metricas_multiples(texto_analizado) if dimensiones else ()),
     ), None
 
 
@@ -1057,6 +1136,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                            COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END) AS productos
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    {join_clientes}
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -1070,6 +1150,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                            COALESCE(p.nombre, 'Sin nombre') AS producto,
                            COALESCE(p.familia, 'Sin familia') AS familia,
                            COALESCE(SUM(vh.ingreso_total), 0) AS ventas_eur,
+                           COALESCE(SUM(vh.cantidad_vendida), 0) AS ventas_unidades,
                            COALESCE(SUM(vh.margen_bruto_eur), 0) AS margen_eur,
                            COALESCE(SUM(vh.margen_destino_eur), 0) AS mgd_eur,
                            CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0
@@ -1077,6 +1158,7 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
                            COUNT(DISTINCT vh.producto_id) AS productos
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
+                    {join_clientes}
                     {join_abc}
                     {join_metricas}
                     WHERE {condiciones}
@@ -1130,7 +1212,15 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             else:
                 sql = f"""{prefijo_abc}
                     SELECT {columnas_comparacion},
-                           {productos_actuales} AS productos{columna_clientes}
+                           {productos_actuales} AS productos,
+                           COUNT(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN 1 END) AS registros_actuales,
+                           COUNT(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN 1 END) AS registros_anteriores,
+                           MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_minima_actual,
+                           MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_maxima_actual,
+                           COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS dias_con_registros_actual,
+                           MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_minima_anterior,
+                           MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_maxima_anterior,
+                           COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS dias_con_registros_anterior{columna_clientes}
                     FROM ventas_historicas vh
                     JOIN productos p ON p.id = vh.producto_id
                     {join_clientes}
@@ -1156,7 +1246,10 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         else:
             sql = f"""{prefijo_abc}
                    SELECT {expresion_agregada} AS {alias_agregado},
-                          COUNT(DISTINCT vh.producto_id) AS productos{columna_clientes}
+                          COUNT(DISTINCT vh.producto_id) AS productos,
+                          MIN(vh.fecha_venta) AS fecha_minima_actual,
+                          MAX(vh.fecha_venta) AS fecha_maxima_actual,
+                          COUNT(DISTINCT vh.fecha_venta) AS dias_con_registros_actual{columna_clientes}
                    FROM ventas_historicas vh
                    JOIN productos p ON p.id = vh.producto_id
                    {join_clientes}

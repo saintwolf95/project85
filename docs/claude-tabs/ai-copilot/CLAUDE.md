@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 08/10/2026 · v1.60
+## Estado verificado · 27/10/2026 · v2.02
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -63,3 +63,46 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - La presentación de AI Copilot usa superficies blancas/neutras, azul único para acciones y tipografía de sistema. No volver a introducir degradados, brillos decorativos ni colores por modelo.
 - Los mensajes, gráficos, tablas Markdown, selector de modelo, exportaciones y modal Cerebro del negocio conservan su funcionalidad y accesibilidad; las variaciones y errores mantienen colores semánticos.
 - El modo oscuro usa las mismas jerarquías visuales con superficies oscuras y foco visible, sin alterar la semántica de las respuestas.
+
+## Actualización v2.02 — Copilot analítico verificable
+
+- `copilot_chats.contexto_analitico` conserva el último `IntentoSemantico` validado (métrica, fechas, comparación, agrupación, filtros y límite). Un seguimiento reutiliza ese contrato, no cifras ni períodos extraídos de la prosa generada.
+- El Copilot reconoce rankings de referencias/SKU, incluido “las 5 mejores referencias por margen absoluto”, y conserva el límite tras aclarar el período. La salida muestra SKU, producto, familia, ventas, MG, MGD y porcentaje de margen.
+- Las comparativas explícitas `FY2025 vs FY2026` se traducen a ventanas equivalentes mayo–abril; cuando se solicita un corte, cada FY usa el mismo mes/día. Un día imposible se normaliza y se declara, por ejemplo 31 de septiembre → 30 de septiembre.
+- Las comparativas mensuales y los totales conjuntos de ventas, MG y MGD se renderizan de forma determinista. Incluyen meses sin registros como cero, cobertura registrada y conciliación de la suma mensual.
+- Las preguntas no reconocidas ya no pasan por una ruta de SQL libre generada por IA. El usuario recibe una orientación en lenguaje de negocio y las consultas conocidas siguen usando plantillas parametrizadas y aisladas por `empresa_id`.
+
+### Comparativas visuales verificadas
+
+- Las comparativas mensuales deterministas incluyen un gráfico doble `FY actual` frente a `FY comparable`, además de la tabla con cobertura y los totales conciliados.
+- La serie del gráfico se genera en backend desde las mismas filas SQL autorizadas que construyen la tabla, conserva explícitamente los meses sin registros con valor cero y se transporta como marcador interno. El LLM no construye ni formatea esta visualización.
+- El frontend elimina el marcador antes de renderizar, muestra leyenda, colores semánticos y valores formateados en euros, unidades o porcentaje. La exportación continúa usando exactamente la consulta parametrizada original.
+- Los rankings de referencias/SKU se presentan también de forma determinista: tabla con SKU, producto, familia, ventas, MG, MGD y MG %, más un gráfico del criterio solicitado. No se delega al LLM la selección, suma ni ordenación de las filas.
+- Ante un error de ejecución, no culpar al usuario ni pedir nombres de columnas o términos técnicos. La respuesta debe conservar la seguridad, indicar que se reintente y orientar a registrar la hora para diagnóstico si persiste.
+- Los modelos de lenguaje no generan configuraciones JSON de gráficos. El frontend solo interpreta el marcador de gráfico emitido por backend, construido desde una consulta semántica autorizada; un bloque JSON del modelo permanece como texto y no se convierte en una visualización.
+- Los informes gerenciales del dossier pasan un control de evidencia adicional: cada importe o porcentaje narrado debe existir en las filas del dossier SQL. Si no supera el control, se publica el informe determinista con las mismas secciones y tablas, no una aproximación del modelo.
+- Los desgloses comerciales de ventas o rentabilidad por familia, marca, sección, Product Manager, cliente, tipo de cliente, comercial, KD o cuadrante se renderizan directamente desde SQL: tabla de hasta 20 segmentos por impacto, gráfico de los 12 principales y exportación completa. No dejar que Thinking resuma u omita segmentos por iniciativa propia.
+
+### Seguimientos analíticos coherentes
+
+- El siguiente mensaje de un chat reutiliza el contrato estructurado del último análisis validado. Si pide un nuevo desglose, mantiene el período y los filtros activos; un filtro o período explícito posterior los sustituye.
+- La expresión «mismo período del año anterior», «ejercicio anterior» o «interanual» desplaza ambas fechas un año de forma equivalente; no la reemplaza por los 30/90 días inmediatamente anteriores.
+- Las frases naturales de ranking («muéstrame los cinco peores») se resuelven como SKU, límite 5 y orden ascendente SQL. «Mejores» y «mayores» conservan el orden descendente.
+
+### Puente comercial verificable
+
+- Una pregunta sobre precio y volumen, o una solicitud de descomposición, muestra un puente determinista: ventas comparables, efecto volumen, mix, precio, variación observada y diferencia sin explicar.
+- La diferencia sin explicar es la conciliación aritmética entre la variación observada y los tres efectos. Si excede 0,01 €, se etiqueta como pendiente de revisar, no como explicación de negocio.
+- El gráfico de barras por familia, marca o sección se firma en backend a partir del puente calculado. Para otros desgloses comerciales se usa familia; no se filtran clientes o comerciales con una columna de producto por error.
+
+### Visualizaciones y artefactos
+
+- «Serie temporal» y «tendencia diaria» generan tabla determinista, cobertura, máximo, mínimo y gráfico de línea desde las filas diarias autorizadas. Las fechas del gráfico se formatean en español.
+- Los informes gerenciales añaden un marcador firmado de evidence bundle. La interfaz ofrece «Descargar informe Excel» y «Descargar informe PDF» sin depender de la prosa generada por IA.
+- El XLSX separa trazabilidad y cada bloque de evidencia en hojas; el PDF muestra hasta 20 filas por bloque e indica cuándo el Excel conserva filas adicionales. El exportador rechaza un marcador ausente o alterado.
+
+### Informe ejecutivo presentable
+
+- El PDF abre con período actual, comparable y trazabilidad; muestra KPI de ventas, variación, MG y MGD disponibles, además de un gráfico de ventas comparable frente a actual cuando ambos valores son no negativos.
+- La hoja Resumen del XLSX incluye las mismas KPI antes de las pestañas de evidencia. Los estilos mejoran legibilidad sin modificar ningún valor calculado.
+- `reportlab` es una dependencia declarada. Si faltase en un entorno, el endpoint devuelve 503 explicando que el Excel sigue disponible, en vez de entregar un 500 opaco.

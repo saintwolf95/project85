@@ -1,12 +1,18 @@
 from fastapi import APIRouter, Depends, Request, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 from datetime import datetime, timezone
 import logging
 import re
+import json
 from ..database import get_db
-from ..copilot_service import process_copilot_chat, cleanup_old_chats, extract_signed_sql_export
+from ..copilot_service import (
+    process_copilot_chat,
+    cleanup_old_chats,
+    extract_signed_report_artifact,
+    extract_signed_sql_export,
+)
 from ..models import Usuario, CopilotChat, CopilotMessage
 from ..api.deps import get_current_user
 from ..core.rate_limit import limiter
@@ -21,6 +27,202 @@ MAX_CHAT_HISTORY_MESSAGES = 100
 MAX_CHAT_LIST = 100
 MAX_LIBRERIA_DOCS_PER_QUERY = 10
 MAX_DOCUMENT_PAGES = 50
+
+
+def _filas_informe(valor: Any) -> list[dict[str, Any]]:
+    if isinstance(valor, list):
+        return [fila for fila in valor if isinstance(fila, dict)]
+    if isinstance(valor, dict):
+        return [valor]
+    return []
+
+
+def _nombre_hoja_informe(nombre: str, existentes: set[str]) -> str:
+    """Devuelve un nombre de hoja Excel estable y válido (máximo 31 caracteres)."""
+    base = re.sub(r"[\\/*?:\[\]]", "_", nombre.replace("_", " ").strip().title())[:31] or "Evidencia"
+    candidato, indice = base, 2
+    while candidato in existentes:
+        sufijo = f" {indice}"
+        candidato = f"{base[:31 - len(sufijo)]}{sufijo}"
+        indice += 1
+    existentes.add(candidato)
+    return candidato
+
+
+def _numero_informe(valor: Any) -> float:
+    try:
+        return float(valor or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _eur_informe(valor: Any) -> str:
+    return f"€{_numero_informe(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _kpis_informe(informe: dict[str, Any]) -> list[dict[str, str]]:
+    """Resume métricas ya calculadas, sin volver a derivarlas desde la prosa."""
+    resultados = informe.get("resultados") if isinstance(informe.get("resultados"), dict) else {}
+    resumen = _filas_informe(resultados.get("resumen"))
+    fila = resumen[0] if resumen else {}
+    ventas_actuales = fila.get("ventas_periodo_actual")
+    ventas_anteriores = fila.get("ventas_periodo_anterior")
+    variacion = fila.get("ventas_variacion_absoluta")
+    variacion_pct = fila.get("ventas_variacion_pct")
+    metricas = []
+    if ventas_actuales is not None:
+        metricas.append({"Métrica": "Ventas actuales", "Valor": _eur_informe(ventas_actuales)})
+    if ventas_anteriores is not None:
+        metricas.append({"Métrica": "Ventas comparables", "Valor": _eur_informe(ventas_anteriores)})
+    if variacion is not None:
+        texto_pct = f" ({_numero_informe(variacion_pct):.2f} %)".replace(".", ",") if variacion_pct is not None else ""
+        metricas.append({"Métrica": "Variación de ventas", "Valor": f"{_eur_informe(variacion)}{texto_pct}"})
+    for clave, etiqueta in (("margen_periodo_actual", "Margen bruto actual"), ("mgd_periodo_actual", "MGD actual")):
+        if fila.get(clave) is not None:
+            metricas.append({"Métrica": etiqueta, "Valor": _eur_informe(fila[clave])})
+    return metricas
+
+
+def _exportar_informe_ejecutivo(informe: dict[str, Any], message_id: int, formato: str):
+    """Construye un artefacto reproducible desde el evidence bundle firmado."""
+    import io
+    from fastapi.responses import StreamingResponse
+
+    if formato == "xlsx":
+        import pandas as pd
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        salida = io.BytesIO()
+        resultados = informe.get("resultados") if isinstance(informe.get("resultados"), dict) else {}
+        with pd.ExcelWriter(salida, engine="openpyxl") as writer:
+            resumen = pd.DataFrame([
+                {"Campo": "Tipo", "Valor": "Informe ejecutivo verificable"},
+                {"Campo": "Período actual", "Valor": f"{informe.get('periodo_actual', {}).get('inicio', 'N/D')} a {informe.get('periodo_actual', {}).get('fin', 'N/D')}"},
+                {"Campo": "Período comparable", "Valor": f"{informe.get('periodo_anterior', {}).get('inicio', 'N/D')} a {informe.get('periodo_anterior', {}).get('fin', 'N/D')}"},
+                {"Campo": "Trazabilidad", "Valor": f"Mensaje Copilot {message_id}"},
+            ])
+            resumen.to_excel(writer, sheet_name="Resumen", index=False)
+            kpis = _kpis_informe(informe)
+            if kpis:
+                pd.DataFrame(kpis).to_excel(writer, sheet_name="Resumen", index=False, startrow=len(resumen) + 3)
+            hojas = {"Resumen"}
+            for nombre, valor in resultados.items():
+                filas = _filas_informe(valor)
+                if filas:
+                    pd.DataFrame(filas).to_excel(writer, sheet_name=_nombre_hoja_informe(str(nombre), hojas), index=False)
+            for worksheet in writer.book.worksheets:
+                for cell in worksheet[1]:
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill("solid", fgColor="0071E3")
+                for columna in worksheet.columns:
+                    ancho = min(max(len(str(cell.value or "")) for cell in columna) + 2, 42)
+                    worksheet.column_dimensions[columna[0].column_letter].width = ancho
+                for fila in worksheet.iter_rows():
+                    for cell in fila:
+                        cell.alignment = Alignment(vertical="top", wrap_text=True)
+        salida.seek(0)
+        return StreamingResponse(
+            salida,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename=informe_copilot_{message_id}.xlsx"},
+        )
+
+    if formato == "pdf":
+        try:
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import A4, landscape
+            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib.units import cm
+            from reportlab.graphics.charts.barcharts import VerticalBarChart
+            from reportlab.graphics.shapes import Drawing
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+            from xml.sax.saxutils import escape
+        except ImportError as error:
+            raise HTTPException(
+                status_code=503,
+                detail="La generación de PDF no está disponible en este servidor. Descarga el informe en Excel o instala las dependencias declaradas.",
+            ) from error
+
+        salida = io.BytesIO()
+        documento = SimpleDocTemplate(salida, pagesize=landscape(A4), rightMargin=1.1 * cm, leftMargin=1.1 * cm, topMargin=1.1 * cm, bottomMargin=1.1 * cm)
+        estilos = getSampleStyleSheet()
+        contenido = [
+            Paragraph("Informe ejecutivo verificable", estilos["Title"]),
+            Paragraph(
+                f"Período actual: {escape(str(informe.get('periodo_actual', {}).get('inicio', 'N/D')))} a {escape(str(informe.get('periodo_actual', {}).get('fin', 'N/D')))}<br/>"
+                f"Período comparable: {escape(str(informe.get('periodo_anterior', {}).get('inicio', 'N/D')))} a {escape(str(informe.get('periodo_anterior', {}).get('fin', 'N/D')))}<br/>"
+                f"Trazabilidad: mensaje Copilot {message_id}. Datos generados desde evidencia SQL validada.",
+                estilos["BodyText"],
+            ),
+            Spacer(1, 0.35 * cm),
+        ]
+        resultados = informe.get("resultados") if isinstance(informe.get("resultados"), dict) else {}
+        kpis = _kpis_informe(informe)
+        if kpis:
+            contenido.append(Paragraph("Resumen ejecutivo", estilos["Heading2"]))
+            tabla_kpis = Table([[item["Métrica"] for item in kpis], [item["Valor"] for item in kpis]], hAlign="LEFT")
+            tabla_kpis.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#10243E")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#EAF3FF")),
+                ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#10243E")),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D2D2D7")),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+            ]))
+            contenido.extend((tabla_kpis, Spacer(1, 0.25 * cm)))
+
+        resumen_evidencia = _filas_informe(resultados.get("resumen"))
+        if resumen_evidencia:
+            fila_resumen = resumen_evidencia[0]
+            comparable = _numero_informe(fila_resumen.get("ventas_periodo_anterior"))
+            actual = _numero_informe(fila_resumen.get("ventas_periodo_actual"))
+            if comparable >= 0 and actual >= 0:
+                contenido.append(Paragraph("Ventas comparables frente a actuales", estilos["Heading2"]))
+                dibujo = Drawing(420, 170)
+                barras = VerticalBarChart()
+                barras.x, barras.y, barras.width, barras.height = 45, 30, 330, 110
+                barras.data = [[comparable, actual]]
+                barras.categoryAxis.categoryNames = ["Comparable", "Actual"]
+                barras.valueAxis.valueMin = 0
+                barras.valueAxis.labels.fontSize = 7
+                barras.categoryAxis.labels.fontSize = 8
+                barras.bars[0].fillColor = colors.HexColor("#0071E3")
+                dibujo.add(barras)
+                contenido.extend((dibujo, Spacer(1, 0.25 * cm)))
+        for nombre, valor in resultados.items():
+            filas = _filas_informe(valor)
+            if not filas:
+                continue
+            contenido.append(Paragraph(escape(str(nombre).replace("_", " ").title()), estilos["Heading2"]))
+            columnas = list(filas[0].keys())[:7]
+            tabla = [[Paragraph(escape(str(columna)), estilos["BodyText"]) for columna in columnas]]
+            for fila in filas[:20]:
+                tabla.append([Paragraph(escape(str(fila.get(columna, "")))[:150], estilos["BodyText"]) for columna in columnas])
+            ancho_total = 27.0 * cm
+            componente = Table(tabla, repeatRows=1, hAlign="LEFT", colWidths=[ancho_total / max(len(columnas), 1)] * len(columnas))
+            componente.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0071E3")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D2D2D7")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F7")]),
+            ]))
+            contenido.extend((componente, Spacer(1, 0.3 * cm)))
+            if len(filas) > 20:
+                contenido.append(Paragraph(f"Se incluyen 20 de {len(filas)} filas en este bloque. El Excel conserva todas las filas.", estilos["Italic"]))
+        documento.build(contenido)
+        salida.seek(0)
+        return StreamingResponse(
+            salida,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=informe_copilot_{message_id}.pdf"},
+        )
+
+    raise HTTPException(status_code=400, detail="El informe ejecutivo se puede descargar en PDF o XLSX.")
 
 
 def _fecha_mensaje_api(fecha: datetime) -> str:
@@ -201,7 +403,7 @@ def export_chat(
         raise HTTPException(status_code=400, detail="El chat no tiene mensajes para exportar")
 
     def limpiar_contenido(contenido: str) -> str:
-        return re.sub(r"<!-- (?:sql_export|copilot_metrics|copilot_followups): [\s\S]*? -->", "", contenido).strip()
+        return re.sub(r"<!-- (?:sql_export|copilot_metrics|copilot_followups|copilot_chart|copilot_report): [\s\S]*? -->", "", contenido).strip()
 
     filas = [
         {
@@ -355,6 +557,11 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
                 logger.warning(f"Error cargando docs LibrerIA: {e_lib}")
 
         # DB RO para queries analíticas de la IA
+        try:
+            contexto_intencion = json.loads(chat.contexto_analitico or "{}")
+        except (TypeError, json.JSONDecodeError):
+            logger.warning("[COPILOT] Contexto analítico inválido para chat_id=%s; se reinicia.", chat_id)
+            contexto_intencion = {}
         from ..database import SessionLocalRO
         db_ro = SessionLocalRO()
         try:
@@ -363,10 +570,19 @@ def copilot_chat(request: Request, payload: ChatRequest, db: Session = Depends(g
                 history=history_dicts, 
                 empresa_id=current_user.empresa_id,
                 model_preference=payload.model_preference,
-                contexto=contexto_negocio
+                contexto=contexto_negocio,
+                contexto_intencion=contexto_intencion,
             )
         finally:
             db_ro.close()
+
+        # El siguiente turno reutiliza este contrato validado, no la prosa de
+        # la respuesta. Si la petición no era analítica se conserva el último
+        # contrato para que «lo mismo» siga siendo interpretable.
+        from ..copilot_orchestrator import analizar_intencion, serializar_intento
+        intento_actual, _ = analizar_intencion(history_dicts, contexto_intencion)
+        if intento_actual:
+            chat.contexto_analitico = json.dumps(serializar_intento(intento_actual), ensure_ascii=False)
             
         # Guardar respuesta IA
         assistant_msg_db = CopilotMessage(chat_id=chat_id, rol="assistant", contenido=reply)
@@ -403,6 +619,10 @@ def download_message_export(
     
     if not msg:
         raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+
+    informe = extract_signed_report_artifact(msg.contenido)
+    if informe:
+        return _exportar_informe_ejecutivo(informe, message_id, format)
         
     # 2. Extraer el SQL firmado
     signed_export = extract_signed_sql_export(msg.contenido)

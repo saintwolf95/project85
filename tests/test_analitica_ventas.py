@@ -8,16 +8,76 @@ from sqlalchemy import create_engine, text
 from app.analitica_ventas import (
     crear_plan_analitico_ventas,
     crear_acciones_seguimiento,
+    construir_grafico_puente_variacion,
+    construir_grafico_serie_temporal,
     rango_clasificacion_abc,
     renderizar_respuesta_analitica,
+    renderizar_puente_variacion,
+    renderizar_serie_temporal,
     renderizar_resumen_mensual,
     respuesta_analitica_cumple_contrato,
+    respuesta_analitica_es_verificable,
 )
 from app.copilot_orchestrator import IntentoSemantico, analizar_intencion, crear_consulta_semantica, resolver_periodo_anterior
-from app.copilot_service import build_followups_marker, build_metrics_marker, build_sql_export_marker, extract_signed_sql_export
+from app.copilot_service import (
+    build_followups_marker,
+    build_metrics_marker,
+    build_report_artifact_marker,
+    build_sql_export_marker,
+    extract_signed_report_artifact,
+    extract_signed_sql_export,
+)
 
 
 class AnaliticaVentasTests(unittest.TestCase):
+    def test_serie_temporal_tiene_grafico_y_cobertura_deterministas(self):
+        filas = [
+            {"fecha": "2026-08-01", "valor": 100},
+            {"fecha": "2026-08-02", "valor": 240},
+        ]
+        respuesta = renderizar_serie_temporal(filas, "ventas", date(2026, 8, 1), date(2026, 8, 2))
+        grafico = construir_grafico_serie_temporal(filas, "ventas")
+
+        self.assertIn("€340,00", respuesta)
+        self.assertIn("Máximo diario", respuesta)
+        self.assertEqual(grafico["type"], "line")
+        self.assertEqual(grafico["data"][1], {"fecha": "02 ago", "valor": 240.0})
+
+    def test_artifact_informe_firmado_recupera_solo_evidencia_original(self):
+        dossier = {
+            "periodo_actual": {"inicio": "2026-05-01", "fin": "2026-08-31"},
+            "periodo_anterior": {"inicio": "2025-05-01", "fin": "2025-08-31"},
+            "resultados": {"resumen": [{"ventas_periodo_actual": 1000}]},
+        }
+        marker = build_report_artifact_marker(dossier)
+        self.assertEqual(extract_signed_report_artifact(marker)["resultados"]["resumen"][0]["ventas_periodo_actual"], 1000)
+        marker_alterado = f"{marker[:-5]}0 -->"
+        self.assertIsNone(extract_signed_report_artifact(marker_alterado))
+
+    def test_puente_precio_volumen_mix_concilia_y_expone_tabla(self):
+        filas = [
+            {
+                "entidad": "Portátiles", "ventas_periodo_a_eur": 1_000,
+                "ventas_periodo_b_eur": 1_070, "efecto_volumen_eur": 40,
+                "efecto_mix_eur": 10, "efecto_precio_eur": 20,
+            },
+            {
+                "entidad": "Monitores", "ventas_periodo_a_eur": 500,
+                "ventas_periodo_b_eur": 470, "efecto_volumen_eur": -20,
+                "efecto_mix_eur": 0, "efecto_precio_eur": -10,
+            },
+        ]
+        respuesta = renderizar_puente_variacion(
+            filas, "familia", date(2025, 5, 1), date(2025, 7, 31), date(2026, 5, 1), date(2026, 7, 31),
+        )
+        grafico = construir_grafico_puente_variacion(filas, "familia")
+
+        self.assertIn("Efecto volumen", respuesta)
+        self.assertIn("€0,00 · conciliado", respuesta)
+        self.assertIn("Portátiles", respuesta)
+        self.assertEqual(grafico["series"][0]["label"], "Volumen")
+        self.assertEqual(grafico["data"][0]["segmento"], "Portátiles")
+
     def test_anio_fiscal_compara_con_el_mismo_tramo_del_ejercicio_anterior(self):
         inicio, fin = resolver_periodo_anterior("anio_fiscal", date(2026, 5, 1), date(2026, 7, 24))
 
@@ -181,6 +241,7 @@ class AnaliticaVentasTests(unittest.TestCase):
         self.assertIn("Portátiles", respuesta)
         self.assertIn("POR-100", respuesta)
         self.assertNotIn("potenciar ventas", respuesta.casefold())
+        self.assertTrue(respuesta_analitica_es_verificable(respuesta, dossier))
 
         marker = build_metrics_marker(dossier)
         payload = marker.removeprefix("<!-- copilot_metrics: ").removesuffix(" -->")
@@ -193,6 +254,40 @@ class AnaliticaVentasTests(unittest.TestCase):
         self.assertIn("Portátiles", acciones[0]["label"])
         self.assertIn("POR-100", acciones[1]["prompt"])
         self.assertIn("clase A", acciones[2]["prompt"])
+
+    def test_contrato_de_evidencia_rechaza_importe_inventado_en_narracion(self):
+        dossier = {
+            "resultados": {
+                "resumen": [{
+                    "ventas_periodo_actual": 1000,
+                    "ventas_periodo_anterior": 900,
+                    "ventas_variacion_absoluta": 100,
+                    "ventas_variacion_pct": 11.11,
+                }],
+                "top_caidas_sku": [{
+                    "sku": "SKU-1", "nombre": "Producto", "familia": "Familia", "abc": "A",
+                    "ventas_periodo_actual": 1000, "ventas_periodo_anterior": 900,
+                    "ventas_variacion_absoluta": 100,
+                }],
+                "abc_ventas": [],
+            },
+        }
+        respuesta = """## Resumen ejecutivo
+Las ventas ascienden a €9.999,00.
+## Qué explica el cambio
+- **Cambio observado:** €100,00.
+## Top 5 movimientos
+| SKU | Producto | Familia | ABC | Actual | Anterior | Variación |
+| --- | --- | --- | --- | ---: | ---: | ---: |
+| SKU-1 | Producto | Familia | A | €1.000,00 | €900,00 | €100,00 |
+## Lectura ABC
+Sin detalle.
+## Qué haría ahora
+1. **Revisar SKU:** medir €100,00.
+## Calidad del análisis
+- Ventana comparable."""
+
+        self.assertFalse(respuesta_analitica_es_verificable(respuesta, dossier))
 
     def test_filtro_abc_usa_ventas_reales_sin_producto_metricas(self):
         motor = create_engine("sqlite://")

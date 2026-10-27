@@ -54,6 +54,11 @@ ENCABEZADOS_RESPUESTA_ANALITICA = (
     "Calidad del análisis",
 )
 
+# Solo se validan importes y porcentajes: son las cifras que sustentan una
+# decisión económica. Las fechas, títulos y el ordinal de una lista no entran
+# en este control para no confundir el formato con una afirmación analítica.
+PATRON_CIFRAS_ECONOMICAS = re.compile(r"(?:-?€\d{1,3}(?:\.\d{3})*(?:,\d+)?|-?\d+(?:[.,]\d+)?%)")
+
 
 @dataclass(frozen=True)
 class ConsultaAnalitica:
@@ -311,6 +316,44 @@ def respuesta_analitica_cumple_contrato(respuesta: str) -> bool:
     )
 
 
+def respuesta_analitica_es_verificable(respuesta: str, dossier: dict[str, Any]) -> bool:
+    """Comprueba que los importes y porcentajes narrados existan en el dossier.
+
+    El modelo sigue pudiendo explicar prioridades y límites, pero no puede
+    publicar una cifra económica distinta de la que devolvió el SQL. Si el
+    control falla se usa el informe determinista, que conserva tablas y hechos.
+    """
+    if not respuesta_analitica_cumple_contrato(respuesta):
+        return False
+
+    def formas_numericas(valor: Any) -> set[str]:
+        if isinstance(valor, bool) or valor is None:
+            return set()
+        if isinstance(valor, (int, float)):
+            numero = float(valor)
+            return {
+                f"{numero:.{decimales}f}".replace(".", ",")
+                for decimales in (0, 1, 2)
+            } | {
+                f"{numero:,.{decimales}f}".replace(",", "_").replace(".", ",").replace("_", ".")
+                for decimales in (0, 1, 2)
+            }
+        if isinstance(valor, dict):
+            return set().union(*(formas_numericas(item) for item in valor.values()))
+        if isinstance(valor, (list, tuple)):
+            return set().union(*(formas_numericas(item) for item in valor))
+        return set()
+
+    permitidas = formas_numericas(dossier.get("resultados", {}))
+    for coincidencia in PATRON_CIFRAS_ECONOMICAS.findall(respuesta):
+        cifra = coincidencia.replace("€", "")
+        if cifra.endswith("%"):
+            cifra = cifra[:-1]
+        if cifra not in permitidas:
+            return False
+    return True
+
+
 def _numero(valor: Any) -> float:
     try:
         return float(valor or 0)
@@ -413,6 +456,568 @@ def renderizar_resumen_mensual(filas: list[dict[str, Any]]) -> str:
         lineas.append(f"- El primer mes es parcial: comienza el {primera_fecha.strftime('%d-%m-%Y')}.")
     if ultima_fecha and ultima_fecha != _ultimo_dia_mes_respuesta(ultima_fecha):
         lineas.append(f"- El último mes es parcial: termina en el último dato disponible, {ultima_fecha.strftime('%d-%m-%Y')}.")
+    return "\n".join(lineas)
+
+
+def _iterar_meses(inicio: date, fin: date) -> list[date]:
+    cursor = inicio.replace(day=1)
+    resultado: list[date] = []
+    while cursor <= fin:
+        resultado.append(cursor)
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+    return resultado
+
+
+def construir_grafico_comparacion_mensual(
+    filas: list[dict[str, Any]],
+    inicio_actual: date,
+    fin_actual: date,
+    inicio_anterior: date,
+    medida: str,
+) -> dict[str, Any]:
+    """Crea la serie visual desde la misma consulta que alimenta la tabla.
+
+    No recibe ni calcula cifras narradas por el modelo. Mantener los meses sin
+    registros con valor cero evita que una barra ausente se interprete como una
+    omisión de cobertura.
+    """
+    por_mes = {str(fila.get("agrupacion", "")).zfill(2): fila for fila in filas if isinstance(fila, dict)}
+    etiqueta = {
+        "ventas_eur": "Ventas netas",
+        "ventas_unidades": "Unidades vendidas",
+        "margen_eur": "Margen bruto",
+        "margen_pct": "Margen bruto %",
+        "mgd_eur": "MGD",
+        "mgd_pct": "MGD %",
+    }.get(medida, medida.replace("_", " ").capitalize())
+    actual_nombre = f"FY{inicio_actual.year}"
+    anterior_nombre = f"FY{inicio_anterior.year}"
+    return {
+        "type": "bar",
+        "title": f"{etiqueta} mensual · {actual_nombre} vs {anterior_nombre}",
+        "xKey": "mes",
+        "format": "unidades" if medida == "ventas_unidades" else "porcentaje" if medida.endswith("_pct") else "eur",
+        "series": [
+            {"key": "actual", "label": actual_nombre, "color": "#0071e3"},
+            {"key": "anterior", "label": anterior_nombre, "color": "#a7c7ed"},
+        ],
+        "data": [
+            {
+                "mes": MESES_RESPUESTA[mes.month - 1].capitalize(),
+                "actual": _numero(por_mes.get(f"{mes.month:02d}", {}).get("periodo_actual")),
+                "anterior": _numero(por_mes.get(f"{mes.month:02d}", {}).get("periodo_anterior")),
+            }
+            for mes in _iterar_meses(inicio_actual, fin_actual)
+        ],
+    }
+
+
+def _etiqueta_medida(medida: str) -> str:
+    return {
+        "ventas_eur": "Ventas netas",
+        "ventas_unidades": "Unidades vendidas",
+        "margen_eur": "Margen bruto",
+        "margen_pct": "Margen bruto %",
+        "mgd_eur": "MGD",
+        "mgd_pct": "MGD %",
+    }.get(medida, medida.replace("_", " ").capitalize())
+
+
+def construir_grafico_ranking_sku(
+    filas: list[dict[str, Any]],
+    medida: str,
+    comparacion: bool,
+) -> dict[str, Any]:
+    """Serie compacta de ranking basada en las filas ya ordenadas por SQL."""
+    etiqueta = _etiqueta_medida(medida)
+    formato = "unidades" if medida == "ventas_unidades" else "porcentaje" if medida.endswith("_pct") else "eur"
+    datos = []
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        datos.append({
+            "referencia": str(fila.get("referencia") or "Sin referencia"),
+            "actual": _numero(fila.get("periodo_actual" if comparacion else medida if medida in fila else "ventas_eur")),
+            **({"anterior": _numero(fila.get("periodo_anterior"))} if comparacion else {}),
+        })
+    return {
+        "type": "bar",
+        "title": f"Ranking de referencias · {etiqueta}",
+        "xKey": "referencia",
+        "format": formato,
+        "series": (
+            [
+                {"key": "actual", "label": "Período actual", "color": "#0071e3"},
+                {"key": "anterior", "label": "Período comparable", "color": "#a7c7ed"},
+            ]
+            if comparacion else [{"key": "actual", "label": etiqueta, "color": "#0071e3"}]
+        ),
+        "data": datos,
+    }
+
+
+def renderizar_ranking_sku(
+    filas: list[dict[str, Any]],
+    medida: str,
+    inicio: date,
+    fin: date,
+    comparacion: bool = False,
+    inicio_anterior: date | None = None,
+    fin_anterior: date | None = None,
+) -> str:
+    """Presenta un ranking de referencias sin delegar los importes al LLM."""
+    etiqueta = _etiqueta_medida(medida)
+    if not filas:
+        return (
+            f"**Ranking de referencias · {etiqueta}**\n\n"
+            f"No hay referencias con datos entre **{inicio:%d-%m-%Y}** y **{fin:%d-%m-%Y}**."
+        )
+    lineas = [
+        f"**Ranking de referencias · {etiqueta}**",
+        f"Período: **{inicio:%d-%m-%Y} – {fin:%d-%m-%Y}**" + (
+            f" · comparable: **{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}**." if comparacion and inicio_anterior and fin_anterior else "."
+        ),
+    ]
+    if comparacion:
+        lineas.extend((
+            "| Referencia | Producto | Familia | Actual | Comparable | Variación | Variación % |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: |",
+        ))
+        for fila in filas:
+            actual = _numero(fila.get("periodo_actual"))
+            anterior = _numero(fila.get("periodo_anterior"))
+            variacion = _numero(fila.get("variacion_absoluta"))
+            porcentaje = _numero(fila.get("variacion_pct"))
+            formato = _entero if medida == "ventas_unidades" else _eur
+            lineas.append(
+                f"| {fila.get('referencia') or 'Sin referencia'} | {fila.get('producto') or 'Sin nombre'} | "
+                f"{fila.get('familia') or 'Sin familia'} | {formato(actual)} | {formato(anterior)} | "
+                f"{formato(variacion)} | {_porcentaje(porcentaje)} |"
+            )
+    else:
+        lineas.extend((
+            "| Referencia | Producto | Familia | Ventas | MG | MGD | MG % |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: |",
+        ))
+        for fila in filas:
+            lineas.append(
+                f"| {fila.get('referencia') or 'Sin referencia'} | {fila.get('producto') or 'Sin nombre'} | "
+                f"{fila.get('familia') or 'Sin familia'} | {_eur(fila.get('ventas_eur'))} | "
+                f"{_eur(fila.get('margen_eur'))} | {_eur(fila.get('mgd_eur'))} | {_porcentaje(fila.get('margen_pct'))} |"
+            )
+    lineas.append(f"\n- **Referencias mostradas:** {len(filas)} · ordenadas por **{etiqueta.lower()}**.")
+    return "\n".join(lineas)
+
+
+def _etiqueta_agrupacion(agrupacion: str | None) -> str:
+    return {
+        "familia": "Familia",
+        "marca": "Marca",
+        "familia_marca": "Familia / marca",
+        "seccion": "Sección",
+        "product_manager": "Product Manager",
+        "cliente": "Cliente",
+        "tipo_cliente": "Tipo de cliente",
+        "comercial_cliente": "Comercial asignado",
+        "comercial_factura": "Comercial de factura",
+        "kd": "Kit Digital",
+        "matriz": "Cuadrante ABCXYZ",
+    }.get(agrupacion or "", "Desglose")
+
+
+def _filas_desglose_visibles(filas: list[dict[str, Any]], comparacion: bool, limite: int = 20) -> list[dict[str, Any]]:
+    """Ordena el detalle por impacto económico y acota solo la presentación.
+
+    La consulta original permanece íntegra para el archivo exportable. El límite
+    evita que un desglose de miles de clientes convierta el chat en una página
+    ilegible.
+    """
+    filas_validas = [fila for fila in filas if isinstance(fila, dict)]
+    campo = "variacion_absoluta" if comparacion else "valor"
+    if not comparacion:
+        # El servicio inyecta el valor de la métrica solicitada antes de llamar.
+        campo = "valor"
+    return sorted(filas_validas, key=lambda fila: abs(_numero(fila.get(campo))), reverse=True)[:limite]
+
+
+def construir_grafico_desglose(
+    filas: list[dict[str, Any]],
+    medida: str,
+    agrupacion: str | None,
+    comparacion: bool,
+) -> dict[str, Any]:
+    """Serie de los doce segmentos de mayor impacto para una vista legible."""
+    etiqueta = _etiqueta_medida(medida)
+    dimension = _etiqueta_agrupacion(agrupacion)
+    preparadas = []
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        preparadas.append({
+            "segmento": str(fila.get("agrupacion") or "Sin clasificar"),
+            "actual": _numero(fila.get("periodo_actual" if comparacion else medida)),
+            "variacion": _numero(fila.get("variacion_absoluta")),
+            **({"anterior": _numero(fila.get("periodo_anterior"))} if comparacion else {}),
+        })
+    clave_orden = "variacion" if comparacion else "actual"
+    datos = sorted(preparadas, key=lambda fila: abs(_numero(fila.get(clave_orden))), reverse=True)[:12]
+    return {
+        "type": "bar",
+        "title": f"{etiqueta} por {dimension.lower()} · principales segmentos",
+        "xKey": "segmento",
+        "format": "unidades" if medida == "ventas_unidades" else "porcentaje" if medida.endswith("_pct") else "eur",
+        "series": (
+            [
+                {"key": "actual", "label": "Período actual", "color": "#0071e3"},
+                {"key": "anterior", "label": "Período comparable", "color": "#a7c7ed"},
+            ]
+            if comparacion else [{"key": "actual", "label": etiqueta, "color": "#0071e3"}]
+        ),
+        "data": datos,
+    }
+
+
+def renderizar_desglose_agrupado(
+    filas: list[dict[str, Any]],
+    medida: str,
+    agrupacion: str | None,
+    inicio: date,
+    fin: date,
+    comparacion: bool = False,
+    inicio_anterior: date | None = None,
+    fin_anterior: date | None = None,
+) -> str:
+    """Tabla determinista para dimensiones comerciales de cualquier cardinalidad."""
+    etiqueta = _etiqueta_medida(medida)
+    dimension = _etiqueta_agrupacion(agrupacion)
+    preparadas = []
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        copia = dict(fila)
+        copia["valor"] = _numero(copia.get(medida))
+        preparadas.append(copia)
+    visibles = _filas_desglose_visibles(preparadas, comparacion)
+    if not visibles:
+        return (
+            f"**{etiqueta} por {dimension.lower()}**\n\n"
+            f"No hay datos entre **{inicio:%d-%m-%Y}** y **{fin:%d-%m-%Y}**."
+        )
+    lineas = [
+        f"**{etiqueta} por {dimension.lower()}**",
+        f"Período: **{inicio:%d-%m-%Y} – {fin:%d-%m-%Y}**" + (
+            f" · comparable: **{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}**." if comparacion and inicio_anterior and fin_anterior else "."
+        ),
+    ]
+    formato = _entero if medida == "ventas_unidades" else _porcentaje if medida.endswith("_pct") else _eur
+    if comparacion:
+        lineas.extend((
+            f"| {dimension} | Actual | Comparable | {'Variación p.p.' if medida.endswith('_pct') else 'Variación'} | Variación % | Productos |",
+            "| --- | ---: | ---: | ---: | ---: | ---: |",
+        ))
+        for fila in visibles:
+            lineas.append(
+                f"| {fila.get('agrupacion') or 'Sin clasificar'} | {formato(fila.get('periodo_actual'))} | "
+                f"{formato(fila.get('periodo_anterior'))} | {formato(fila.get('variacion_pp') if medida.endswith('_pct') else fila.get('variacion_absoluta'))} | "
+                f"{_porcentaje(fila.get('variacion_pct'))} | {_entero(fila.get('productos'))} |"
+            )
+    else:
+        lineas.extend((
+            f"| {dimension} | {etiqueta} | Productos | Clientes |",
+            "| --- | ---: | ---: | ---: |",
+        ))
+        for fila in visibles:
+            clientes = _entero(fila.get("clientes")) if "clientes" in fila else "—"
+            lineas.append(
+                f"| {fila.get('agrupacion') or 'Sin clasificar'} | {formato(fila.get(medida))} | "
+                f"{_entero(fila.get('productos'))} | {clientes} |"
+            )
+    if len(filas) > len(visibles):
+        lineas.append(f"\n- Se muestran los **{len(visibles)}** segmentos de mayor impacto de **{len(filas)}**; el archivo descargable conserva el resultado completo.")
+    else:
+        lineas.append(f"\n- **Segmentos mostrados:** {len(visibles)}.")
+    return "\n".join(lineas)
+
+
+def construir_grafico_puente_variacion(
+    filas: list[dict[str, Any]], dimension: str | None,
+) -> dict[str, Any]:
+    """Crea la vista de precio/volumen/mix desde el puente ya calculado.
+
+    El gráfico no intenta simular una cascada con valores dibujados por un LLM:
+    representa las tres contribuciones exactas por segmento y permite contrastar
+    visualmente cuál está moviendo las ventas.
+    """
+    etiqueta_dimension = _etiqueta_agrupacion(dimension)
+    datos = [
+        {
+            "segmento": str(fila.get("entidad") or "Sin clasificar"),
+            "volumen": _numero(fila.get("efecto_volumen_eur")),
+            "mix": _numero(fila.get("efecto_mix_eur")),
+            "precio": _numero(fila.get("efecto_precio_eur")),
+        }
+        for fila in filas
+        if isinstance(fila, dict)
+    ]
+    datos.sort(key=lambda fila: abs(fila["volumen"] + fila["mix"] + fila["precio"]), reverse=True)
+    return {
+        "type": "bar",
+        "title": f"Puente precio-volumen-mix por {etiqueta_dimension.lower()}",
+        "xKey": "segmento",
+        "format": "eur",
+        "series": [
+            {"key": "volumen", "label": "Volumen", "color": "#0071e3"},
+            {"key": "mix", "label": "Mix", "color": "#ff9f0a"},
+            {"key": "precio", "label": "Precio", "color": "#30d158"},
+        ],
+        "data": datos[:12],
+    }
+
+
+def renderizar_puente_variacion(
+    filas: list[dict[str, Any]],
+    dimension: str | None,
+    inicio_anterior: date,
+    fin_anterior: date,
+    inicio_actual: date,
+    fin_actual: date,
+) -> str:
+    """Explica un puente comercial con conciliación aritmética visible.
+
+    Precio, volumen y mix se reciben de una herramienta SQL parametrizada. La
+    suma de los tres efectos debe coincidir con ventas actuales menos ventas
+    comparables; si no coincide, la diferencia se declara en vez de inventar
+    una interpretación.
+    """
+    etiqueta_dimension = _etiqueta_agrupacion(dimension)
+    preparadas = [fila for fila in filas if isinstance(fila, dict)]
+    if not preparadas:
+        return (
+            "**Puente precio-volumen-mix**\n\n"
+            f"No hay ventas comparables por {etiqueta_dimension.lower()} entre "
+            f"**{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}** y "
+            f"**{inicio_actual:%d-%m-%Y} – {fin_actual:%d-%m-%Y}**."
+        )
+
+    for fila in preparadas:
+        fila["variacion_observada"] = _numero(fila.get("ventas_periodo_b_eur")) - _numero(fila.get("ventas_periodo_a_eur"))
+        fila["efecto_total"] = (
+            _numero(fila.get("efecto_volumen_eur"))
+            + _numero(fila.get("efecto_mix_eur"))
+            + _numero(fila.get("efecto_precio_eur"))
+        )
+    visibles = sorted(preparadas, key=lambda fila: abs(_numero(fila["variacion_observada"])), reverse=True)[:12]
+    ventas_anterior = sum(_numero(fila.get("ventas_periodo_a_eur")) for fila in preparadas)
+    ventas_actual = sum(_numero(fila.get("ventas_periodo_b_eur")) for fila in preparadas)
+    variacion = ventas_actual - ventas_anterior
+    efecto_volumen = sum(_numero(fila.get("efecto_volumen_eur")) for fila in preparadas)
+    efecto_mix = sum(_numero(fila.get("efecto_mix_eur")) for fila in preparadas)
+    efecto_precio = sum(_numero(fila.get("efecto_precio_eur")) for fila in preparadas)
+    conciliado = efecto_volumen + efecto_mix + efecto_precio
+    residuo = variacion - conciliado
+    estado_conciliacion = "conciliado" if abs(residuo) < 0.01 else "pendiente de revisar"
+
+    lineas = [
+        "**Puente precio-volumen-mix**",
+        (
+            f"Ventana comparable: **{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}** · "
+            f"ventana actual: **{inicio_actual:%d-%m-%Y} – {fin_actual:%d-%m-%Y}**."
+        ),
+        "| Concepto | Importe |",
+        "| --- | ---: |",
+        f"| Ventas comparables | {_eur(ventas_anterior)} |",
+        f"| Efecto volumen | {_eur(efecto_volumen)} |",
+        f"| Efecto mix | {_eur(efecto_mix)} |",
+        f"| Efecto precio | {_eur(efecto_precio)} |",
+        f"| Variación explicada | {_eur(conciliado)} |",
+        f"| Variación observada | {_eur(variacion)} |",
+        f"| Diferencia sin explicar | {_eur(residuo)} · {estado_conciliacion} |",
+        "",
+        f"### Segmentos con mayor movimiento · {etiqueta_dimension}",
+        f"| {etiqueta_dimension} | Comparable | Actual | Volumen | Mix | Precio | Variación |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for fila in visibles:
+        lineas.append(
+            f"| {fila.get('entidad') or 'Sin clasificar'} | {_eur(fila.get('ventas_periodo_a_eur'))} | "
+            f"{_eur(fila.get('ventas_periodo_b_eur'))} | {_eur(fila.get('efecto_volumen_eur'))} | "
+            f"{_eur(fila.get('efecto_mix_eur'))} | {_eur(fila.get('efecto_precio_eur'))} | "
+            f"{_eur(fila.get('variacion_observada'))} |"
+        )
+    if len(preparadas) > len(visibles):
+        lineas.append(f"\n- Se muestran los {len(visibles)} {etiqueta_dimension.lower()} con mayor variación absoluta de {len(preparadas)}.")
+    lineas.append(
+        "- Volumen mide el cambio de unidades al precio medio comparable; mix mide el cambio de composición de SKU; "
+        "precio mide el cambio de precio medio sobre las unidades actuales. No prueba por sí solo la causa comercial."
+    )
+    return "\n".join(lineas)
+
+
+def construir_grafico_serie_temporal(
+    filas: list[dict[str, Any]], medida: str,
+) -> dict[str, Any]:
+    """Convierte una serie diaria autorizada en una visualización estructurada."""
+    etiqueta = _etiqueta_medida({"ventas": "ventas_eur", "unidades": "ventas_unidades", "mgd": "mgd_eur"}.get(medida, medida))
+    datos = []
+    for fila in filas:
+        if not isinstance(fila, dict) or not fila.get("fecha"):
+            continue
+        fecha = _fecha_resultado(fila.get("fecha"))
+        datos.append({
+            "fecha": f"{fecha.day:02d} {MESES_RESPUESTA[fecha.month - 1][:3]}" if fecha else str(fila.get("fecha")),
+            "valor": _numero(fila.get("valor")),
+        })
+    return {
+        "type": "line",
+        "title": f"Evolución diaria · {etiqueta}",
+        "xKey": "fecha",
+        "format": "unidades" if medida == "unidades" else "eur",
+        "series": [{"key": "valor", "label": etiqueta, "color": "#0071e3"}],
+        "data": datos,
+    }
+
+
+def renderizar_serie_temporal(
+    filas: list[dict[str, Any]], medida: str, inicio: date, fin: date,
+) -> str:
+    """Presenta la serie diaria y su cobertura sin que el modelo agregue datos."""
+    etiqueta = _etiqueta_medida({"ventas": "ventas_eur", "unidades": "ventas_unidades", "mgd": "mgd_eur"}.get(medida, medida))
+    validas = [fila for fila in filas if isinstance(fila, dict) and fila.get("fecha")]
+    formato = _entero if medida == "unidades" else _eur
+    if not validas:
+        return (
+            f"**Evolución diaria · {etiqueta}**\n\n"
+            f"No hay registros entre **{inicio:%d-%m-%Y}** y **{fin:%d-%m-%Y}**."
+        )
+    total = sum(_numero(fila.get("valor")) for fila in validas)
+    maximo = max(validas, key=lambda fila: _numero(fila.get("valor")))
+    minimo = min(validas, key=lambda fila: _numero(fila.get("valor")))
+    fecha_minima = _fecha_resultado(validas[0].get("fecha"))
+    fecha_maxima = _fecha_resultado(validas[-1].get("fecha"))
+    lineas = [
+        f"**Evolución diaria · {etiqueta}**",
+        (
+            f"Cobertura registrada: **{fecha_minima:%d-%m-%Y}** a **{fecha_maxima:%d-%m-%Y}** "
+            f"dentro de la ventana solicitada **{inicio:%d-%m-%Y} – {fin:%d-%m-%Y}**."
+        ),
+        f"- **Total de la serie:** {formato(total)}.",
+        f"- **Máximo diario:** {formato(maximo.get('valor'))} el {(_fecha_resultado(maximo.get('fecha')) or fecha_maxima):%d-%m-%Y}.",
+        f"- **Mínimo diario:** {formato(minimo.get('valor'))} el {(_fecha_resultado(minimo.get('fecha')) or fecha_minima):%d-%m-%Y}.",
+        "\n| Fecha | Valor |",
+        "| --- | ---: |",
+    ]
+    for fila in validas[-20:]:
+        fecha = _fecha_resultado(fila.get("fecha"))
+        lineas.append(f"| {fecha:%d-%m-%Y} | {formato(fila.get('valor'))} |")
+    if len(validas) > 20:
+        lineas.append("\n- La tabla muestra los últimos 20 días con registro; el gráfico conserva toda la serie disponible.")
+    return "\n".join(lineas)
+
+
+def renderizar_comparacion_mensual(
+    filas: list[dict[str, Any]],
+    inicio_actual: date,
+    fin_actual: date,
+    inicio_anterior: date,
+    fin_anterior: date,
+    medida: str,
+    ajuste_fecha: str | None = None,
+) -> str:
+    """Presenta una comparación mes a mes sin pedir cálculos al modelo.
+
+    Incluye los meses sin ventas con valor cero y conserva la cobertura real
+    devuelta por la base de datos, para que una ausencia no se presente como un
+    mes completo de actividad.
+    """
+    por_mes = {str(fila.get("agrupacion", "")).zfill(2): fila for fila in filas if isinstance(fila, dict)}
+    etiqueta = _etiqueta_medida(medida)
+    actual_nombre = f"FY{inicio_actual.year}"
+    anterior_nombre = f"FY{inicio_anterior.year}"
+    meses = _iterar_meses(inicio_actual, fin_actual)
+    total_actual = total_anterior = 0.0
+    lineas = [
+        f"**Comparativa {actual_nombre} vs {anterior_nombre}**",
+        f"Ventanas equivalentes: **{inicio_actual:%d-%m-%Y} – {fin_actual:%d-%m-%Y}** frente a **{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}**.",
+        "| Mes | " + actual_nombre + f" {etiqueta} | " + anterior_nombre + f" {etiqueta} | Variación | Variación % | Cobertura registrada |",
+        "| --- | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for mes in meses:
+        fila = por_mes.get(f"{mes.month:02d}", {})
+        actual = _numero(fila.get("periodo_actual"))
+        anterior = _numero(fila.get("periodo_anterior"))
+        variacion = _numero(fila.get("variacion_absoluta"))
+        variacion_pct = _numero(fila.get("variacion_pct"))
+        total_actual += actual
+        total_anterior += anterior
+        cobertura_actual = _fecha_resultado(fila.get("fecha_minima_actual"))
+        cobertura_fin = _fecha_resultado(fila.get("fecha_maxima_actual"))
+        cobertura_anterior = _fecha_resultado(fila.get("fecha_minima_anterior"))
+        cobertura_anterior_fin = _fecha_resultado(fila.get("fecha_maxima_anterior"))
+        cobertura = (
+            f"{cobertura_anterior:%d-%m}–{cobertura_anterior_fin:%d-%m} / {cobertura_actual:%d-%m}–{cobertura_fin:%d-%m}"
+            if cobertura_actual and cobertura_fin and cobertura_anterior and cobertura_anterior_fin else "Sin registros en uno de los períodos"
+        )
+        formato = _entero if medida == "ventas_unidades" else _eur
+        porcentaje = f"{variacion_pct:,.2f} %".replace(",", "X").replace(".", ",").replace("X", ".")
+        lineas.append(
+            f"| {MESES_RESPUESTA[mes.month - 1].capitalize()} | {formato(actual)} | {formato(anterior)} | {formato(variacion)} | {porcentaje} | {cobertura} |"
+        )
+
+    diferencia = total_actual - total_anterior
+    diferencia_pct = (diferencia / abs(total_anterior) * 100) if total_anterior else 0.0
+    formato = _entero if medida == "ventas_unidades" else _eur
+    porcentaje_total = f"{diferencia_pct:,.2f} %".replace(",", "X").replace(".", ",").replace("X", ".")
+    lineas.extend((
+        "\n### Totales conciliados",
+        f"- **{actual_nombre}:** {formato(total_actual)} · **{anterior_nombre}:** {formato(total_anterior)}.",
+        f"- **Diferencia:** {formato(diferencia)} ({porcentaje_total}).",
+        "- La suma de las filas mensuales coincide con los totales mostrados; los meses sin registros se presentan con valor 0.",
+    ))
+    if ajuste_fecha:
+        lineas.append(f"- **Ajuste de fecha:** {ajuste_fecha}")
+    return "\n".join(lineas)
+
+
+def renderizar_resumen_financiero(
+    fila: dict[str, Any] | None,
+    inicio_actual: date,
+    fin_actual: date,
+    inicio_anterior: date | None = None,
+    fin_anterior: date | None = None,
+    ajuste_fecha: str | None = None,
+) -> str:
+    """Muestra ventas, MG y MGD desde una única consulta exacta."""
+    fila = fila or {}
+    actual_nombre = f"FY{inicio_actual.year}" if inicio_actual.month == 5 else "Periodo actual"
+    anterior_nombre = f"FY{inicio_anterior.year}" if inicio_anterior and inicio_anterior.month == 5 else "Periodo anterior"
+    lineas = [
+        "**Resumen financiero comparativo**" if inicio_anterior else "**Resumen financiero**",
+        f"Periodo actual: **{inicio_actual:%d-%m-%Y} – {fin_actual:%d-%m-%Y}**" + (
+            f" · comparable: **{inicio_anterior:%d-%m-%Y} – {fin_anterior:%d-%m-%Y}**." if inicio_anterior and fin_anterior else "."
+        ),
+    ]
+    if inicio_anterior:
+        lineas.extend((
+            f"| Métrica | {actual_nombre} | {anterior_nombre} | Diferencia | Diferencia % |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ))
+        for clave, etiqueta in (("ventas", "Ventas netas"), ("margen", "Margen bruto"), ("mgd", "MGD")):
+            actual = _numero(fila.get(f"{clave}_periodo_actual"))
+            anterior = _numero(fila.get(f"{clave}_periodo_anterior"))
+            diferencia = actual - anterior
+            pct = diferencia / abs(anterior) * 100 if anterior else 0.0
+            pct_texto = f"{pct:,.2f} %".replace(",", "X").replace(".", ",").replace("X", ".")
+            lineas.append(f"| {etiqueta} | {_eur(actual)} | {_eur(anterior)} | {_eur(diferencia)} | {pct_texto} |")
+    else:
+        lineas.extend((
+            "| Métrica | Total |",
+            "| --- | ---: |",
+            f"| Ventas netas | {_eur(fila.get('ventas_periodo_actual'))} |",
+            f"| Margen bruto | {_eur(fila.get('margen_periodo_actual'))} |",
+            f"| MGD | {_eur(fila.get('mgd_periodo_actual'))} |",
+        ))
+    if ajuste_fecha:
+        lineas.append(f"\n- **Ajuste de fecha:** {ajuste_fecha}")
     return "\n".join(lineas)
 
 

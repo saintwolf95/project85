@@ -248,6 +248,18 @@ def ensure_agent_signals_schema() -> None:
         """))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_usuario_onboarding_usuario_flujo ON usuario_onboarding (usuario_id, empresa_id, flujo)"))
 
+
+def ensure_copilot_schema() -> None:
+    """Añade de forma aditiva el contexto analítico de los chats existentes."""
+    from sqlalchemy import inspect, text
+
+    models.CopilotChat.__table__.create(bind=engine, checkfirst=True)
+    columnas = {columna["name"] for columna in inspect(engine).get_columns("copilot_chats")}
+    if "contexto_analitico" not in columnas:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE copilot_chats ADD COLUMN contexto_analitico TEXT NOT NULL DEFAULT '{}'"))
+        logger.info("[STARTUP] Contexto analítico persistente del Copilot inicializado.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Tabla aditiva necesaria también cuando producción omite create_all.
@@ -258,6 +270,7 @@ async def lifespan(app: FastAPI):
     models.AgentDecisionStep.__table__.create(bind=engine, checkfirst=True)
     models.AgentNotificationRecipient.__table__.create(bind=engine, checkfirst=True)
     models.AgentNotificationLog.__table__.create(bind=engine, checkfirst=True)
+    ensure_copilot_schema()
     daily_task = None
     if ENABLE_DAILY_AGENT_REPORTS:
         from .daily_agents import daily_reports_loop
@@ -352,7 +365,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="2.01.0",
+    version="2.02.0",
     lifespan=lifespan
 )
 

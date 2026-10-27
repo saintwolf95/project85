@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api, getCopilotChats, getCopilotChatHistory, deleteCopilotChat, renameCopilotChat, getBusinessContext, updateBusinessContext, uploadBusinessDocument, getLibreriaDocuments, getCopilotCapabilities } from '../services/api';
 import type { CopilotCapabilities, CopilotChat, LibreriaDocument } from '../services/api';
-import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Pencil, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight } from 'lucide-react';
+import { Send, Bot, User, Zap, Brain, Plus, MessageSquare, Trash2, Pencil, Loader2, Menu, X, BookOpen, Save, Paperclip, Download, Copy, Check, Library, ChevronDown, RotateCcw, AlertCircle, ArrowRight, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize from 'rehype-sanitize';
@@ -37,7 +37,9 @@ const INVENTORY_SUGGESTIONS = [
 
 const SQL_EXPORT_PATTERN = /<!-- sql_export: [\s\S]*? -->/g;
 const METRICS_MARKER_PATTERN = /<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->/;
+const CHART_MARKER_PATTERN = /<!-- copilot_chart: ([A-Za-z0-9+/=]+) -->/;
 const FOLLOWUPS_MARKER_PATTERN = /<!-- copilot_followups: ([A-Za-z0-9+/=]+) -->/;
+const REPORT_MARKER_PATTERN = /<!-- copilot_report: [A-Za-z0-9+/=]+\.[a-f0-9]{64} -->/;
 const decodeBase64Utf8 = (encoded: string) => {
   try {
     const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
@@ -46,8 +48,9 @@ const decodeBase64Utf8 = (encoded: string) => {
     return null;
   }
 };
-const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').replace(METRICS_MARKER_PATTERN, '').replace(FOLLOWUPS_MARKER_PATTERN, '').trim();
+const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATTERN, '').replace(METRICS_MARKER_PATTERN, '').replace(CHART_MARKER_PATTERN, '').replace(FOLLOWUPS_MARKER_PATTERN, '').replace(REPORT_MARKER_PATTERN, '').trim();
 const hasCopilotExport = (content: string) => /<!-- sql_export: [\s\S]*? -->/.test(content);
+const hasCopilotReport = (content: string) => REPORT_MARKER_PATTERN.test(content);
 
 type CopilotMetricPayload = { data: Record<string, number>; formato?: 'eur' | 'unidades' | 'porcentaje' };
 
@@ -66,13 +69,19 @@ const parseCopilotMetrics = (content: string): CopilotMetricPayload | null => {
 
 const METRIC_LABELS: Record<string, string> = {
   ventas_eur: 'Ventas',
+  ventas_periodo_actual: 'Ventas · período actual',
+  ventas_periodo_anterior: 'Ventas · período comparable',
   ventas_unidades: 'Unidades vendidas',
   inventario_eur: 'Inventario',
   inventario_unidades: 'Unidades en stock',
   beneficio_eur: 'Beneficio',
   margen_eur: 'Margen',
+  margen_periodo_actual: 'Margen · período actual',
+  margen_periodo_anterior: 'Margen · período comparable',
   margen_pct: 'Margen %',
   mgd_eur: 'Margen en destino',
+  mgd_periodo_actual: 'MGD · período actual',
+  mgd_periodo_anterior: 'MGD · período comparable',
   mgd_pct: 'Margen en destino %',
   periodo_actual: 'Periodo actual',
   periodo_anterior: 'Periodo anterior',
@@ -174,18 +183,44 @@ const MODEL_OPTIONS = [
 ];
 
 interface CopilotChartConfig {
-  type?: string;
+  type?: 'bar' | 'line' | 'pie';
   title?: string;
   data?: Array<Record<string, string | number>>;
   xKey?: string;
   yKey?: string;
   color?: string;
+  format?: 'eur' | 'unidades' | 'porcentaje';
+  series?: Array<{ key: string; label: string; color?: string }>;
 }
+
+const parseCopilotChart = (content: string): CopilotChartConfig | null => {
+  const match = CHART_MARKER_PATTERN.exec(content);
+  if (!match) return null;
+  try {
+    const decoded = decodeBase64Utf8(match[1]);
+    if (!decoded) return null;
+    const parsed = JSON.parse(decoded) as CopilotChartConfig;
+    if (!parsed?.type || !Array.isArray(parsed.data) || !parsed.xKey) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
 
 const CopilotChartRenderer = ({ config }: { config: CopilotChartConfig }) => {
   if (!config || !config.type || !config.data) return null;
-  const { type, title, data, xKey, yKey, color } = config;
+  const { type, title, data, xKey, yKey, color, format } = config;
   const baseColor = color || COLORS[0];
+  const series = config.series?.filter(seriesItem => seriesItem.key && seriesItem.label)
+    || (yKey ? [{ key: yKey, label: title || yKey, color: baseColor }] : []);
+  if ((type === 'bar' || type === 'line') && (!xKey || !series.length)) return null;
+  const tooltipFormatter = (value: unknown) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return value == null ? '' : String(value);
+    if (format === 'unidades') return numeric.toLocaleString('es-ES', { maximumFractionDigits: 0 });
+    if (format === 'porcentaje') return `${numeric.toLocaleString('es-ES', { maximumFractionDigits: 2 })}%`;
+    return numeric.toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+  };
 
   return (
     <div className="my-6 w-full rounded-[16px] border border-black/[0.08] bg-white p-5 dark:border-slate-700 dark:bg-slate-900">
@@ -197,16 +232,22 @@ const CopilotChartRenderer = ({ config }: { config: CopilotChartConfig }) => {
               <CartesianGrid vertical={false} stroke="#d2d2d7" strokeDasharray="4 4" />
               <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
-              <Tooltip contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
-              <Bar dataKey={yKey} fill={baseColor} radius={[6, 6, 0, 0]} maxBarSize={40} isAnimationActive={false} />
+              <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+              {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+              {series.map((seriesItem, index) => (
+                <Bar key={seriesItem.key} dataKey={seriesItem.key} name={seriesItem.label} fill={seriesItem.color || COLORS[index % COLORS.length]} radius={[6, 6, 0, 0]} maxBarSize={40} isAnimationActive={false} />
+              ))}
             </BarChart>
           ) : type === 'line' ? (
             <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
               <CartesianGrid vertical={false} stroke="#d2d2d7" strokeDasharray="4 4" />
               <XAxis dataKey={xKey} tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fill: '#86868b', fontSize: 12 }} />
-              <Tooltip contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
-              <Line type="monotone" dataKey={yKey} stroke={baseColor} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#ffffff' }} isAnimationActive={false} />
+              <Tooltip formatter={tooltipFormatter} contentStyle={{ backgroundColor: 'var(--ai-surface)', border: '1px solid var(--ai-separator)', borderRadius: '12px', color: 'var(--ai-text)', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }} />
+              {series.length > 1 && <Legend wrapperStyle={{ fontSize: 12 }} />}
+              {series.map((seriesItem, index) => (
+                <Line key={seriesItem.key} type="monotone" dataKey={seriesItem.key} name={seriesItem.label} stroke={seriesItem.color || COLORS[index % COLORS.length]} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 2, stroke: '#ffffff' }} isAnimationActive={false} />
+              ))}
             </LineChart>
           ) : type === 'pie' ? (
             <PieChart>
@@ -225,6 +266,11 @@ const CopilotChartRenderer = ({ config }: { config: CopilotChartConfig }) => {
       </div>
     </div>
   );
+};
+
+const CopilotChartFromMessage = ({ content }: { content: string }) => {
+  const config = parseCopilotChart(content);
+  return config ? <CopilotChartRenderer config={config} /> : null;
 };
 
 interface Message {
@@ -525,14 +571,14 @@ export const AiCopilot = () => {
     }
   };
 
-  const downloadExport = async (messageId: string, format: 'csv' | 'xlsx') => {
+  const downloadExport = async (messageId: string, format: 'csv' | 'xlsx' | 'pdf') => {
     try {
       setExportingMessage(`${messageId}-${format}`);
       const response = await api.get(`/copilot/chat/message/${messageId}/export?format=${format}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `exportacion_ia_${messageId}.${format}`);
+      link.setAttribute('download', `${format === 'pdf' ? 'informe_copilot' : 'exportacion_ia'}_${messageId}.${format}`);
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
@@ -835,6 +881,7 @@ export const AiCopilot = () => {
                       <>
                         <CopyButton text={msg.content} />
                         <CopilotMetricCards content={msg.content} />
+                        <CopilotChartFromMessage content={msg.content} />
                         <div className="copilot-markdown max-w-none">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
@@ -859,14 +906,6 @@ export const AiCopilot = () => {
                                 const { children, className, ...rest } = props;
                                 const match = /language-(\w+)/.exec(className || '');
                                 const isInline = !match;
-                                if (!isInline && match && match[1] === 'json') {
-                                  try {
-                                    const parsed = JSON.parse(String(children));
-                                    if (parsed?.chartConfig) return <CopilotChartRenderer config={parsed.chartConfig} />;
-                                  } catch (error) {
-                                    console.debug('Configuración de gráfico no válida', error);
-                                  }
-                                }
                                 return isInline
                                   ? <code className={className} {...rest}>{children}</code>
                                   : <pre className={className}><code {...rest}>{children}</code></pre>;
@@ -876,14 +915,21 @@ export const AiCopilot = () => {
                             {cleanCopilotContent(msg.content)}
                           </ReactMarkdown>
                           <CopilotFollowups content={msg.content} onSelect={handleSend} disabled={isLoading} />
-                          {hasCopilotExport(msg.content) && (
+                          {(hasCopilotExport(msg.content) || hasCopilotReport(msg.content)) && (
                             <div className="mt-4 flex flex-wrap gap-3 border-t border-black/[0.08] pt-4 dark:border-slate-700/50">
-                              <button onClick={() => downloadExport(msg.id, 'csv')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-4 py-2 text-[13px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:opacity-50 dark:bg-slate-700 dark:text-slate-300">
-                                {exportingMessage === `${msg.id}-csv` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar CSV
-                              </button>
+                              {hasCopilotExport(msg.content) && (
+                                <button onClick={() => downloadExport(msg.id, 'csv')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-4 py-2 text-[13px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:opacity-50 dark:bg-slate-700 dark:text-slate-300">
+                                  {exportingMessage === `${msg.id}-csv` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar CSV
+                                </button>
+                              )}
                               <button onClick={() => downloadExport(msg.id, 'xlsx')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#0071e3] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#0077ed] disabled:opacity-50">
-                                {exportingMessage === `${msg.id}-xlsx` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Descargar Excel (.xlsx)
+                                {exportingMessage === `${msg.id}-xlsx` ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} {hasCopilotReport(msg.content) ? 'Descargar informe Excel' : 'Descargar Excel (.xlsx)'}
                               </button>
+                              {hasCopilotReport(msg.content) && (
+                                <button onClick={() => downloadExport(msg.id, 'pdf')} disabled={Boolean(exportingMessage)} className="inline-flex min-h-10 items-center gap-2 rounded-[10px] bg-[#f5f5f7] px-4 py-2 text-[13px] font-medium text-[#424245] transition-colors hover:text-[#0071e3] disabled:opacity-50 dark:bg-slate-700 dark:text-slate-300">
+                                  {exportingMessage === `${msg.id}-pdf` ? <Loader2 size={16} className="animate-spin" /> : <FileText size={16} />} Descargar informe PDF
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

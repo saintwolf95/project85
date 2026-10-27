@@ -28,6 +28,71 @@ class IntentoSemantico:
     comparacion: bool = False
     fecha_inicio_comparacion: date | None = None
     fecha_fin_comparacion: date | None = None
+    limite: int | None = None
+    orden: str = "desc"
+    ajuste_fecha: str | None = None
+
+
+def serializar_intento(intento: IntentoSemantico | None) -> dict[str, Any] | None:
+    """Persiste únicamente el contrato analítico, nunca el texto del modelo."""
+    if not intento:
+        return None
+    def serializar_valor(valor: Any) -> Any:
+        return valor.isoformat() if isinstance(valor, date) else valor
+
+    return {
+        "tipo": intento.tipo,
+        "medida": intento.medida,
+        "periodo": intento.periodo,
+        "fecha_inicio": serializar_valor(intento.fecha_inicio),
+        "fecha_fin": serializar_valor(intento.fecha_fin),
+        "agrupacion": intento.agrupacion,
+        "parametros": {clave: serializar_valor(valor) for clave, valor in intento.parametros.items()},
+        "descripcion": intento.descripcion,
+        "comparacion": intento.comparacion,
+        "fecha_inicio_comparacion": serializar_valor(intento.fecha_inicio_comparacion),
+        "fecha_fin_comparacion": serializar_valor(intento.fecha_fin_comparacion),
+        "limite": intento.limite,
+        "orden": intento.orden,
+        "ajuste_fecha": intento.ajuste_fecha,
+    }
+
+
+def restaurar_intento(datos: dict[str, Any] | None) -> IntentoSemantico | None:
+    """Restaura un contrato analítico previamente validado para un seguimiento."""
+    if not isinstance(datos, dict) or not datos.get("medida") or not datos.get("tipo"):
+        return None
+
+    def fecha(valor: Any) -> date | None:
+        if isinstance(valor, date):
+            return valor
+        if isinstance(valor, str):
+            try:
+                return date.fromisoformat(valor)
+            except ValueError:
+                return None
+        return None
+
+    parametros = {
+        clave: fecha(valor) if clave.startswith("fecha_") else valor
+        for clave, valor in (datos.get("parametros") or {}).items()
+    }
+    return IntentoSemantico(
+        tipo=str(datos["tipo"]),
+        medida=str(datos["medida"]),
+        periodo=datos.get("periodo"),
+        fecha_inicio=fecha(datos.get("fecha_inicio")),
+        fecha_fin=fecha(datos.get("fecha_fin")),
+        agrupacion=datos.get("agrupacion"),
+        parametros=parametros,
+        descripcion=str(datos.get("descripcion") or ""),
+        comparacion=bool(datos.get("comparacion")),
+        fecha_inicio_comparacion=fecha(datos.get("fecha_inicio_comparacion")),
+        fecha_fin_comparacion=fecha(datos.get("fecha_fin_comparacion")),
+        limite=datos.get("limite") if isinstance(datos.get("limite"), int) else None,
+        orden=datos.get("orden") if datos.get("orden") in {"asc", "desc"} else "desc",
+        ajuste_fecha=datos.get("ajuste_fecha") if isinstance(datos.get("ajuste_fecha"), str) else None,
+    )
 
 
 def normalizar_texto(texto: str) -> str:
@@ -78,6 +143,59 @@ def _ultimo_dia_mes(anio: int, mes: int) -> date:
     return date(siguiente_anio, siguiente_mes, 1) - timedelta(days=1)
 
 
+def _fecha_normalizada(anio: int, mes: int, dia: int) -> tuple[date, bool]:
+    """Devuelve una fecha válida y señala si se ajustó un día imposible.
+
+    En preguntas analíticas es mejor corregir de forma explícita «31 de
+    septiembre» a 30 de septiembre que abandonar silenciosamente el contexto.
+    """
+    ultimo_dia = _ultimo_dia_mes(anio, mes).day
+    fecha = date(anio, mes, min(max(dia, 1), ultimo_dia))
+    return fecha, dia != fecha.day
+
+
+def _resolver_comparacion_fiscal(texto: str) -> tuple[date, date, date, date, str | None] | None:
+    """Resuelve comparativas explícitas como «FY2025 vs FY2026 hasta septiembre».
+
+    El año fiscal de Five Minutes va de mayo a abril. El primer rango devuelto
+    es el más reciente y el segundo el ejercicio anterior para reutilizar el
+    contrato comparativo del resto del Copilot.
+    """
+    normalizado = normalizar_texto(texto)
+    ejercicios = sorted({int(valor) for valor in re.findall(r"\bfy\s*(20\d{2})\b", normalizado)})
+    if len(ejercicios) != 2:
+        return None
+
+    corte = re.search(
+        rf"\bhasta\s+(?:el\s+)?(\d{{1,2}})\s+de\s+({'|'.join(MESES_ES)})(?:\s+de\s+(20\d{{2}}))?\b",
+        normalizado,
+    )
+    if corte:
+        dia_solicitado = int(corte.group(1))
+        mes_corte = MESES_ES[corte.group(2)]
+        anio_explicito = int(corte.group(3)) if corte.group(3) else None
+    else:
+        # Si no se indica corte se comparan ejercicios fiscales completos.
+        dia_solicitado, mes_corte, anio_explicito = 30, 4, None
+
+    def rango(ejercicio: int) -> tuple[date, date, str | None]:
+        inicio = date(ejercicio, 5, 1)
+        anio_fin = anio_explicito or (ejercicio if mes_corte >= 5 else ejercicio + 1)
+        fin, corregida = _fecha_normalizada(anio_fin, mes_corte, dia_solicitado)
+        # Un corte anterior a mayo pertenece al siguiente año natural.
+        if fin < inicio:
+            fin, corregida = _fecha_normalizada(ejercicio + 1, mes_corte, dia_solicitado)
+        aviso = (
+            f"Se ajustó el {dia_solicitado} de {corte.group(2)} al {fin.day} de {corte.group(2)}."
+            if corregida and corte else None
+        )
+        return inicio, fin, aviso
+
+    anterior_inicio, anterior_fin, aviso_anterior = rango(ejercicios[0])
+    actual_inicio, actual_fin, aviso_actual = rango(ejercicios[1])
+    return actual_inicio, actual_fin, anterior_inicio, anterior_fin, aviso_actual or aviso_anterior
+
+
 def _resolver_rango_fechas_naturales(normalizado: str, fecha_hoy: date) -> tuple[date, date] | None:
     """Resuelve rangos como «desde el 5 de mayo de 2025 hasta hoy»."""
     nombres_meses = "|".join(MESES_ES)
@@ -102,7 +220,9 @@ def _resolver_rango_fechas_naturales(normalizado: str, fecha_hoy: date) -> tuple
     )
     if fin_match:
         try:
-            fin = date(int(fin_match.group(3)), MESES_ES[fin_match.group(2)], int(fin_match.group(1)))
+            fin, _ = _fecha_normalizada(
+                int(fin_match.group(3)), MESES_ES[fin_match.group(2)], int(fin_match.group(1))
+            )
         except ValueError:
             return None
     else:
@@ -199,7 +319,7 @@ def resolver_periodo(texto: str, hoy: date | None = None) -> tuple[str | None, d
 def detectar_comparacion(texto: str) -> bool:
     normalizado = normalizar_texto(texto)
     return _contiene(normalizado, (
-        "comparar", "compara", "comparalo", "compararlo", "comparacion", "frente a", "frente al", "respecto a", "respecto al", "vs", "variacion", "crecimiento", "tendencia", "evolucion"
+        "comparar", "compara", "comparalo", "compararlo", "comparacion", "frente a", "frente al", "respecto a", "respecto al", "contra", "diferencias", "vs", "variacion", "crecimiento", "tendencia", "evolucion"
     ))
 
 
@@ -218,9 +338,23 @@ def resolver_periodo_anterior(periodo: str | None, fecha_inicio: date | None, fe
     return fin_anterior - timedelta(days=dias - 1), fin_anterior
 
 
+def _periodo_interanual_equivalente(fecha_inicio: date, fecha_fin: date) -> tuple[date, date]:
+    """Desplaza un intervalo un año, ajustando de forma segura el 29 de febrero."""
+    inicio, _ = _fecha_normalizada(fecha_inicio.year - 1, fecha_inicio.month, fecha_inicio.day)
+    fin, _ = _fecha_normalizada(fecha_fin.year - 1, fecha_fin.month, fecha_fin.day)
+    return inicio, fin
+
+
 def detectar_medida(texto: str) -> tuple[str | None, str | None]:
     """Devuelve la medida y el tipo de dato que representa."""
     normalizado = normalizar_texto(texto)
+
+    # Una comparativa que pide varios KPI no se puede degradar a una única
+    # métrica por el orden de las palabras. Se resuelve con un resumen común.
+    menciona_ventas = _contiene(normalizado, ("ventas", "venta", "facturacion", "ingresos", "ingreso"))
+    menciona_margen = _contiene(normalizado, ("margen", "mg", "mgd", "margen en destino"))
+    if menciona_ventas and menciona_margen:
+        return "resumen_financiero", "ventas"
 
     if _contiene(normalizado, ("productos en cada cuadrante", "productos por cuadrante", "conteo de la matriz", "cuantos hay en la matriz")) or re.search(
         r"\bcuant(?:os|as)\b.*\bproductos?\b.*\b(?:cuadrante|matriz)\b", normalizado
@@ -265,6 +399,12 @@ def detectar_medida(texto: str) -> tuple[str | None, str | None]:
 
 def detectar_agrupacion(texto: str) -> str | None:
     normalizado = normalizar_texto(texto)
+    if (
+        _contiene(normalizado, ("por referencia", "por referencias", "por sku", "por skus", "por producto", "por productos"))
+        or re.search(r"\b(?:top|ranking|mejores?|mayores?|peores?)\s*\d*\s*(?:referencias?|productos?|skus?)\b", normalizado)
+        or re.search(r"\b\d+\s+(?:mejores?|mayores?|peores?)\s+(?:referencias?|productos?|skus?)\b", normalizado)
+    ):
+        return "sku"
     if _contiene(normalizado, ("por comercial factura", "por comercial de factura", "cada comercial factura")):
         return "comercial_factura"
     if _contiene(normalizado, ("por nombre comercial", "por comercial asignado", "por comercial cliente")):
@@ -376,10 +516,15 @@ def _es_seguimiento(texto: str) -> bool:
         return False
     if re.match(r"^(y|tambien|también|ademas|además)\b", normalizado):
         return True
-    if re.match(r"^(compara|comparalo|compararlo)\b", normalizado):
+    if re.match(r"^(compara|comparalo|compararlo|dame|hazme|muestrame|muestra)\b", normalizado) and _contiene(
+        normalizado, (
+            "lo mismo", "totales", "sumatorio", "ejercicio anterior", "ano anterior",
+            "diferencias", "contra", "mejores", "mayores", "peores", "menores",
+        )
+    ):
         return True
     return _contiene(normalizado, (
-        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por cliente", "por tipo cliente", "por comercial", "por kd", "por matriz", "en euros", "en unidades", "lo mismo", "mismo periodo", "desglosa", "desglosar", "desglosado", "desglosada"
+        "por familia", "por marca", "por seccion", "por product manager", "por pm", "por cliente", "por tipo cliente", "por comercial", "por kd", "por matriz", "por referencia", "por sku", "lo mismo", "mismo periodo", "ejercicio anterior", "ano anterior", "contra totales", "sumatorio", "mejores", "mayores", "peores", "menores", "desglosa", "desglosar", "desglosado", "desglosada"
     ))
 
 
@@ -426,7 +571,9 @@ def _es_pregunta_agregada(texto: str) -> bool:
     )
 
 
-def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico | None, str | None]:
+def analizar_intencion(
+    history: list[dict[str, Any]], contexto_previo: dict[str, Any] | None = None,
+) -> tuple[IntentoSemantico | None, str | None]:
     """Identifica preguntas agregadas y devuelve una aclaracion cuando falta contexto."""
     mensajes_usuario = [
         mensaje.get("content", "")
@@ -438,8 +585,20 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
 
     actual = mensajes_usuario[-1]
     texto_analizado = actual
-    periodo, fecha_inicio, fecha_fin = resolver_periodo(actual)
-    comparar = detectar_comparacion(actual)
+    comparacion_fiscal = _resolver_comparacion_fiscal(actual)
+    if comparacion_fiscal:
+        (
+            fecha_inicio,
+            fecha_fin,
+            fecha_inicio_comparacion,
+            fecha_fin_comparacion,
+            ajuste_fecha,
+        ) = comparacion_fiscal
+        periodo, comparar = "comparacion_fiscal", True
+    else:
+        periodo, fecha_inicio, fecha_fin = resolver_periodo(actual)
+        fecha_inicio_comparacion, fecha_fin_comparacion, ajuste_fecha = None, None, None
+        comparar = detectar_comparacion(actual)
     medida, tipo = detectar_medida(actual)
     analisis_gerencial = es_pregunta_gerencial(actual)
     if analisis_gerencial and not medida:
@@ -451,7 +610,9 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
     intento_anterior = None
 
     if len(mensajes_usuario) > 1 and _es_seguimiento(actual):
-        intento_anterior, _ = analizar_intencion(history[:-1])
+        intento_anterior = restaurar_intento(contexto_previo)
+        if not intento_anterior:
+            intento_anterior, _ = analizar_intencion(history[:-1])
         if intento_anterior:
             texto_analizado = f"{mensajes_usuario[-2]} {actual}"
             if not medida:
@@ -462,6 +623,9 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
                 fecha_fin = intento_anterior.fecha_fin
             if not comparar:
                 comparar = intento_anterior.comparacion
+            if not fecha_inicio_comparacion:
+                fecha_inicio_comparacion = intento_anterior.fecha_inicio_comparacion
+                fecha_fin_comparacion = intento_anterior.fecha_fin_comparacion
         else:
             # Una aclaración previa puede contener solo parte de la intención.
             # Completamos los huecos con los mensajes anteriores del usuario.
@@ -487,6 +651,16 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
         return None, None
 
     filtros = detectar_filtros(texto_analizado)
+    if intento_anterior:
+        # El contrato persistido conserva filtros que no se repiten en una
+        # petición corta como «desglósalo por familia». Las fechas se resuelven
+        # aparte para que un nuevo período sí pueda sustituir al anterior.
+        filtros_anteriores = {
+            clave: valor
+            for clave, valor in intento_anterior.parametros.items()
+            if not clave.startswith("fecha_")
+        }
+        filtros = {**filtros_anteriores, **filtros}
     if _tiene_filtro_no_soportado(actual if intento_anterior else texto_analizado):
         return None, None
 
@@ -505,8 +679,53 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
         agrupacion = agrupacion_actual or intento_anterior.agrupacion
     else:
         agrupacion = detectar_agrupacion(texto_analizado)
+    texto_normalizado = normalizar_texto(actual)
+    ranking_implicito = bool(re.search(
+        r"\b(?:top\s*)?(?:\d{1,2}|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
+        r"(?:mejores?|mayores?|peores?|menores?)\b",
+        texto_normalizado,
+    ))
+    if ranking_implicito and not agrupacion_actual:
+        agrupacion = "sku"
     descripcion = f"{medida} agrupado por {agrupacion}" if agrupacion else medida
-    fecha_inicio_comparacion, fecha_fin_comparacion = resolver_periodo_anterior(periodo, fecha_inicio, fecha_fin) if comparar else (None, None)
+    if comparar and not fecha_inicio_comparacion:
+        if _contiene(texto_normalizado, ("mismo periodo", "ano anterior", "ejercicio anterior", "interanual")):
+            fecha_inicio_comparacion, fecha_fin_comparacion = _periodo_interanual_equivalente(
+                fecha_inicio, fecha_fin,
+            )
+        else:
+            fecha_inicio_comparacion, fecha_fin_comparacion = resolver_periodo_anterior(
+                periodo, fecha_inicio, fecha_fin,
+            )
+    texto_ranking = actual if intento_anterior else texto_analizado
+    ranking_normalizado = normalizar_texto(texto_ranking)
+    limite_match = re.search(
+        r"\b(?:top|ranking|primer(?:os|as)?|mejores?|mayores?)\s*(\d{1,2})\b|\b(\d{1,2})\s+(?:mejores?|mayores?|peores?)\b",
+        ranking_normalizado,
+    )
+    limite = min(int(limite_match.group(1) or limite_match.group(2)), 50) if limite_match else None
+    if limite is None:
+        numeros_texto = {
+            "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+            "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10,
+        }
+        limite_palabra = re.search(
+            r"\b(uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+"
+            r"(?:mejores?|mayores?|peores?|menores?)\b",
+            ranking_normalizado,
+        )
+        if limite_palabra:
+            limite = numeros_texto[limite_palabra.group(1)]
+    if limite is None and intento_anterior:
+        limite = intento_anterior.limite
+    if re.search(r"\b(peores?|menores?|caidas?)\b", texto_normalizado):
+        orden = "asc"
+    elif re.search(r"\b(mejores?|mayores?|top|ranking)\b", texto_normalizado):
+        orden = "desc"
+    elif intento_anterior:
+        orden = intento_anterior.orden
+    else:
+        orden = "desc"
     parametros = {
         clave: valor
         for clave, valor in {
@@ -542,6 +761,9 @@ def analizar_intencion(history: list[dict[str, Any]]) -> tuple[IntentoSemantico 
         comparacion=comparar,
         fecha_inicio_comparacion=fecha_inicio_comparacion,
         fecha_fin_comparacion=fecha_fin_comparacion,
+        limite=limite,
+        orden=orden,
+        ajuste_fecha=ajuste_fecha,
     ), None
 
 
@@ -688,6 +910,38 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         return sql, dict(intento.parametros)
 
     if intento.tipo in ("ventas", "rentabilidad"):
+        if intento.medida == "resumen_financiero":
+            condiciones = _condiciones_sql(intento, incluir_periodo=True)
+            if intento.comparacion:
+                sql = f"""
+                    SELECT
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.ingreso_total ELSE 0 END), 0) AS ventas_periodo_actual,
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.ingreso_total ELSE 0 END), 0) AS ventas_periodo_anterior,
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.margen_bruto_eur ELSE 0 END), 0) AS margen_periodo_actual,
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.margen_bruto_eur ELSE 0 END), 0) AS margen_periodo_anterior,
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.margen_destino_eur ELSE 0 END), 0) AS mgd_periodo_actual,
+                        COALESCE(SUM(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.margen_destino_eur ELSE 0 END), 0) AS mgd_periodo_anterior,
+                        MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_minima_actual,
+                        MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_maxima_actual,
+                        MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_minima_anterior,
+                        MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_maxima_anterior
+                    FROM ventas_historicas vh
+                    JOIN productos p ON p.id = vh.producto_id
+                    WHERE {condiciones}
+                """
+            else:
+                sql = f"""
+                    SELECT COALESCE(SUM(vh.ingreso_total), 0) AS ventas_periodo_actual,
+                           COALESCE(SUM(vh.margen_bruto_eur), 0) AS margen_periodo_actual,
+                           COALESCE(SUM(vh.margen_destino_eur), 0) AS mgd_periodo_actual,
+                           MIN(vh.fecha_venta) AS fecha_minima_actual,
+                           MAX(vh.fecha_venta) AS fecha_maxima_actual
+                    FROM ventas_historicas vh
+                    JOIN productos p ON p.id = vh.producto_id
+                    WHERE {condiciones}
+                """
+            return sql, dict(intento.parametros)
+
         if intento.medida == "ventas_eur":
             expresion = "vh.ingreso_total"
             alias = "ventas_eur"
@@ -785,6 +1039,52 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
         columna_clientes = ", COUNT(DISTINCT vh.cliente_id) AS clientes" if usa_clientes else ""
         prefijo_abc = crear_cte_abc_ventas() if usa_abc_dinamico else ""
         join_abc = " LEFT JOIN clasificacion_abc ca ON ca.producto_id = p.id" if usa_abc_dinamico else ""
+        if intento.agrupacion == "sku":
+            limite = intento.limite or 20
+            parametros = {**intento.parametros, "limite": limite}
+            orden_sql = "ASC" if intento.orden == "asc" else "DESC"
+            if intento.comparacion:
+                actual_sql, anterior_sql, variacion_sql, variacion_pct_sql, _ = _expresiones_comparativas(intento, expresion)
+                campo_orden = "variacion_absoluta" if intento.orden == "asc" else "periodo_actual"
+                sql = f"""{prefijo_abc}
+                    SELECT p.sku AS referencia,
+                           COALESCE(p.nombre, 'Sin nombre') AS producto,
+                           COALESCE(p.familia, 'Sin familia') AS familia,
+                           {actual_sql} AS periodo_actual,
+                           {anterior_sql} AS periodo_anterior,
+                           {variacion_sql} AS variacion_absoluta,
+                           {variacion_pct_sql} AS variacion_pct,
+                           COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END) AS productos
+                    FROM ventas_historicas vh
+                    JOIN productos p ON p.id = vh.producto_id
+                    {join_abc}
+                    {join_metricas}
+                    WHERE {condiciones}
+                    GROUP BY p.sku, p.nombre, p.familia
+                    ORDER BY {campo_orden} {orden_sql}, referencia ASC
+                    LIMIT :limite
+                """
+            else:
+                sql = f"""{prefijo_abc}
+                    SELECT p.sku AS referencia,
+                           COALESCE(p.nombre, 'Sin nombre') AS producto,
+                           COALESCE(p.familia, 'Sin familia') AS familia,
+                           COALESCE(SUM(vh.ingreso_total), 0) AS ventas_eur,
+                           COALESCE(SUM(vh.margen_bruto_eur), 0) AS margen_eur,
+                           COALESCE(SUM(vh.margen_destino_eur), 0) AS mgd_eur,
+                           CASE WHEN COALESCE(SUM(vh.ingreso_total), 0) = 0 THEN 0
+                                ELSE COALESCE(SUM(vh.margen_bruto_eur), 0) / NULLIF(SUM(vh.ingreso_total), 0) * 100 END AS margen_pct,
+                           COUNT(DISTINCT vh.producto_id) AS productos
+                    FROM ventas_historicas vh
+                    JOIN productos p ON p.id = vh.producto_id
+                    {join_abc}
+                    {join_metricas}
+                    WHERE {condiciones}
+                    GROUP BY p.sku, p.nombre, p.familia
+                    ORDER BY {alias_agregado} {orden_sql}, referencia ASC
+                    LIMIT :limite
+                """
+            return sql, parametros
         if intento.comparacion:
             actual_sql, anterior_sql, variacion_sql, variacion_pct_sql, variacion_pp_sql = _expresiones_comparativas(intento, expresion)
             columnas_comparacion = (
@@ -794,7 +1094,26 @@ def crear_consulta_semantica(intento: IntentoSemantico) -> tuple[str, dict[str, 
             if variacion_pp_sql:
                 columnas_comparacion += f", {variacion_pp_sql} AS variacion_pp"
             productos_actuales = "COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END)"
-            if agrupacion:
+            if intento.agrupacion == "mes":
+                mes = "SUBSTR(CAST(vh.fecha_venta AS TEXT), 6, 2)"
+                sql = f"""{prefijo_abc}
+                    SELECT {mes} AS agrupacion,
+                           {columnas_comparacion},
+                           MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_minima_actual,
+                           MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_maxima_actual,
+                           MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_minima_anterior,
+                           MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_comparacion AND :fecha_fin_comparacion THEN vh.fecha_venta END) AS fecha_maxima_anterior,
+                           {productos_actuales} AS productos
+                    FROM ventas_historicas vh
+                    JOIN productos p ON p.id = vh.producto_id
+                    {join_clientes}
+                    {join_abc}
+                    {join_metricas}
+                    WHERE {condiciones}
+                    GROUP BY {mes}
+                    ORDER BY agrupacion ASC
+                """
+            elif agrupacion:
                 sql = f"""{prefijo_abc}
                     SELECT {agrupacion} AS agrupacion,
                            {columnas_comparacion},

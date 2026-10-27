@@ -1,7 +1,22 @@
 import unittest
 from datetime import date
 
-from app.copilot_orchestrator import analizar_intencion, crear_consulta_semantica, resolver_periodo
+from app.copilot_orchestrator import (
+    analizar_intencion,
+    crear_consulta_semantica,
+    resolver_periodo,
+    serializar_intento,
+)
+from app.analitica_ventas import (
+    construir_grafico_comparacion_mensual,
+    construir_grafico_desglose,
+    construir_grafico_ranking_sku,
+    renderizar_comparacion_mensual,
+    renderizar_desglose_agrupado,
+    renderizar_ranking_sku,
+    renderizar_resumen_financiero,
+)
+from app.copilot_service import interpret_results
 
 
 CASOS_EVALUACION = (
@@ -217,6 +232,200 @@ class EvaluacionCopilotTests(unittest.TestCase):
         consulta, _parametros = crear_consulta_semantica(intento)
         self.assertIn("inventario_historico ih", consulta)
         self.assertIn("periodo_anterior", consulta)
+
+    def test_ranking_de_referencias_conserva_metricas_y_limite_tras_aclarar_periodo(self):
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Cuáles han sido las 5 mejores referencias por margen absoluto"},
+            {"role": "assistant", "content": "¿Qué periodo quieres analizar?"},
+            {"role": "user", "content": "90 días"},
+        ])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.medida, "margen_eur")
+        self.assertEqual(intento.agrupacion, "sku")
+        self.assertEqual(intento.limite, 5)
+        self.assertEqual(intento.periodo, "ultimos_90_dias")
+        consulta, parametros = crear_consulta_semantica(intento)
+        self.assertIn("p.sku AS referencia", consulta)
+        self.assertIn("LIMIT :limite", consulta)
+        self.assertEqual(parametros["limite"], 5)
+
+    def test_comparativa_fiscal_explicita_normaliza_fecha_y_alinea_meses(self):
+        intento, aclaracion = analizar_intencion([{
+            "role": "user",
+            "content": "Compara FY2025 vs FY2026 hasta el 31 de septiembre por mes las ventas",
+        }])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertTrue(intento.comparacion)
+        self.assertEqual(intento.periodo, "comparacion_fiscal")
+        self.assertEqual(intento.fecha_inicio, date(2026, 5, 1))
+        self.assertEqual(intento.fecha_fin, date(2026, 9, 30))
+        self.assertEqual(intento.fecha_inicio_comparacion, date(2025, 5, 1))
+        self.assertEqual(intento.fecha_fin_comparacion, date(2025, 9, 30))
+        self.assertIn("ajustó", intento.ajuste_fecha)
+        consulta, _ = crear_consulta_semantica(intento)
+        self.assertIn("SUBSTR(CAST(vh.fecha_venta AS TEXT), 6, 2)", consulta)
+        self.assertIn("fecha_minima_actual", consulta)
+
+    def test_resumen_financiero_fiscal_calcula_los_tres_kpi_en_una_sola_consulta(self):
+        intento, aclaracion = analizar_intencion([{
+            "role": "user",
+            "content": "Dame los totales de ventas, margen y MGD de FY2025 contra FY2026 hasta el 30 de septiembre",
+        }])
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.medida, "resumen_financiero")
+        self.assertTrue(intento.comparacion)
+        consulta, _ = crear_consulta_semantica(intento)
+        self.assertIn("ventas_periodo_actual", consulta)
+        self.assertIn("margen_periodo_actual", consulta)
+        self.assertIn("mgd_periodo_actual", consulta)
+
+    def test_contexto_estructurado_restaura_el_ranking_en_un_seguimiento(self):
+        inicial, _ = analizar_intencion([{
+            "role": "user", "content": "Top 5 referencias por margen de los últimos 90 días",
+        }])
+        self.assertIsNotNone(inicial)
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Top 5 referencias por margen de los últimos 90 días"},
+            {"role": "assistant", "content": "Resultado anterior"},
+            {"role": "user", "content": "Lo mismo, pero por ventas"},
+        ], serializar_intento(inicial))
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.medida, "ventas_eur")
+        self.assertEqual(intento.agrupacion, "sku")
+        self.assertEqual(intento.limite, 5)
+
+    def test_seguimiento_conserva_filtro_y_compara_ventana_equivalente(self):
+        inicial, _ = analizar_intencion([{
+            "role": "user",
+            "content": "Ventas de la familia 'Portátiles' desde 01/05/2026 hasta 30/09/2026",
+        }])
+        self.assertIsNotNone(inicial)
+
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Ventas de la familia 'Portátiles' desde 01/05/2026 hasta 30/09/2026"},
+            {"role": "assistant", "content": "Resultado anterior"},
+            {"role": "user", "content": "Compáralo con el mismo periodo del año anterior y desglósalo por marca"},
+        ], serializar_intento(inicial))
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertTrue(intento.comparacion)
+        self.assertEqual(intento.agrupacion, "marca")
+        self.assertEqual(intento.parametros["familia"], "Portátiles")
+        self.assertEqual(intento.fecha_inicio, date(2026, 5, 1))
+        self.assertEqual(intento.fecha_fin, date(2026, 9, 30))
+        self.assertEqual(intento.fecha_inicio_comparacion, date(2025, 5, 1))
+        self.assertEqual(intento.fecha_fin_comparacion, date(2025, 9, 30))
+
+    def test_seguimiento_cinco_peores_usa_ranking_ascendente(self):
+        inicial, _ = analizar_intencion([{
+            "role": "user", "content": "Top 5 referencias por margen de los últimos 90 días",
+        }])
+        self.assertIsNotNone(inicial)
+
+        intento, aclaracion = analizar_intencion([
+            {"role": "user", "content": "Top 5 referencias por margen de los últimos 90 días"},
+            {"role": "assistant", "content": "Resultado anterior"},
+            {"role": "user", "content": "Muéstrame los cinco peores"},
+        ], serializar_intento(inicial))
+
+        self.assertIsNone(aclaracion)
+        self.assertIsNotNone(intento)
+        self.assertEqual(intento.agrupacion, "sku")
+        self.assertEqual(intento.limite, 5)
+        self.assertEqual(intento.orden, "asc")
+        consulta, parametros = crear_consulta_semantica(intento)
+        self.assertIn("ORDER BY margen_eur ASC, referencia ASC", consulta)
+        self.assertEqual(parametros["limite"], 5)
+
+    def test_render_comparativo_incluye_mes_sin_registros_y_conciliacion(self):
+        respuesta = renderizar_comparacion_mensual(
+            [{
+                "agrupacion": "05", "periodo_actual": 120, "periodo_anterior": 100,
+                "variacion_absoluta": 20, "variacion_pct": 20,
+                "fecha_minima_actual": "2026-05-01", "fecha_maxima_actual": "2026-05-31",
+                "fecha_minima_anterior": "2025-05-01", "fecha_maxima_anterior": "2025-05-31",
+            }],
+            date(2026, 5, 1), date(2026, 6, 30), date(2025, 5, 1), date(2025, 6, 30),
+            "ventas_eur", "Se ajustó el 31 de septiembre al 30 de septiembre.",
+        )
+
+        self.assertIn("| Mayo |", respuesta)
+        self.assertIn("| Junio | €0,00 | €0,00", respuesta)
+        self.assertIn("Totales conciliados", respuesta)
+        self.assertIn("Ajuste de fecha", respuesta)
+
+    def test_render_resumen_financiero_muestra_ventas_mg_y_mgd(self):
+        respuesta = renderizar_resumen_financiero(
+            {
+                "ventas_periodo_actual": 500, "ventas_periodo_anterior": 400,
+                "margen_periodo_actual": 50, "margen_periodo_anterior": 40,
+                "mgd_periodo_actual": 35, "mgd_periodo_anterior": 30,
+            },
+            date(2026, 5, 1), date(2026, 9, 30), date(2025, 5, 1), date(2025, 9, 30),
+        )
+
+        self.assertIn("Ventas netas", respuesta)
+        self.assertIn("Margen bruto", respuesta)
+        self.assertIn("MGD", respuesta)
+
+    def test_grafico_comparativo_usa_la_misma_serie_y_conserva_meses_cero(self):
+        grafico = construir_grafico_comparacion_mensual(
+            [{"agrupacion": "05", "periodo_actual": 120, "periodo_anterior": 100}],
+            date(2026, 5, 1), date(2026, 6, 30), date(2025, 5, 1), "ventas_eur",
+        )
+
+        self.assertEqual(grafico["title"], "Ventas netas mensual · FY2026 vs FY2025")
+        self.assertEqual(grafico["series"][0]["label"], "FY2026")
+        self.assertEqual(grafico["series"][1]["label"], "FY2025")
+        self.assertEqual(grafico["data"], [
+            {"mes": "Mayo", "actual": 120.0, "anterior": 100.0},
+            {"mes": "Junio", "actual": 0.0, "anterior": 0.0},
+        ])
+
+    def test_ranking_sku_tiene_tabla_y_grafico_deterministas(self):
+        filas = [{
+            "referencia": "SKU-1", "producto": "Producto 1", "familia": "Familia 1",
+            "ventas_eur": 500, "margen_eur": 80, "mgd_eur": 60, "margen_pct": 16,
+        }]
+        respuesta = renderizar_ranking_sku(filas, "margen_eur", date(2026, 8, 1), date(2026, 8, 31))
+        grafico = construir_grafico_ranking_sku(filas, "margen_eur", False)
+
+        self.assertIn("SKU-1", respuesta)
+        self.assertIn("€80,00", respuesta)
+        self.assertEqual(grafico["data"], [{"referencia": "SKU-1", "actual": 80.0}])
+        self.assertEqual(grafico["series"][0]["label"], "Margen bruto")
+
+    def test_error_de_consulta_no_culpa_al_usuario_ni_expone_lenguaje_tecnico(self):
+        respuesta = interpret_results([], "SELECT no se usa", None, error="error interno")
+
+        self.assertIn("No pude completar", respuesta)
+        self.assertNotIn("columnas inexistentes", respuesta)
+        self.assertNotIn("términos exactos", respuesta)
+
+    def test_desglose_de_familias_tiene_tabla_y_grafico_verificados(self):
+        filas = [
+            {"agrupacion": "Portátiles", "ventas_eur": 1000, "productos": 4},
+            {"agrupacion": "Monitores", "ventas_eur": 700, "productos": 2},
+        ]
+        respuesta = renderizar_desglose_agrupado(
+            filas, "ventas_eur", "familia", date(2026, 8, 1), date(2026, 8, 31),
+        )
+        grafico = construir_grafico_desglose(filas, "ventas_eur", "familia", False)
+
+        self.assertIn("Ventas netas por familia", respuesta)
+        self.assertIn("Portátiles", respuesta)
+        self.assertIn("€1.000,00", respuesta)
+        self.assertEqual(grafico["data"][0]["segmento"], "Portátiles")
+        self.assertEqual(grafico["series"][0]["label"], "Ventas netas")
 
 
 if __name__ == "__main__":

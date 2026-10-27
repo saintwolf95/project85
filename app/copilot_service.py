@@ -35,6 +35,7 @@ DEFAULT_OPENAI_TIMEOUT_SECONDS = 45.0
 EXPORT_MARKER_PATTERN = re.compile(
     r"<!-- sql_export: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64})(?:\.(trusted|untrusted)(?:\.([A-Za-z0-9+/=]+))?)? -->"
 )
+REPORT_MARKER_PATTERN = re.compile(r"<!-- copilot_report: ([A-Za-z0-9+/=]+)\.([a-f0-9]{64}) -->")
 
 def _export_signature(sql_b64: str, trusted_query: bool = False, params_b64: str | None = None) -> str:
     scope = "trusted" if trusted_query else "untrusted"
@@ -101,6 +102,53 @@ def build_metrics_marker(raw_data: Any, sql_query: str = "") -> str:
         return ""
     encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato}).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_metrics: {encoded} -->"
+
+
+def build_chart_marker(config: dict[str, Any]) -> str:
+    """Entrega una visualización creada por backend, no por el modelo de texto."""
+    encoded = base64.b64encode(
+        json.dumps(config, ensure_ascii=False, default=str, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    return f"<!-- copilot_chart: {encoded} -->"
+
+
+def _report_signature(payload_b64: str) -> str:
+    return hmac.new(
+        SUPABASE_JWT_SECRET.encode("utf-8"),
+        f"report:{payload_b64}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def build_report_artifact_marker(dossier: dict[str, Any]) -> str:
+    """Adjunta el evidence bundle firmado para exportar un informe reproducible."""
+    payload = {
+        "type": "informe_ejecutivo",
+        "periodo_actual": dossier.get("periodo_actual", {}),
+        "periodo_anterior": dossier.get("periodo_anterior", {}),
+        "resultados": dossier.get("resultados", {}),
+    }
+    encoded = base64.b64encode(
+        json.dumps(payload, ensure_ascii=False, default=str, separators=(",", ":")).encode("utf-8")
+    ).decode("ascii")
+    return f"<!-- copilot_report: {encoded}.{_report_signature(encoded)} -->"
+
+
+def extract_signed_report_artifact(content: str) -> dict[str, Any] | None:
+    """Recupera un dossier exportable solo si su firma es válida."""
+    match = REPORT_MARKER_PATTERN.search(content)
+    if not match:
+        return None
+    encoded, signature = match.groups()
+    if not hmac.compare_digest(signature, _report_signature(encoded)):
+        return None
+    try:
+        payload = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, binascii.Error):
+        return None
+    if not isinstance(payload, dict) or payload.get("type") != "informe_ejecutivo":
+        return None
+    return payload
 
 
 def build_followups_marker(intento: Any) -> str:
@@ -523,13 +571,18 @@ def interpret_results(
     usage_context: dict | None = None,
 ) -> str:
     if error:
-        return "⚠️ **Fallo en la consulta de datos.**\n\nLa consulta generada por el asistente intentó acceder a datos o columnas inexistentes. Por seguridad, la operación fue abortada y no se reintentará automáticamente para no consumir recursos.\n\nPor favor, reformula tu pregunta utilizando términos exactos del negocio."
+        return (
+            "⚠️ **No pude completar este análisis con los datos disponibles.**\n\n"
+            "La consulta analítica validada no pudo ejecutarse. No necesitas conocer nombres técnicos "
+            "ni reformular la pregunta con campos de base de datos. Inténtalo de nuevo; si vuelve a ocurrir, "
+            "informa al administrador con la hora de la consulta para revisar el registro técnico."
+        )
 
     from .analitica_ventas import (
         contrato_respuesta_analitica,
         es_dossier_analitico,
         renderizar_respuesta_analitica,
-        respuesta_analitica_cumple_contrato,
+        respuesta_analitica_es_verificable,
     )
 
     es_dossier = es_dossier_analitico(raw_data)
@@ -558,21 +611,9 @@ REGLAS ESTRICTAS PARA MODO AVANZADO:
 1. **Profundidad sin verborrea:** Prioriza las 3 conclusiones que más explican el impacto EUR. Usa frases cortas, evita introducciones y no repitas en prosa lo que ya aparece en una tabla.
 2. **Decisiones verificables:** Distingue hecho, interpretación e hipótesis. Recomienda una comprobación concreta y medible; no inventes riesgos, oportunidades ni causalidad fuera del dossier.
 3. **Jerarquía ejecutiva:** Empieza por fechas comparables, KPI y diagnóstico. Después muestra impulsores, tabla y acciones. Una respuesta avanzada debe ser más precisa, no simplemente más larga.
-4. **Gráficos Dinámicos:** TIENES LA CAPACIDAD DE RENDERIZAR GRÁFICOS REALES. Si el usuario pide un gráfico o si el contexto analítico lo pide, INYECTA al final de tu mensaje un bloque de código estrictamente JSON con la siguiente estructura (elige entre 'bar', 'line', 'pie'):
-```json
-{{
-  "chartConfig": {{
-    "type": "bar",
-    "title": "Título del Gráfico",
-    "data": [{{"name": "A", "value": 10}}, {{"name": "B", "value": 20}}],
-    "xKey": "name",
-    "yKey": "value",
-    "color": "#0ea5e9"
-  }}
-}}
-```
+4. **Gráficos verificados:** No generes JSON, bloques de gráfico ni datos de visualización. La aplicación dibuja gráficos solo desde series calculadas y firmadas por el backend.
 5. **Lenguaje SQL Prohibido:** NUNCA muestres código SQL ni nombres de tablas/columnas técnicas al usuario.
-6. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
+6. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto. Escribe cada importe y porcentaje con precisión exacta, sin abreviar en millones o miles.{truncation_warning}
    Si la consulta devuelve un desglose, muestra cada fila devuelta; nunca reconstruyas periodos sumando o restando agregados que no estén desglosados.
 7. **Contexto Corporativo:** Usa el "Contexto del Negocio" para adaptar tus consejos a la realidad de la empresa.
 8. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
@@ -603,14 +644,9 @@ Tu objetivo es responder de forma rápida, ágil y al grano.
 REGLAS ESTRICTAS PARA MODO RÁPIDO:
 1. **Concisión Extrema:** Responde de forma MUY DIRECTA. Si aportas conclusiones, deben ser viñetas breves (1 o 2 puntos clave). NO escribas informes gigantes ni exageres.
 2. **Formato Compacto:** REDUCE AL MÁXIMO LOS SALTOS DE LÍNEA. No dejes líneas en blanco innecesarias.
-3. **Gráficos Dinámicos:** TIENES LA CAPACIDAD DE RENDERIZAR GRÁFICOS. Si la pregunta requiere visualizar tendencias o comparativas, añade al final de tu respuesta un bloque de código JSON con este formato exacto:
-```json
-{{
-  "chartConfig": {{ "type": "bar", "title": "...", "data": [{{"name": "A", "value": 10}}], "xKey": "name", "yKey": "value", "color": "#0ea5e9" }}
-}}
-```
+3. **Gráficos verificados:** No generes JSON, bloques de gráfico ni datos de visualización. La aplicación dibuja gráficos solo desde series calculadas y firmadas por el backend.
 4. **Lenguaje SQL Prohibido:** NUNCA muestres sintaxis SQL ni nombres de tablas/columnas técnicas.
-5. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto.{truncation_warning}
+5. **Fidelidad de Datos:** NUNCA inventes números que no estén en el resultado bruto. Escribe cada importe y porcentaje con precisión exacta, sin abreviar en millones o miles.{truncation_warning}
    Si la consulta devuelve un desglose, muestra cada fila devuelta; nunca reconstruyas periodos sumando o restando agregados que no estén desglosados.
 6. **Contexto:** Usa el "Contexto del Negocio".
 7. **Idioma:** Responde SIEMPRE en español, independientemente del idioma de la pregunta.
@@ -643,8 +679,8 @@ Contexto del Negocio: {contexto}
             getattr(usage, "completion_tokens", None),
             getattr(usage, "total_tokens", None),
         )
-    if es_dossier and not respuesta_analitica_cumple_contrato(reply):
-        logger.warning("La interpretación analítica no cumplió el contrato; se usa el respaldo determinista.")
+    if es_dossier and not respuesta_analitica_es_verificable(reply, raw_data):
+        logger.warning("La interpretación analítica no superó el contrato de evidencia; se usa el respaldo determinista.")
         reply = renderizar_respuesta_analitica(raw_data)
     # Adjuntamos el SQL oculto para el feature de CSV Export
     if isinstance(raw_data, list) and len(raw_data) > 0:
@@ -655,7 +691,14 @@ Contexto del Negocio: {contexto}
         
     return reply
 
-def process_copilot_chat(db: Session, history: list, empresa_id: int, model_preference: str = "terra", contexto: str = "") -> str:
+def process_copilot_chat(
+    db: Session,
+    history: list,
+    empresa_id: int,
+    model_preference: str = "terra",
+    contexto: str = "",
+    contexto_intencion: dict[str, Any] | None = None,
+) -> str:
     if not history:
         return "No hay historial de mensajes."
         
@@ -666,7 +709,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     from .copilot_orchestrator import analizar_intencion, crear_consulta_semantica
     from .copilot_business_tools import buscar_senales, descomponer_variacion, semantic_context, serie_temporal
 
-    intento, aclaracion = analizar_intencion(history)
+    intento, aclaracion = analizar_intencion(history, contexto_intencion)
     if aclaracion:
         return aclaracion
 
@@ -696,17 +739,87 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
     contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
+        if intento.medida == "resumen_financiero" or (intento.agrupacion == "mes" and intento.comparacion):
+            sql_query, query_params = crear_consulta_semantica(intento)
+            raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
+            if error:
+                logger.error("[COPILOT DETERMINISTA] Consulta %s falló: %s", intento.descripcion, error)
+                return (
+                    "⚠️ **No pude calcular esta comparación con los datos disponibles.**\n\n"
+                    "La consulta analítica validada falló antes de generar resultados. No necesitas reformularla "
+                    "con términos técnicos; inténtalo de nuevo y, si persiste, informa al administrador con la hora de la consulta."
+                )
+            from .analitica_ventas import (
+                construir_grafico_comparacion_mensual,
+                renderizar_comparacion_mensual,
+                renderizar_resumen_financiero,
+            )
+
+            chart_marker = ""
+            if intento.medida == "resumen_financiero":
+                reply = renderizar_resumen_financiero(
+                    (raw_data or [{}])[0],
+                    intento.fecha_inicio,
+                    intento.fecha_fin,
+                    intento.fecha_inicio_comparacion,
+                    intento.fecha_fin_comparacion,
+                    intento.ajuste_fecha,
+                )
+            else:
+                reply = renderizar_comparacion_mensual(
+                    raw_data or [],
+                    intento.fecha_inicio,
+                    intento.fecha_fin,
+                    intento.fecha_inicio_comparacion,
+                    intento.fecha_fin_comparacion,
+                    intento.medida,
+                    intento.ajuste_fecha,
+                )
+                chart_marker = build_chart_marker(construir_grafico_comparacion_mensual(
+                    raw_data or [],
+                    intento.fecha_inicio,
+                    intento.fecha_fin,
+                    intento.fecha_inicio_comparacion,
+                    intento.medida,
+                ))
+            export_marker = build_sql_export_marker(sql_query, trusted_query=True, query_params=query_params)
+            metrics_marker = build_metrics_marker(raw_data, sql_query)
+            followups = build_followups_marker(intento)
+            return "\n\n".join(parte for parte in (reply, metrics_marker, chart_marker, export_marker, followups) if parte)
+
         if ("precio" in normalized_message and "volumen" in normalized_message) or "descompon" in normalized_message:
             if intento.fecha_inicio and intento.fecha_fin and intento.fecha_inicio_comparacion and intento.fecha_fin_comparacion:
+                from .analitica_ventas import construir_grafico_puente_variacion, renderizar_puente_variacion
+
+                # El puente sólo admite dimensiones de producto con una
+                # descomposición aritmética estable. Para otros desgloses se
+                # vuelve a familia en lugar de aplicar un filtro equivocado.
+                dimension_puente = intento.agrupacion if intento.agrupacion in {"familia", "marca", "seccion"} else "familia"
                 bridge = descomponer_variacion(
                     db, empresa_id, (intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion),
-                    (intento.fecha_inicio, intento.fecha_fin), intento.agrupacion or "familia",
+                    (intento.fecha_inicio, intento.fecha_fin), dimension_puente,
+                    value=intento.parametros.get(dimension_puente),
                 )
-                return interpret_results(history, "Herramienta determinista descomponer_variacion", bridge, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True, usage_context=usage_context)
+                reply = renderizar_puente_variacion(
+                    bridge,
+                    dimension_puente,
+                    intento.fecha_inicio_comparacion,
+                    intento.fecha_fin_comparacion,
+                    intento.fecha_inicio,
+                    intento.fecha_fin,
+                )
+                chart_marker = build_chart_marker(construir_grafico_puente_variacion(bridge, dimension_puente))
+                followups = build_followups_marker(intento)
+                return "\n\n".join(parte for parte in (reply, chart_marker, followups) if parte)
         if any(term in normalized_message for term in ("serie temporal", "tendencia diaria", "evolución diaria", "evolucion diaria")) and intento.fecha_inicio and intento.fecha_fin:
+            from .analitica_ventas import construir_grafico_serie_temporal, renderizar_serie_temporal
+
             metric = "mgd" if intento.medida.startswith("mgd") else "unidades" if intento.medida == "ventas_unidades" else "ventas"
             series = serie_temporal(db, empresa_id, metric, intento.fecha_inicio, intento.fecha_fin)
-            return interpret_results(history, "Herramienta determinista serie_temporal", series, model_preference=model_preference, contexto=contexto_analisis, trusted_query=True, usage_context=usage_context)
+            reply = renderizar_serie_temporal(series, metric, intento.fecha_inicio, intento.fecha_fin)
+            chart_marker = build_chart_marker(construir_grafico_serie_temporal(series, metric))
+            followups = build_followups_marker(intento)
+            return "\n\n".join(parte for parte in (reply, chart_marker, followups) if parte)
         if intento.tipo == "inventario" or intento.medida in {
             "matriz_productos",
             "productos_alerta",
@@ -780,6 +893,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
                         trusted_query=True,
                     )
                     seguimiento = build_dynamic_followups_marker(dossier)
+                    informe = build_report_artifact_marker(dossier)
                     logger.info(
                         "[AUDIT ANALITICA] empresa_id=%s modelo=%s bloques_ok=%s bloques_fallidos=%s latencia_ms=%s",
                         empresa_id,
@@ -788,10 +902,59 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
                         ",".join(bloques_fallidos) or "ninguno",
                         round((time.perf_counter() - inicio_plan) * 1000),
                     )
-                    return f"{respuesta}\n\n{seguimiento}" if seguimiento else respuesta
+                    return "\n\n".join(parte for parte in (respuesta, seguimiento, informe) if parte)
 
         sql_query, query_params = crear_consulta_semantica(intento)
         raw_data, error = execute_sql(db, sql_query, empresa_id, query_params, trusted_query=True)
+        if (
+            not error
+            and intento.tipo in {"ventas", "rentabilidad"}
+            and intento.agrupacion
+            and intento.agrupacion not in {"sku", "mes"}
+        ):
+            from .analitica_ventas import construir_grafico_desglose, renderizar_desglose_agrupado
+
+            filas_desglose = raw_data or []
+            reply = renderizar_desglose_agrupado(
+                filas_desglose,
+                intento.medida,
+                intento.agrupacion,
+                intento.fecha_inicio,
+                intento.fecha_fin,
+                intento.comparacion,
+                intento.fecha_inicio_comparacion,
+                intento.fecha_fin_comparacion,
+            )
+            chart_marker = build_chart_marker(construir_grafico_desglose(
+                filas_desglose,
+                intento.medida,
+                intento.agrupacion,
+                intento.comparacion,
+            ))
+            export_marker = build_sql_export_marker(sql_query, trusted_query=True, query_params=query_params)
+            followups = build_followups_marker(intento)
+            return "\n\n".join(parte for parte in (reply, chart_marker, export_marker, followups) if parte)
+        if not error and intento.agrupacion == "sku":
+            from .analitica_ventas import construir_grafico_ranking_sku, renderizar_ranking_sku
+
+            filas_ranking = raw_data or []
+            reply = renderizar_ranking_sku(
+                filas_ranking,
+                intento.medida,
+                intento.fecha_inicio,
+                intento.fecha_fin,
+                intento.comparacion,
+                intento.fecha_inicio_comparacion,
+                intento.fecha_fin_comparacion,
+            )
+            chart_marker = build_chart_marker(construir_grafico_ranking_sku(
+                filas_ranking,
+                intento.medida,
+                intento.comparacion,
+            ))
+            export_marker = build_sql_export_marker(sql_query, trusted_query=True, query_params=query_params)
+            followups = build_followups_marker(intento)
+            return "\n\n".join(parte for parte in (reply, chart_marker, export_marker, followups) if parte)
         if not error and intento.agrupacion == "mes" and not intento.comparacion:
             from .analitica_ventas import renderizar_resumen_mensual
 
@@ -813,40 +976,7 @@ def process_copilot_chat(db: Session, history: list, empresa_id: int, model_pref
         followups = build_followups_marker(intento) if not error else ""
         return f"{reply}\n\n{followups}" if followups else reply
 
-    # Loop de reintento: si la SQL falla, se le dice a GPT qué falló para que corrija
-    max_retries = 2
-    retry_history = list(history)  # Copia para no mutar el original
-    
-    for attempt in range(max_retries + 1):
-        # 1. Generar SQL
-        sql_query = generate_sql(retry_history, empresa_id, model_preference, contexto_analisis, usage_context)
-        
-        # 2. Ejecutar SQL en la conexión RO
-        raw_data, error = execute_sql(db, sql_query, empresa_id)
-        
-        # 3. Si hay error y quedan reintentos, pedirle a GPT que corrija
-        if error and attempt < max_retries:
-            logger.warning(f"[AUDIT SQL] Reintento {attempt + 1}/{max_retries}. SQL fallida hash={hashlib.sha256(sql_query.encode('utf-8')).hexdigest()[:12]}")
-            # Acumular el error en retry_history (NO resetear) para que GPT vea todos los intentos fallidos
-            retry_history.append({
-                "role": "assistant",
-                "content": sql_query
-            })
-            retry_history.append({
-                "role": "user",
-                "content": f"La consulta SQL anterior falló con este error: '{error}'. Por favor, genera una consulta SQL corregida. Recuerda que solo existen estas tablas: productos, clientes, inventario_snapshot, inventario_historico, ventas_historicas, registro_po, producto_metricas. Revisa los nombres de columnas del esquema."
-            })
-            continue
-        
-        # 4. Interpretar (ya sea con datos o con error final)
-        final_response = interpret_results(history, sql_query, raw_data, error, model_preference, contexto_analisis, usage_context=usage_context)
-        return final_response
-    
-    return """⚠️ **No pude obtener datos para responder tu pregunta** tras varios intentos.
+    return """No he podido identificar todavía una consulta analítica verificable para esa petición.
 
-Esto puede ocurrir si la pregunta usa términos muy genéricos o combinaciones inusuales. Prueba a ser más específico:
-- ✅ *¿Cuál es el valor del inventario de la familia 'Portátiles'?*
-- ✅ *¿Qué productos clase A tienen riesgo de rotura?*
-- ✅ *Top 10 productos por ventas 90 días*
-- ✅ *¿Cuántos artículos hay en cada cuadrante de la matriz ABC/XYZ?*"""
+Puedo preparar ventas, unidades, MG, MGD, inventario, rankings de referencias, comparativas entre periodos y análisis ABCXYZ. Indícame la métrica, el período y, si aplica, el detalle que quieres comparar. No necesitas usar nombres técnicos de la base de datos."""
 

@@ -143,6 +143,9 @@ class CopilotChat(Base):
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
     titulo = Column(String, nullable=False, default="Nuevo Chat")
+    # Contrato estructurado del último análisis válido. Evita reconstruir una
+    # comparativa desde el texto narrativo del modelo en los turnos siguientes.
+    contexto_analitico = Column(Text, nullable=False, default="{}")
     creado_en = Column(DateTime, default=datetime.utcnow)
     actualizado_en = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

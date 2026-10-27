@@ -427,3 +427,46 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - En dispositivos de hasta 700 px, la escena se sustituye por tarjetas accesibles por agente. Muestran exclusivamente estado confirmado, etapa y tarea genérica, y conservan los enlaces permitidos a expediente, informe o chat.
 - `/ai-control/oficina?modo=pantalla` es una vista a pantalla completa con tipografía ampliada, solo estados de trabajo y sin acciones, hallazgos, historial ni datos del Centro de mando. No consulta `/agents/office-viva`.
 - Las mutaciones de decisiones, pasos y gestión visual de señales de la oficina exigen `get_current_active_admin` en servidor. El parámetro de URL no concede permisos ni cambia las garantías de API.
+
+## Actualización v2.02 — Copilot analítico verificable
+
+- El estado de seguimiento del Copilot se persiste como contrato analítico JSON por chat, no se recupera desde la respuesta narrada del modelo. Debe contener métrica, período, comparación, agrupación, filtros y límite de ranking.
+- Las referencias/SKU son una dimensión de ranking válida. “Las 5 mejores referencias por margen absoluto” debe producir cinco filas de SKU, producto, familia y métricas, nunca sustituirse por un total global.
+- Las comparativas FY explícitas usan ventanas equivalentes de mayo a abril y admiten un corte común. Las fechas imposibles se ajustan al último día real del mes y el ajuste se declara al usuario.
+- Los totales comparativos de ventas, MG y MGD y las comparativas mes a mes se calculan en backend con consultas parametrizadas, cobertura y conciliación; el LLM no suma ni reinterpreta las cifras.
+- No reenviar preguntas analíticas no reconocidas a generación libre de SQL. Guiar al usuario en términos de negocio y ampliar el catálogo determinista antes de añadir nuevos casos.
+
+### Visualización verificable
+
+- Una comparativa mensual del Copilot debe entregar tabla, KPI, gráfico y exportación desde una única consulta SQL parametrizada. Las cuatro salidas comparten la misma cobertura y no pueden depender de cifras redactadas por el LLM.
+- El gráfico debe mantener una serie por período fiscal, su leyenda y los meses sin registros con cero; ocultar una barra no equivale a demostrar que no hubo datos.
+- Los marcadores internos de métricas, gráfico, seguimientos y exportación no se muestran ni se copian como texto de la respuesta.
+- Los rankings de SKU/referencias se resuelven con una tabla y un gráfico generados desde el resultado SQL ya ordenado; no permitir que el LLM reordene, recalcule o omita referencias.
+- Los errores de ejecución de una consulta validada no deben atribuirse al usuario ni exponer detalles de esquema: pedir reintento y remitir al registro técnico con la hora si persisten.
+- No renderizar configuraciones de gráfico generadas por un LLM. Todo gráfico visible debe ser una serie estructurada creada en backend desde resultados SQL validados.
+- La narración de un dossier gerencial debe validar sus importes y porcentajes contra la evidencia SQL antes de publicarse; una cifra económica huérfana fuerza el respaldo determinista.
+- Los desgloses comerciales o de rentabilidad por dimensión se muestran como tabla y gráfico deterministas. Limitar solo la presentación para legibilidad; mantener siempre la exportación de todas las filas devueltas por la consulta autorizada.
+
+### Seguimientos analíticos coherentes
+
+- Un seguimiento corto reutiliza el contrato persistido: conserva medida, período y filtros anteriores salvo que el usuario los sustituya explícitamente. Por ejemplo, «desglósalo por marca» tras una consulta de una familia mantiene esa familia.
+- «Compáralo con el mismo período del año anterior» calcula la ventana interanual equivalente, no el bloque inmediatamente precedente. El desplazamiento anual protege también el 29 de febrero.
+- Los seguimientos de ranking entienden cantidades escritas («los cinco peores») y aplican orden ascendente para peores/menores/caídas, o descendente para mejores/mayores. La ordenación ocurre en SQL parametrizado, nunca en la narración del LLM.
+
+### Puente comercial verificable
+
+- Las consultas de precio, volumen o mix no se narran a partir de una lista de datos: se renderizan como un puente determinista con ventas comparables, efecto volumen, efecto mix, efecto precio, variación observada y residuo de conciliación.
+- La igualdad `variación observada = volumen + mix + precio + residuo` es visible. Si el residuo no es cero, debe declararse como pendiente de revisar y no atribuirse al modelo ni al usuario.
+- El puente solo admite familia, marca o sección. Ante otra dimensión, desglosa por familia para no aplicar filtros semánticamente erróneos. El gráfico se construye desde los mismos efectos calculados y no desde texto generado.
+
+### Visualizaciones y artefactos
+
+- Las solicitudes de serie temporal o tendencia diaria se responden con tabla, cobertura, máximos/mínimos y gráfico de línea creado desde la serie SQL autorizada. La etiqueta de fechas se presenta en español.
+- Un análisis gerencial genera un evidence bundle firmado y exportable. El informe PDF muestra las tablas de evidencia principales; el XLSX contiene hoja de trazabilidad y una hoja completa por bloque analítico. No construir estos archivos desde la narración del LLM.
+- El endpoint de exportación verifica la firma del informe y que el mensaje pertenezca al usuario antes de crear el archivo. Los marcadores internos de gráfico, informe, exportación, KPI y seguimientos nunca se muestran en conversación ni en la exportación completa del chat.
+
+### Informe ejecutivo presentable
+
+- El PDF del informe ejecutivo abre con trazabilidad de períodos, tarjetas KPI y un gráfico de ventas comparables frente a actuales, siempre extraídos del bloque `resumen` del evidence bundle firmado. No usar texto del LLM como dato de portada.
+- El Excel añade las KPI de dirección en la hoja Resumen y conserva los bloques de evidencia completos en pestañas separadas, con cabeceras y anchos legibles.
+- El PDF incluye como máximo 20 filas por bloque y declara el recorte; el XLSX mantiene todas las filas. Si `reportlab` no está disponible en el servidor, responder con 503 y guiar al Excel en lugar de fallar con error interno.

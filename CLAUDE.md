@@ -470,3 +470,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 - El PDF del informe ejecutivo abre con trazabilidad de períodos, tarjetas KPI y un gráfico de ventas comparables frente a actuales, siempre extraídos del bloque `resumen` del evidence bundle firmado. No usar texto del LLM como dato de portada.
 - El Excel añade las KPI de dirección en la hoja Resumen y conserva los bloques de evidencia completos en pestañas separadas, con cabeceras y anchos legibles.
 - El PDF incluye como máximo 20 filas por bloque y declara el recorte; el XLSX mantiene todas las filas. Si `reportlab` no está disponible en el servidor, responder con 503 y guiar al Excel en lugar de fallar con error interno.
+
+## Actualización v2.03 — corrección de ejecución del Copilot
+
+- Las consultas SQL deterministas no reciben telemetría de LLM: `execute_sql` solo acepta la sesión, SQL, empresa, parámetros y el indicador de consulta confiable. La telemetría se registra exclusivamente en `interpret_results`, después de una llamada real al modelo.
+- El flujo de dossier analítico debe ejecutar todos sus bloques SQL sin argumentos ajenos a su contrato; posteriormente pasa `usage_context` a la narración para mantener la trazabilidad de tokens sin producir errores 500.

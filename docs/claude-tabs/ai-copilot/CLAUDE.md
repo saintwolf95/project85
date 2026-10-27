@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.02
+## Estado verificado · 27/10/2026 · v2.03
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -106,3 +106,8 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 - El PDF abre con período actual, comparable y trazabilidad; muestra KPI de ventas, variación, MG y MGD disponibles, además de un gráfico de ventas comparable frente a actual cuando ambos valores son no negativos.
 - La hoja Resumen del XLSX incluye las mismas KPI antes de las pestañas de evidencia. Los estilos mejoran legibilidad sin modificar ningún valor calculado.
 - `reportlab` es una dependencia declarada. Si faltase en un entorno, el endpoint devuelve 503 explicando que el Excel sigue disponible, en vez de entregar un 500 opaco.
+
+## Actualización v2.03 — ejecución estable del dossier
+
+- `execute_sql` no recibe ni registra `usage_context`: no invoca modelos y su contrato queda limitado a consulta parametrizada de solo lectura.
+- El dossier pasa la telemetría a `interpret_results`, donde se ejecuta la llamada LLM. Así se registra el consumo real sin provocar un `TypeError` en los bloques SQL.

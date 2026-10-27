@@ -876,7 +876,6 @@ def process_copilot_chat(
                         empresa_id,
                         consulta.parametros,
                         trusted_query=True,
-                        usage_context=usage_context,
                     )
                     if error:
                         logger.warning("No se pudo ejecutar el bloque analitico %s: %s", consulta.nombre, error)
@@ -891,6 +890,7 @@ def process_copilot_chat(
                         model_preference=model_preference,
                         contexto=contexto_analisis,
                         trusted_query=True,
+                        usage_context=usage_context,
                     )
                     seguimiento = build_dynamic_followups_marker(dossier)
                     informe = build_report_artifact_marker(dossier)

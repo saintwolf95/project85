@@ -1,5 +1,7 @@
 import unittest
 from datetime import date
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from app.copilot_orchestrator import (
     analizar_intencion,
@@ -16,7 +18,7 @@ from app.analitica_ventas import (
     renderizar_ranking_sku,
     renderizar_resumen_financiero,
 )
-from app.copilot_service import interpret_results
+from app.copilot_service import interpret_results, process_copilot_chat
 
 
 CASOS_EVALUACION = (
@@ -426,6 +428,42 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIn("€1.000,00", respuesta)
         self.assertEqual(grafico["data"][0]["segmento"], "Portátiles")
         self.assertEqual(grafico["series"][0]["label"], "Ventas netas")
+
+    def test_dossier_no_pasa_telemetria_a_la_consulta_sql(self):
+        """La telemetría es de la llamada LLM, no del contrato de SQL."""
+        plan = SimpleNamespace(
+            periodo_actual=(date(2026, 10, 1), date(2026, 10, 27)),
+            periodo_anterior=(date(2026, 9, 1), date(2026, 9, 27)),
+            consultas=(SimpleNamespace(nombre="resumen", sql="SELECT 1", parametros={}),),
+        )
+
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+
+        llamadas_sql = []
+
+        def ejecutar_sql_ficticio(*args, **kwargs):
+            llamadas_sql.append((args, kwargs))
+            self.assertNotIn("usage_context", kwargs)
+            return [{"ventas_periodo_actual": 120}], None
+
+        with (
+            patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan),
+            patch("app.copilot_context.construir_resumen_operativo", return_value=""),
+            patch("app.copilot_service.execute_sql", side_effect=ejecutar_sql_ficticio),
+            patch("app.copilot_service.interpret_results", return_value="Respuesta verificada") as interpretar,
+        ):
+            respuesta = process_copilot_chat(
+                SesionFicticia(),
+                [{"role": "user", "content": "¿Cómo va la empresa este mes?"}],
+                empresa_id=1,
+                model_preference="terra",
+            )
+
+        self.assertEqual(len(llamadas_sql), 1)
+        self.assertIn("Respuesta verificada", respuesta)
+        self.assertEqual(interpretar.call_args.kwargs["usage_context"]["empresa_id"], 1)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.03
+## Estado verificado · 27/10/2026 · v2.04
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -111,3 +111,33 @@ El módulo no mantiene un catálogo de herramientas decorativo: las funciones co
 
 - `execute_sql` no recibe ni registra `usage_context`: no invoca modelos y su contrato queda limitado a consulta parametrizada de solo lectura.
 - El dossier pasa la telemetría a `interpret_results`, donde se ejecuta la llamada LLM. Así se registra el consumo real sin provocar un `TypeError` en los bloques SQL.
+
+## Actualización v2.04 — acciones bajo preguntas
+
+- Iconos Reintentar y Editar con nombre accesible, tooltip, foco de teclado y deshabilitados mientras se responde. Reintentar añade una pregunta con el modelo/contexto actuales: no reproduce una rama histórica ni sobreescribe respuestas.
+- Editar prepara una copia en el editor y explica que se enviará como pregunta nueva. Permite cancelar; cambiar de chat limpia la edición. Antes de reemplazar un borrador se solicita confirmación.
+
+## Diagnóstico y plan propuesto — pendiente de implementación
+
+### Límites confirmados en código
+
+- `detectar_agrupacion` devuelve un solo valor y prioriza SKU ante «Top 10 productos». La petición «Dame un resumen de ventas para este mes, con clientes, secciones y Top 10 productos» se reduce a SKU; `es_pregunta_gerencial` no reconoce «resumen de ventas» como dossier.
+- `DIMENSIONES_VENTAS` del dossier no incluye clientes. Sus consultas de impulsores ordenan variación ascendente y limitan a 10; el detalle SKU a 5. No existen bloques simétricos de subidas ni cálculo de demanda caliente ligado a stock en ese plan.
+- El plan gerencial calcula por defecto el período anterior con `_rango_anterior`, sin usar las fechas comparativas explícitas del contrato. Un plan nuevo debe respetar el contrato y distinguir YoY de MoM.
+- Las tarjetas ya existen (`build_metrics_marker` y `CopilotMetricCards`), pero la evidencia del dossier no llega siempre al frontend: el respaldo por ausencia de API añade tarjetas; el respaldo por excepción de API retorna solo texto. El camino normal con LLM pasa un dossier a un constructor de tarjetas pensado también para ese formato, pero se deben comprobar todos los retornos y completar MG/MGD, comparables y cobertura.
+- Hay caché TTL de contexto operativo en `copilot_context.py`; no equivale a precálculos persistentes multidimensionales. Reutilizar las métricas y señales compartidas, no crear una segunda definición de ABC, cobertura o márgenes.
+
+### Orden de implementación recomendado
+
+1. **Contrato multiconsulta y cobertura de la respuesta.** Añadir lista de dimensiones, bloques solicitados, límites por bloque y comparaciones al contrato persistido. Consultas parametrizadas de totales, clientes, secciones y productos para una sola petición. Un validador debe exigir cada bloque; un bloque fallido se declara como fallo, nunca como cero o ausencia de datos. Modelo narra después de recuperar evidencia.
+2. **Resumen ejecutivo determinista.** Tarjetas grandes con ventas, variación YoY, MG, MGD, unidades y clientes activos, fechas exactas, último dato y cobertura comparable. Tablas de cada dimensión solicitada; subidas y caídas separadas. Los bloques visuales se producen en backend independientemente de la narración. No ocultar que falta histórico ni comparar un mes parcial con un mes completo.
+3. **Capa compartida de métricas preparadas.** Agregados diarios por empresa y por SKU, cliente y sección, con dimensiones históricas definidas. Guardar revisión de dataset, fecha de cálculo y cobertura. Upsert/recalcular solo fechas afectadas tras importación, también correcciones históricas; publicar la nueva revisión de forma atómica. Resumen y Top 10 cacheados por empresa, alcance, período, comparación y revisión. Misma capa para Copilot, Dashboard y Control IA; no almacenar rankings globales reutilizados erróneamente después de filtrar.
+4. **Demanda y suficiencia.** SKU: ADS 28d = unidades positivas / días cubiertos (incluyendo ceros de días realmente cubiertos); ventas netas se mantienen aparte con abonos. Cobertura = stock actual / ADS. Propuesta inicial configurable de caliente: ventas recientes positivas y aceleración ADS 7d / ADS de los 21d previos, con mínimos de actividad e impacto; declarar base cero como producto nuevo, no crecimiento infinito. Contrastar demanda con lead time conocido; si falta, mostrar cobertura y «lead time no disponible», no garantizar suficiencia. Añadir ABC, fecha del snapshot y discrepancia temporal entre ventas y stock. No tratar aging por última venta como edad física del stock.
+5. **Profundización controlada y evaluaciones.** Catálogo de herramientas parametrizadas para desgloses adicionales y artefactos desde la evidencia; máximo de pasos y presupuesto. Tests de extremo a extremo del endpoint real, no solo del parser: multidimensión, conciliación, filtros, aislamiento multiempresa, SQL sin argumentos inválidos, caché invalidada, histórico parcial, abonos, base cero y ausencia de inventario. Exportaciones reutilizan el mismo bundle, no la prosa.
+
+### Fórmulas y reglas propuestas
+
+- Para YoY: actual desde inicio de período hasta corte real disponible; comparable mismas fechas del año anterior, declarando días ausentes y 29 de febrero. No reemplazar por mes anterior salvo petición expresa.
+- Delta EUR = ventas actuales − ventas comparables. Delta % = delta / ABS(ventas comparables) × 100 cuando la base sea distinta de cero; etiqueta explícita para bases negativas o cero. Top caídas solo delta < 0; Top subidas solo delta > 0, ordenados por impacto EUR, máximo 10 por dimensión.
+- Clientes activos = clientes distintos con venta positiva, con criterio explícito para el cliente sin identificar. Nunca asignar el stock completo a cada cliente; medir su exposición sobre SKU compartidos sin duplicar inventario. Secciones requieren cobertura ponderada coherente, no media simple de días de cobertura de sus SKU.
+- No imponer límites de porcentaje a las variaciones de negocio por analogía con el suelo de importación de MG/MGD. Cada fórmula debe conciliar con detalle y considerar cobertura y devoluciones.

@@ -475,3 +475,8 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - Las consultas SQL deterministas no reciben telemetría de LLM: `execute_sql` solo acepta la sesión, SQL, empresa, parámetros y el indicador de consulta confiable. La telemetría se registra exclusivamente en `interpret_results`, después de una llamada real al modelo.
 - El flujo de dossier analítico debe ejecutar todos sus bloques SQL sin argumentos ajenos a su contrato; posteriormente pasa `usage_context` a la narración para mantener la trazabilidad de tokens sin producir errores 500.
+
+## Actualización v2.04 — acciones de preguntas y diagnóstico del Copilot
+
+- Cada mensaje del usuario ofrece iconos accesibles de reintentar y editar. Reintentar envía de nuevo con el contexto y modelo actuales; editar carga una copia en el editor para enviar como pregunta nueva. No modifica ni elimina mensajes persistidos. Se avisa antes de sustituir un borrador y las acciones se deshabilitan durante una petición.
+- El diagnóstico y plan pendiente de métricas multidimensionales se documentan en `docs/claude-tabs/ai-copilot/CLAUDE.md`. No confundir estas propuestas con funcionalidad implementada: todavía se interpreta una única agrupación por pregunta y el dossier no incluye clientes ni rankings positivos.

@@ -369,6 +369,7 @@ export const AiCopilot = () => {
   const [currentChatId, setCurrentChatId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [isEditingPrompt, setIsEditingPrompt] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -450,6 +451,8 @@ export const AiCopilot = () => {
 
   const selectChat = async (chatId: number) => {
     if (isLoading || chatId === currentChatId) return;
+    setIsEditingPrompt(false);
+    setInput('');
     setCurrentChatId(chatId);
     setShowSuggestions(false);
     setChatError(null);
@@ -479,6 +482,8 @@ export const AiCopilot = () => {
 
   const startNewChat = () => {
     if (isLoading) return;
+    setIsEditingPrompt(false);
+    setInput('');
     setCurrentChatId(null);
     setMessages([createGreetingMessage(capabilities)]);
     setShowSuggestions(true);
@@ -520,7 +525,10 @@ export const AiCopilot = () => {
   const handleSend = async (textOverride?: string) => {
     const userText = (typeof textOverride === 'string' ? textOverride : input).trim();
     if (!userText || isLoading) return;
-    if (typeof textOverride !== 'string') setInput('');
+    if (typeof textOverride !== 'string') {
+      setInput('');
+      setIsEditingPrompt(false);
+    }
     setShowSuggestions(false);
     setChatError(null);
     setLastFailedQuestion(null);
@@ -941,6 +949,35 @@ export const AiCopilot = () => {
                       {msg.timestamp}
                     </span>
                   )}
+                  {msg.role === 'user' && (
+                    <div className="flex justify-end gap-1" role="group" aria-label="Acciones de la pregunta">
+                      <button
+                        type="button"
+                        onClick={() => handleSend(msg.content)}
+                        disabled={isLoading}
+                        title="Reintentar: enviar de nuevo con el modelo y contexto actuales"
+                        aria-label="Reintentar pregunta"
+                        className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-black/5 hover:text-[#0071e3] focus-visible:outline-2 focus-visible:outline-[#0071e3] disabled:opacity-40 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-brand-cyan"
+                      >
+                        <RotateCcw size={15} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (input.trim() && input !== msg.content && !window.confirm('¿Sustituir el borrador actual por esta pregunta?')) return;
+                          setInput(msg.content);
+                          setIsEditingPrompt(true);
+                          inputRef.current?.focus();
+                        }}
+                        disabled={isLoading}
+                        title="Editar una copia de esta pregunta antes de enviarla"
+                        aria-label="Editar pregunta"
+                        className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-black/5 hover:text-[#0071e3] focus-visible:outline-2 focus-visible:outline-[#0071e3] disabled:opacity-40 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-brand-cyan"
+                      >
+                        <Pencil size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1009,6 +1046,14 @@ export const AiCopilot = () => {
             </div>
           </div>
 
+          {isEditingPrompt && (
+            <div className="mb-2 flex items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400" role="status">
+              <span>Editando una copia · Se enviará como pregunta nueva sin borrar el historial.</span>
+              <button type="button" onClick={() => { setInput(''); setIsEditingPrompt(false); }} title="Cancelar edición" aria-label="Cancelar edición" className="rounded-lg p-2 hover:bg-black/5 dark:hover:bg-white/5">
+                <X size={14} aria-hidden="true" />
+              </button>
+            </div>
+          )}
           <div className="relative flex items-end">
             <textarea
               ref={inputRef}

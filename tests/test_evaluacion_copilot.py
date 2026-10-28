@@ -885,12 +885,22 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIn("no coinciden", respuesta)
         self.assertIn("actividad comercial o a una carga incompleta", respuesta)
         self.assertIn("Diferencia observada provisional: **10,00 €**", respuesta)
+        self.assertIn("Actual (FY2026)", respuesta)
+        self.assertIn("Período anterior (FY2025)", respuesta)
         self.assertIn("| S1 | 100,00 € | 90,00 € | 10,00 € | 11,11 % |", respuesta)
         informe = extract_signed_report_artifact(respuesta)
         self.assertIsNone(informe["resultados"]["sku"][0]["variacion_absoluta"])
         self.assertIsNone(informe["resultados"]["sku"][0]["variacion_pct"])
         self.assertEqual(informe["resultados"]["sku"][0]["diferencia_observada"], 10)
         self.assertTrue(informe["resultados"]["sku"][0]["comparacion_provisional"])
+
+    def test_etiquetas_fiscales_respetan_mayo_y_rangos(self):
+        from datetime import date
+        from app.copilot_service import etiqueta_ejercicios_fiscales
+
+        self.assertEqual(etiqueta_ejercicios_fiscales(date(2026, 1, 1), date(2026, 4, 30)), "FY2025")
+        self.assertEqual(etiqueta_ejercicios_fiscales(date(2026, 5, 1), date(2027, 4, 30)), "FY2026")
+        self.assertEqual(etiqueta_ejercicios_fiscales(date(2026, 4, 30), date(2026, 5, 1)), "FY2025–FY2026")
 
 
 if __name__ == "__main__":

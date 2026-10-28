@@ -1,5 +1,9 @@
 # SupplyChain / Five Minutes — contexto de trabajo
 
+El PDF ejecutivo de Copilot se construye en `app/copilot_pdf.py` desde el informe firmado; emplea etiquetas de negocio, fechas legibles y euros redondeados sin decimales solo para presentación. Marca comparaciones provisionales y no modifica los valores de origen ni el Excel.
+
+Actualización v2.12: los resúmenes multidimensionales y rankings de Copilot indican el FY de cada período, identificado por el año de inicio el 1 de mayo; enero–abril pertenecen al FY anterior. Las fechas siguen visibles y un período entre ejercicios muestra ambos FY. La comparación puede ser interanual o de otro tipo según la consulta.
+
 Actualización v2.11: AI Copilot ocupa el ancho disponible. Cuando hay datos en ambos períodos pero la cobertura no permite comparar, presenta diferencias aritméticas provisionales claramente etiquetadas, sin atribuirlas a una subida o caída real; el informe conserva la distinción. La migración v2.10 fue aplicada en producción, pendiente de comprobar la reconstrucción y conciliación de agregados.
 
 ## Propósito

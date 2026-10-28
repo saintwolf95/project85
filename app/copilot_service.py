@@ -568,6 +568,14 @@ def execute_sql(
         return None, "La consulta SQL no pudo ejecutarse. Verifica que los nombres de las tablas y columnas sean correctos."
 
 
+def etiqueta_ejercicios_fiscales(inicio: date, fin: date) -> str:
+    """FY se identifica por el año de inicio (mayo); conserva rangos entre ejercicios."""
+    def ejercicio(fecha: date) -> int:
+        return fecha.year if fecha.month >= 5 else fecha.year - 1
+    primero, ultimo = ejercicio(inicio), ejercicio(fin)
+    return f"FY{primero}" if primero == ultimo else f"FY{primero}–FY{ultimo}"
+
+
 def calcular_kpis_resumen_multidimensional(db: Session, intento: Any, empresa_id: int) -> tuple[dict[str, Any], str]:
     """Calcula cabecera ejecutiva con los mismos filtros del desglose solicitado."""
     from .analitica_ventas import crear_cte_abc_ventas
@@ -637,7 +645,8 @@ def calcular_kpis_resumen_multidimensional(db: Session, intento: Any, empresa_id
                 resumen["ventas_variacion_pct"] = (actual_eur - anterior_eur) / anterior_eur * 100
             else:
                 aviso += (" No se pudo consultar el período comparable; la variación no está disponible." if error_prev else " La comparación no está verificada: la base no es positiva o los períodos registrados no son equivalentes.")
-            aviso += f" Último día con ventas: {fin_real:%d-%m-%Y}. Período comparable solicitado: {inicio_prev:%d-%m-%Y} – {fin_prev:%d-%m-%Y}."
+            fiscal_prev = etiqueta_ejercicios_fiscales(inicio_prev, fin_prev)
+            aviso += f" Último día con ventas: {fin_real:%d-%m-%Y}. Período comparable solicitado ({fiscal_prev}): {inicio_prev:%d-%m-%Y} – {fin_prev:%d-%m-%Y}."
         clientes, error_clientes = execute_sql(db, consulta(True), empresa_id, parametros, trusted_query=True)
         if error_clientes:
             db.rollback()
@@ -675,7 +684,9 @@ def renderizar_rankings_compartidos(db: Session, intento: Any, empresa_id: int, 
         return "No se pudo verificar la cobertura del ranking; no se han inventado variaciones."
     direcciones = [clave for clave, patron in (("caidas", r"\bcaídas?\b|\bcaidas?\b"), ("subidas", r"\bsubidas?\b")) if re.search(patron, texto)]
     nombres = {"sku": "Productos", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias"}
-    lineas = [f"## Variación de ventas por dimensión\n\nPeríodo actual: **{actual[0]:%d-%m-%Y} – {actual[1]:%d-%m-%Y}** · Comparable: **{anterior[0]:%d-%m-%Y} – {anterior[1]:%d-%m-%Y}** · Último día con ventas: **{fin_real:%d-%m-%Y}**.",
+    fiscal_actual = etiqueta_ejercicios_fiscales(*actual)
+    fiscal_anterior = etiqueta_ejercicios_fiscales(*anterior)
+    lineas = [f"## Variación de ventas por dimensión\n\nPeríodo actual ({fiscal_actual}): **{actual[0]:%d-%m-%Y} – {actual[1]:%d-%m-%Y}** · Comparable ({fiscal_anterior}): **{anterior[0]:%d-%m-%Y} – {anterior[1]:%d-%m-%Y}** · Último día con ventas: **{fin_real:%d-%m-%Y}**.",
               "Los extremos registrados coinciden, pero no certifican que la carga esté completa. Las secciones y nombres corresponden al catálogo actual."]
     if "cliente" in intento.dimensiones:
         lineas.append("El ranking de clientes excluye ventas sin cliente identificado; esas ventas siguen incluidas en los totales generales.")
@@ -701,7 +712,7 @@ def renderizar_rankings_compartidos(db: Session, intento: Any, empresa_id: int, 
             if not filas:
                 lineas.append(f"### {titulo}\n\nNo se han identificado {direccion} en los períodos consultados.")
                 continue
-            tabla = [f"### {titulo}", "| Código | Entidad | Actual | Comparable | Diferencia | Variación |", "| --- | --- | ---: | ---: | ---: | ---: |"]
+            tabla = [f"### {titulo}", f"| Código | Entidad | Actual ({fiscal_actual}) | Comparable ({fiscal_anterior}) | Diferencia | Variación |", "| --- | --- | ---: | ---: | ---: | ---: |"]
             def eur(value: float) -> str:
                 return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
             for fila in filas:
@@ -714,7 +725,7 @@ def renderizar_rankings_compartidos(db: Session, intento: Any, empresa_id: int, 
     revision_final = revision_ventas(db, empresa_id)
     if revision_inicial != revision_final:
         return "Los datos de ventas cambiaron durante la consulta. No se publica una comparación mezclando revisiones; inténtalo de nuevo."
-    informe = {"periodo_actual": {"inicio": actual[0].isoformat(), "fin": actual[1].isoformat()},
+    informe = {"medida": "ventas_eur", "periodo_actual": {"inicio": actual[0].isoformat(), "fin": actual[1].isoformat()},
                "periodo_anterior": {"inicio": anterior[0].isoformat(), "fin": anterior[1].isoformat()}, "resultados": resultados}
     return "\n\n".join([*lineas, build_report_artifact_marker(informe)])
 
@@ -958,7 +969,8 @@ def process_copilot_chat(
                 except (TypeError, ValueError):
                     return None
 
-            lineas = [f"## Resumen por dimensiones\n\nPeríodo solicitado: **{intento.fecha_inicio:%d-%m-%Y} – {intento.fecha_fin:%d-%m-%Y}**."]
+            fiscal_solicitado = etiqueta_ejercicios_fiscales(intento.fecha_inicio, intento.fecha_fin)
+            lineas = [f"## Resumen por dimensiones\n\nPeríodo solicitado ({fiscal_solicitado}): **{intento.fecha_inicio:%d-%m-%Y} – {intento.fecha_fin:%d-%m-%Y}**."]
             resultados: dict[str, Any] = {}
             resumen_kpis: dict[str, Any] | None = None
             if intento.medida == "ventas_eur" and re.search(r"\bresumen\b", normalized_message):
@@ -976,6 +988,8 @@ def process_copilot_chat(
                                           parametros={**intento.parametros, "fecha_fin": fin_efectivo,
                                                       "fecha_inicio_comparacion": inicio_prev, "fecha_fin_comparacion": fin_prev})
             estados: list[dict[str, str]] = []
+            fiscal_actual = etiqueta_ejercicios_fiscales(intento.fecha_inicio, intento.fecha_fin)
+            fiscal_anterior = etiqueta_ejercicios_fiscales(intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion) if intento.comparacion and intento.fecha_inicio_comparacion and intento.fecha_fin_comparacion else None
             cobertura_actual = cobertura_anterior = False
             tramos_equivalentes = False
             for dimension in (None, *intento.dimensiones):
@@ -1070,9 +1084,9 @@ def process_copilot_chat(
                             diferencia = mostrar_numero(fila["diferencia_observada"])
                             porcentaje = fila.get("diferencia_observada_pct")
                             pct_texto = f" ({porcentaje:.2f} % sobre el importe anterior)".replace(".", ",") if porcentaje is not None else " (porcentaje no disponible: base no positiva)"
-                            lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Período anterior: **{total_anterior}** · Diferencia observada provisional: **{diferencia}**{pct_texto}.")
+                            lineas.append(f"### {etiqueta}\n\nActual ({fiscal_actual}): **{total_actual}** · Período anterior ({fiscal_anterior}): **{total_anterior}** · Diferencia observada provisional: **{diferencia}**{pct_texto}.")
                         else:
-                            lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Comparable: **{total_anterior}** · Variación absoluta: **{variacion}**.")
+                            lineas.append(f"### {etiqueta}\n\nActual ({fiscal_actual}): **{total_actual}** · Comparable ({fiscal_anterior}): **{total_anterior}** · Variación absoluta: **{variacion}**.")
                         if not cobertura_actual or not cobertura_anterior:
                             lineas.append("No se puede comparar: no hay registros de ventas en al menos uno de los períodos; no es posible confirmar si hubo una carga completa.")
                         elif not tramos_equivalentes:
@@ -1082,11 +1096,11 @@ def process_copilot_chat(
                     else:
                         lineas.append(f"### {etiqueta}\n\n{intento.medida.replace('_', ' ').title()}: **{mostrar_numero(fila.get(intento.medida))}**.")
                 elif intento.comparacion:
-                    lineas.append(f"### {etiqueta}\n\nComparable: **{intento.fecha_inicio_comparacion:%d-%m-%Y} – {intento.fecha_fin_comparacion:%d-%m-%Y}**.")
+                    lineas.append(f"### {etiqueta}\n\nActual ({fiscal_actual}): **{intento.fecha_inicio:%d-%m-%Y} – {intento.fecha_fin:%d-%m-%Y}** · Comparable ({fiscal_anterior}): **{intento.fecha_inicio_comparacion:%d-%m-%Y} – {intento.fecha_fin_comparacion:%d-%m-%Y}**.")
                     if not filas:
                         lineas.append("Sin registros para esta dimensión en los períodos consultados.")
                         continue
-                    encabezado = "| Elemento | Actual | Período anterior | Diferencia observada* | Diferencia %* |" if cobertura_actual and cobertura_anterior and not tramos_equivalentes else "| Elemento | Actual | Comparable | Variación | Variación % |"
+                    encabezado = f"| Elemento | Actual ({fiscal_actual}) | Período anterior ({fiscal_anterior}) | Diferencia observada* | Diferencia %* |" if cobertura_actual and cobertura_anterior and not tramos_equivalentes else f"| Elemento | Actual ({fiscal_actual}) | Comparable ({fiscal_anterior}) | Variación | Variación % |"
                     filas_tabla = [encabezado, "| --- | ---: | ---: | ---: | ---: |"]
                     for fila in filas:
                         nombre = str(fila.get("referencia") or fila.get("agrupacion") or "Sin identificar").replace("|", "\\|")
@@ -1134,6 +1148,7 @@ def process_copilot_chat(
                     lineas.append("### Conclusiones\n\n" + "\n".join(f"- {conclusion}" for conclusion in conclusiones))
             resultados["estado_bloques"] = estados
             informe = {
+                "medida": intento.medida,
                 "periodo_actual": {"inicio": intento.fecha_inicio.isoformat(), "fin": intento.fecha_fin.isoformat()},
                 "periodo_anterior": {"inicio": intento.fecha_inicio_comparacion.isoformat(), "fin": intento.fecha_fin_comparacion.isoformat()} if intento.comparacion else {},
                 "resultados": resultados,

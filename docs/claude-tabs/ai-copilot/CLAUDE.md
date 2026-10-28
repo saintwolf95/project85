@@ -188,3 +188,9 @@ En comparaciones multidimensionales, los extremos de los registros se contrastan
 
 - La página utiliza el ancho disponible del área principal.
 - Si los períodos tienen registros pero sus duraciones o extremos no son equivalentes, muestra las diferencias observadas como provisionales, con aviso de cobertura; no las considera variaciones verificadas. El artefacto mantiene la variación verificada en N/D y añade diferencia observada y su carácter provisional. Sin registros en un período, no inventa diferencias.
+## Actualización v2.12
+
+- Los resúmenes multidimensionales y rankings indican el FY por año de inicio en mayo junto a las fechas. Si el rango atraviesa ejercicios se muestran ambos; una comparación dentro de un mismo ejercicio puede mostrar el mismo FY en ambas columnas.
+## PDF ejecutivo
+
+- El PDF usa etiquetas de negocio y formato español; importes monetarios sin decimales, porcentajes con dos decimales. Las diferencias provisionales se identifican y no se convierten en variaciones verificadas. El Excel conserva los datos completos y su precisión.

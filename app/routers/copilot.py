@@ -129,99 +129,14 @@ def _exportar_informe_ejecutivo(informe: dict[str, Any], message_id: int, format
 
     if formato == "pdf":
         try:
-            from reportlab.lib import colors
-            from reportlab.lib.pagesizes import A4, landscape
-            from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.lib.units import cm
-            from reportlab.graphics.charts.barcharts import VerticalBarChart
-            from reportlab.graphics.shapes import Drawing
-            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-            from xml.sax.saxutils import escape
+            from ..copilot_pdf import generar_pdf_informe
         except ImportError as error:
-            raise HTTPException(
-                status_code=503,
-                detail="La generación de PDF no está disponible en este servidor. Descarga el informe en Excel o instala las dependencias declaradas.",
-            ) from error
-
-        salida = io.BytesIO()
-        documento = SimpleDocTemplate(salida, pagesize=landscape(A4), rightMargin=1.1 * cm, leftMargin=1.1 * cm, topMargin=1.1 * cm, bottomMargin=1.1 * cm)
-        estilos = getSampleStyleSheet()
-        contenido = [
-            Paragraph("Informe ejecutivo verificable", estilos["Title"]),
-            Paragraph(
-                f"Período actual: {escape(str(informe.get('periodo_actual', {}).get('inicio', 'N/D')))} a {escape(str(informe.get('periodo_actual', {}).get('fin', 'N/D')))}<br/>"
-                f"Período comparable: {escape(str(informe.get('periodo_anterior', {}).get('inicio', 'N/D')))} a {escape(str(informe.get('periodo_anterior', {}).get('fin', 'N/D')))}<br/>"
-                f"Trazabilidad: mensaje Copilot {message_id}. Datos generados desde evidencia SQL validada.",
-                estilos["BodyText"],
-            ),
-            Spacer(1, 0.35 * cm),
-        ]
-        resultados = informe.get("resultados") if isinstance(informe.get("resultados"), dict) else {}
-        kpis = _kpis_informe(informe)
-        if kpis:
-            contenido.append(Paragraph("Resumen ejecutivo", estilos["Heading2"]))
-            tabla_kpis = Table([[item["Métrica"] for item in kpis], [item["Valor"] for item in kpis]], hAlign="LEFT")
-            tabla_kpis.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#10243E")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#EAF3FF")),
-                ("TEXTCOLOR", (0, 1), (-1, 1), colors.HexColor("#10243E")),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D2D2D7")),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("TOPPADDING", (0, 0), (-1, -1), 7),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-            ]))
-            contenido.extend((tabla_kpis, Spacer(1, 0.25 * cm)))
-
-        resumen_evidencia = _filas_informe(resultados.get("resumen"))
-        if resumen_evidencia:
-            fila_resumen = resumen_evidencia[0]
-            comparable = _numero_informe(fila_resumen.get("ventas_periodo_anterior"))
-            actual = _numero_informe(fila_resumen.get("ventas_periodo_actual"))
-            if fila_resumen.get("ventas_periodo_anterior") is not None and fila_resumen.get("ventas_periodo_actual") is not None and comparable >= 0 and actual >= 0:
-                contenido.append(Paragraph("Ventas comparables frente a actuales", estilos["Heading2"]))
-                dibujo = Drawing(420, 170)
-                barras = VerticalBarChart()
-                barras.x, barras.y, barras.width, barras.height = 45, 30, 330, 110
-                barras.data = [[comparable, actual]]
-                barras.categoryAxis.categoryNames = ["Comparable", "Actual"]
-                barras.valueAxis.valueMin = 0
-                barras.valueAxis.labels.fontSize = 7
-                barras.categoryAxis.labels.fontSize = 8
-                barras.bars[0].fillColor = colors.HexColor("#0071E3")
-                dibujo.add(barras)
-                contenido.extend((dibujo, Spacer(1, 0.25 * cm)))
-        for nombre, valor in resultados.items():
-            filas = _filas_informe(valor)
-            if not filas:
-                continue
-            contenido.append(Paragraph(escape(str(nombre).replace("_", " ").title()), estilos["Heading2"]))
-            columnas = list(filas[0].keys())[:7]
-            tabla = [[Paragraph(escape(str(columna)), estilos["BodyText"]) for columna in columnas]]
-            for fila in filas[:20]:
-                tabla.append([Paragraph(escape(str(fila.get(columna) if fila.get(columna) is not None else "N/D"))[:150], estilos["BodyText"]) for columna in columnas])
-            ancho_total = 27.0 * cm
-            componente = Table(tabla, repeatRows=1, hAlign="LEFT", colWidths=[ancho_total / max(len(columnas), 1)] * len(columnas))
-            componente.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0071E3")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D2D2D7")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F5F7")]),
-            ]))
-            contenido.extend((componente, Spacer(1, 0.3 * cm)))
-            if len(filas) > 20:
-                contenido.append(Paragraph(f"Se incluyen 20 de {len(filas)} filas en este bloque. El Excel conserva todas las filas.", estilos["Italic"]))
-        documento.build(contenido)
-        salida.seek(0)
+            raise HTTPException(status_code=503, detail="La generación de PDF no está disponible en este servidor.") from error
         return StreamingResponse(
-            salida,
+            generar_pdf_informe(informe, message_id),
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=informe_copilot_{message_id}.pdf"},
         )
-
     raise HTTPException(status_code=400, detail="El informe ejecutivo se puede descargar en PDF o XLSX.")
 
 

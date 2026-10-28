@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.06
+## Estado verificado · 27/10/2026 · v2.07
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -129,6 +129,12 @@ En comparaciones multidimensionales, los extremos de los registros se contrastan
 - La pregunta gerencial se compara por defecto con el mismo tramo del año anterior y recorta el período al último día con ventas disponible; una comparación explícita se respeta. Las preguntas con filtros que el dossier global no aplica no deben usarlo. El resumen presenta hasta seis tarjetas: ventas, variación porcentual cuando es evaluable, MG, MGD, unidades y clientes activos identificados. Clientes activos: cliente distinto con al menos una venta positiva, sin contar la clave `SIN-CLIENTE`. El usuario ve fechas y último día con registros.
 - Las tablas de clientes y productos se ordenan por venta actual; la de secciones recoge las diez menores variaciones. Proceden del dossier parametrizado. Si el resumen o un bloque falla, se informa en lugar de sustituirlo por cero. Ante tramos no equivalentes o base anterior no positiva no se publica una variación ni una interpretación comparativa. La coincidencia de extremos no garantiza que no existan huecos de importación.
 - Esta actualización es parcial: las tarjetas todavía no se fuerzan para cada tipo de consulta ni se completan las demás fases del plan. Verificar el despliegue antes de darla por activa.
+
+## Actualización v2.07 — aislamiento de errores y retención
+
+- El resumen básico no consulta `clientes`. El conteo de clientes activos y el desglose de clientes se ejecutan como bloques independientes; si fallan, se muestra el resumen verificable, no se presenta el conteo como cero y no se permite al modelo inferir cifras de clientes ausentes.
+- Para habilitar los bloques de clientes se debe conceder `SELECT` sobre `public.clientes` al rol real de `DATABASE_RO_URL`, previa identificación con `SELECT current_user` desde esa misma conexión y revisión de RLS/alcance. No usar credenciales de escritura como alternativa. El permiso es sobre toda la tabla salvo que RLS u otra política lo restrinja; el filtro de empresa de la aplicación sigue siendo obligatorio.
+- `cleanup_old_chats` utiliza cascada ORM y una transacción con bloqueo y lote de hasta 100 chats del usuario. Al desplegarlo se reanudará la eliminación efectiva de chats y mensajes con más de 30 días sin actividad: comunicarlo y obtener confirmación consciente antes de activar en producción; conservar una copia antes si el usuario necesita esos históricos.
 
 ### Límites confirmados en código
 

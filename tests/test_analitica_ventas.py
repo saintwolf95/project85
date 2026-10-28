@@ -365,7 +365,10 @@ Sin detalle.
 
         plan = crear_plan_analitico_ventas(intento)
         self.assertIsNotNone(plan)
-        self.assertEqual(len(plan.consultas), 11)
+        self.assertEqual(len(plan.consultas), 12)
+        consultas = {consulta_analitica.nombre: consulta_analitica.sql for consulta_analitica in plan.consultas}
+        self.assertNotIn("JOIN clientes", consultas["resumen"])
+        self.assertIn("JOIN clientes", consultas["clientes_activos"])
         with motor.begin() as conexion:
             resultados = {
                 consulta_analitica.nombre: conexion.execute(

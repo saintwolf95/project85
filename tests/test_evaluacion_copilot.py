@@ -523,6 +523,43 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertEqual(enviado.fecha_fin_comparacion, date(2025, 10, 24))
         self.assertIn("24-10-2026", respuesta)
 
+    def test_resumen_gerencial_se_mantiene_si_clientes_no_tiene_permiso(self):
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+            def rollback(self):
+                pass
+        plan = SimpleNamespace(
+            periodo_actual=(date(2026, 10, 1), date(2026, 10, 27)),
+            periodo_anterior=(date(2025, 10, 1), date(2025, 10, 27)),
+            consultas=(SimpleNamespace(nombre="resumen", sql="SELECT resumen", parametros={}),
+                       SimpleNamespace(nombre="clientes_activos", sql="SELECT clientes_activos", parametros={}),
+                       SimpleNamespace(nombre="clientes_comparativa", sql="SELECT clientes_comparativa", parametros={})),
+        )
+        fila = {"ventas_periodo_actual": 120, "ventas_periodo_anterior": 100,
+                "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-27",
+                "fecha_minima_anterior": "2025-10-01", "fecha_maxima_anterior": "2025-10-27"}
+        def ejecutar(_db, sql, *_args, **_kwargs):
+            if "AS fecha_ultima" in sql:
+                return [{"fecha_ultima": "2026-10-27"}], None
+            if "clientes" in sql:
+                return None, "sin permiso"
+            return [fila], None
+        with (patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)),
+              patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan),
+              patch("app.copilot_context.construir_resumen_operativo", return_value=""),
+              patch("app.copilot_service.execute_sql", side_effect=ejecutar),
+              patch("app.copilot_service.interpret_results", return_value="Resultado verificable") as interpretar):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "¿Cómo va la empresa este mes?"}], 7)
+        interpretar.assert_not_called()
+        self.assertIn("Resumen ejecutivo", respuesta)
+        self.assertIn("No se pudo consultar clientes activos", respuesta)
+        self.assertIn("No se pudo calcular este bloque", respuesta)
+        import base64, json, re
+        metricas = json.loads(base64.b64decode(re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", respuesta).group(1)))['data']
+        self.assertEqual(metricas['ventas_eur'], 120)
+        self.assertNotIn('clientes_activos', metricas)
+
     def test_resumen_multidimensional_incluye_todos_los_bloques_y_reporta_fallos(self):
         class SesionFicticia:
             def get_bind(self):

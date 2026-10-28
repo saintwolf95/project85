@@ -205,15 +205,26 @@ def crear_plan_analitico_ventas(intento: Any) -> PlanAnaliticoVentas | None:
                 SELECT {ventas}, {unidades}, {margen}, {mgd},
                        COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.producto_id END) AS productos_actuales,
                        COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.producto_id END) AS productos_anteriores,
-                       COUNT(DISTINCT CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin AND vh.ingreso_total > 0 AND c.cliente_pk <> 'SIN-CLIENTE' THEN vh.cliente_id END) AS clientes_activos,
                        MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_minima_actual,
                        MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin THEN vh.fecha_venta END) AS fecha_maxima_actual,
                        MIN(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.fecha_venta END) AS fecha_minima_anterior,
                        MAX(CASE WHEN vh.fecha_venta BETWEEN :fecha_inicio_anterior AND :fecha_fin_anterior THEN vh.fecha_venta END) AS fecha_maxima_anterior
                 FROM ventas_historicas vh
                 JOIN productos p ON p.id = vh.producto_id
-                LEFT JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id
                 WHERE p.empresa_id = :empresa_id AND {alcance}
+            """,
+            parametros,
+        ),
+        ConsultaAnalitica(
+            "clientes_activos",
+            """
+                SELECT COUNT(DISTINCT vh.cliente_id) AS clientes_activos
+                FROM ventas_historicas vh
+                JOIN productos p ON p.id = vh.producto_id
+                JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id
+                WHERE p.empresa_id = :empresa_id
+                  AND vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin
+                  AND vh.ingreso_total > 0 AND c.cliente_pk <> 'SIN-CLIENTE'
             """,
             parametros,
         ),

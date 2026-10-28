@@ -268,10 +268,14 @@ def cleanup_old_chats(db: Session, usuario_id: int):
     from .models import CopilotChat
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     try:
-        db.query(CopilotChat).filter(
+        chats = db.query(CopilotChat).filter(
             CopilotChat.usuario_id == usuario_id,
             CopilotChat.actualizado_en < thirty_days_ago
-        ).delete()
+        ).order_by(CopilotChat.id).with_for_update(skip_locked=True).limit(100).all()
+        # El borrado ORM activa la relación delete-orphan; un DELETE masivo
+        # ignora esa cascada y falla con las claves foráneas existentes.
+        for chat in chats:
+            db.delete(chat)
         db.commit()
     except Exception as e:
         logger.error(f"Error limpiando chats antiguos: {e}")
@@ -1085,6 +1089,9 @@ def process_copilot_chat(
                         return "No pude calcular el resumen general. No se ha considerado que las ventas sean cero; inténtalo de nuevo."
                     resumen_filas = dossier["resultados"].get("resumen") or []
                     resumen = resumen_filas[0] if resumen_filas else {}
+                    clientes_filas = dossier["resultados"].get("clientes_activos") or []
+                    if clientes_filas:
+                        resumen["clientes_activos"] = clientes_filas[0].get("clientes_activos")
                     def fecha_evidencia(valor: Any) -> date | None:
                         try:
                             return date.fromisoformat(str(valor)[:10]) if valor else None
@@ -1109,18 +1116,26 @@ def process_copilot_chat(
                         if fin_real else "No hay registros de ventas en el período solicitado; no se considera que las ventas sean cero."
                     )
                     aviso = "Las fechas registradas no certifican una carga completa; pueden existir días sin movimientos o huecos de importación. Los clientes activos identificados son clientes distintos con al menos una venta positiva; se excluye la clave SIN-CLIENTE."
+                    if "clientes_activos" in bloques_fallidos:
+                        aviso += " No se pudo consultar clientes activos; revisa los permisos de lectura o la disponibilidad de la tabla de clientes."
                     if not comparacion_verificada:
                         motivo = "La venta comparable es cero o negativa; no se presenta una variación porcentual sin revisar esa base." if fechas_equivalentes else "No se presenta la variación ni los impulsores comparativos porque faltan registros o los tramos registrados no coinciden; puede deberse a actividad comercial o a una carga incompleta."
                         return "\n\n".join(parte for parte in (marker, fechas, aviso, motivo) if parte)
-                    respuesta = interpret_results(
-                        history,
-                        "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
-                        dossier,
-                        model_preference=model_preference,
-                        contexto=contexto_analisis,
-                        trusted_query=True,
-                        usage_context=usage_context,
-                    )
+                    if {"clientes_activos", "clientes_comparativa"}.intersection(bloques_fallidos):
+                        # Sin evidencia de clientes no permitir que el modelo
+                        # complete cifras o atribuciones de cliente por su cuenta.
+                        from .analitica_ventas import renderizar_respuesta_analitica
+                        respuesta = renderizar_respuesta_analitica(dossier)
+                    else:
+                        respuesta = interpret_results(
+                            history,
+                            "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
+                            dossier,
+                            model_preference=model_preference,
+                            contexto=contexto_analisis,
+                            trusted_query=True,
+                            usage_context=usage_context,
+                        )
                     seguimiento = build_dynamic_followups_marker(dossier)
                     informe = build_report_artifact_marker(dossier)
                     logger.info(

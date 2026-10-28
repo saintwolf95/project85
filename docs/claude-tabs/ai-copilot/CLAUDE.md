@@ -184,3 +184,7 @@ En comparaciones multidimensionales, los extremos de los registros se contrastan
 - Delta EUR = ventas actuales − ventas comparables. Delta % = delta / ABS(ventas comparables) × 100 cuando la base sea distinta de cero; etiqueta explícita para bases negativas o cero. Top caídas solo delta < 0; Top subidas solo delta > 0, ordenados por impacto EUR, máximo 10 por dimensión.
 - Clientes activos = clientes distintos con venta positiva, con criterio explícito para el cliente sin identificar. Nunca asignar el stock completo a cada cliente; medir su exposición sobre SKU compartidos sin duplicar inventario. Secciones requieren cobertura ponderada coherente, no media simple de días de cobertura de sus SKU.
 - No imponer límites de porcentaje a las variaciones de negocio por analogía con el suelo de importación de MG/MGD. Cada fórmula debe conciliar con detalle y considerar cobertura y devoluciones.
+## Actualización v2.11
+
+- La página utiliza el ancho disponible del área principal.
+- Si los períodos tienen registros pero sus duraciones o extremos no son equivalentes, muestra las diferencias observadas como provisionales, con aviso de cobertura; no las considera variaciones verificadas. El artefacto mantiene la variación verificada en N/D y añade diferencia observada y su carácter provisional. Sin registros en un período, no inventa diferencias.

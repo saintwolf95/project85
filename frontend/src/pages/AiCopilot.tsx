@@ -87,6 +87,8 @@ const METRIC_LABELS: Record<string, string> = {
   periodo_anterior: 'Periodo anterior',
   variacion_absoluta: 'Variación',
   variacion_pct: 'Variación %',
+  diferencia_observada: 'Diferencia observada provisional',
+  diferencia_observada_pct: 'Diferencia observada provisional %',
   variacion_pp: 'Variación p.p.',
   variacion_ventas_eur: 'Variación ventas',
   variacion_ventas_pct: 'Variación ventas %',
@@ -678,7 +680,7 @@ export const AiCopilot = () => {
   const activeModel = MODEL_OPTIONS.find(m => m.value === modelPreference)!;
 
   return (
-    <div className="copilot-apple relative mx-auto flex h-[calc(100vh-6rem)] w-full max-w-[1600px] flex-col gap-5 md:flex-row animate-in fade-in duration-500">
+    <div className="copilot-apple relative flex h-[calc(100vh-6rem)] w-full min-w-0 flex-col gap-5 md:flex-row animate-in fade-in duration-500">
 
       {/* Botón Móvil Sidebar */}
       <div className="lg:hidden mb-2 flex items-center justify-between">

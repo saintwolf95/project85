@@ -1,5 +1,7 @@
 # SupplyChain / Five Minutes — contexto de trabajo
 
+Actualización v2.11: AI Copilot ocupa el ancho disponible. Cuando hay datos en ambos períodos pero la cobertura no permite comparar, presenta diferencias aritméticas provisionales claramente etiquetadas, sin atribuirlas a una subida o caída real; el informe conserva la distinción. La migración v2.10 fue aplicada en producción, pendiente de comprobar la reconstrucción y conciliación de agregados.
+
 ## Propósito
 
 Aplicación interna de analítica comercial, inventario y supply chain para Five Minutes. La empresa activa ve ventas, inventario, ABCXYZ, previsiones y asistentes de IA. La interfaz y todas las respuestas al usuario se mantienen en español.

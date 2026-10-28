@@ -884,9 +884,13 @@ class EvaluacionCopilotTests(unittest.TestCase):
             respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": pregunta}], 7)
         self.assertIn("no coinciden", respuesta)
         self.assertIn("actividad comercial o a una carga incompleta", respuesta)
+        self.assertIn("Diferencia observada provisional: **10,00 €**", respuesta)
+        self.assertIn("| S1 | 100,00 € | 90,00 € | 10,00 € | 11,11 % |", respuesta)
         informe = extract_signed_report_artifact(respuesta)
         self.assertIsNone(informe["resultados"]["sku"][0]["variacion_absoluta"])
         self.assertIsNone(informe["resultados"]["sku"][0]["variacion_pct"])
+        self.assertEqual(informe["resultados"]["sku"][0]["diferencia_observada"], 10)
+        self.assertTrue(informe["resultados"]["sku"][0]["comparacion_provisional"])
 
 
 if __name__ == "__main__":

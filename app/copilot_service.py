@@ -636,7 +636,7 @@ def calcular_kpis_resumen_multidimensional(db: Session, intento: Any, empresa_id
                 resumen["ventas_variacion_absoluta"] = actual_eur - anterior_eur
                 resumen["ventas_variacion_pct"] = (actual_eur - anterior_eur) / anterior_eur * 100
             else:
-                aviso += (" No se pudo consultar el período comparable; la variación no está disponible." if error_prev else " La variación no se muestra: no hay base positiva o los períodos registrados no son equivalentes.")
+                aviso += (" No se pudo consultar el período comparable; la variación no está disponible." if error_prev else " La comparación no está verificada: la base no es positiva o los períodos registrados no son equivalentes.")
             aviso += f" Último día con ventas: {fin_real:%d-%m-%Y}. Período comparable solicitado: {inicio_prev:%d-%m-%Y} – {fin_prev:%d-%m-%Y}."
         clientes, error_clientes = execute_sql(db, consulta(True), empresa_id, parametros, trusted_query=True)
         if error_clientes:
@@ -1027,7 +1027,8 @@ def process_copilot_chat(
                         ultima_anterior = fecha_sql(filas[0].get("fecha_maxima_anterior"))
                         if primera_actual and ultima_actual and primera_anterior and ultima_anterior:
                             tramos_equivalentes = (
-                                (primera_actual - intento.fecha_inicio).days == (primera_anterior - intento.fecha_inicio_comparacion).days
+                                (intento.fecha_fin - intento.fecha_inicio).days == (intento.fecha_fin_comparacion - intento.fecha_inicio_comparacion).days
+                                and (primera_actual - intento.fecha_inicio).days == (primera_anterior - intento.fecha_inicio_comparacion).days
                                 and (intento.fecha_fin - ultima_actual).days == (intento.fecha_fin_comparacion - ultima_anterior).days
                             )
                     corregidas = []
@@ -1037,6 +1038,11 @@ def process_copilot_chat(
                             fila["periodo_actual"] = None
                         if not cobertura_anterior:
                             fila["periodo_anterior"] = None
+                        if cobertura_actual and cobertura_anterior and not tramos_equivalentes and fila.get("periodo_actual") is not None and fila.get("periodo_anterior") is not None:
+                            diferencia_observada = float(fila["periodo_actual"]) - float(fila["periodo_anterior"])
+                            fila["diferencia_observada"] = diferencia_observada
+                            fila["diferencia_observada_pct"] = diferencia_observada / float(fila["periodo_anterior"]) * 100 if float(fila["periodo_anterior"]) > 0 else None
+                            fila["comparacion_provisional"] = True
                         if not cobertura_actual or not cobertura_anterior or not tramos_equivalentes:
                             fila["variacion_absoluta"] = fila["variacion_pct"] = None
                         elif fila.get("periodo_anterior") is not None and fila["periodo_anterior"] <= 0:
@@ -1060,11 +1066,17 @@ def process_copilot_chat(
                         total_actual = mostrar_numero(actual) if cobertura_actual else "N/D (sin registros)"
                         total_anterior = mostrar_numero(anterior) if cobertura_anterior else "N/D (sin registros)"
                         variacion = mostrar_numero(fila.get("variacion_absoluta")) if cobertura_actual and cobertura_anterior and tramos_equivalentes else "N/D"
-                        lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Comparable: **{total_anterior}** · Variación absoluta: **{variacion}**.")
+                        if fila.get("comparacion_provisional"):
+                            diferencia = mostrar_numero(fila["diferencia_observada"])
+                            porcentaje = fila.get("diferencia_observada_pct")
+                            pct_texto = f" ({porcentaje:.2f} % sobre el importe anterior)".replace(".", ",") if porcentaje is not None else " (porcentaje no disponible: base no positiva)"
+                            lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Período anterior: **{total_anterior}** · Diferencia observada provisional: **{diferencia}**{pct_texto}.")
+                        else:
+                            lineas.append(f"### {etiqueta}\n\nActual: **{total_actual}** · Comparable: **{total_anterior}** · Variación absoluta: **{variacion}**.")
                         if not cobertura_actual or not cobertura_anterior:
                             lineas.append("No se puede comparar: no hay registros de ventas en al menos uno de los períodos; no es posible confirmar si hubo una carga completa.")
                         elif not tramos_equivalentes:
-                            lineas.append("Los tramos con ventas registradas no coinciden dentro de ambos períodos. La diferencia podría deberse a actividad comercial o a una carga incompleta; no se calcula la variación hasta contrastar la cobertura.")
+                            lineas.append("Los tramos con ventas registradas no coinciden dentro de ambos períodos. Las diferencias observadas son aritméticas y provisionales, no una evolución comparable: podrían deberse a actividad comercial o a una carga incompleta. Contrasta la cobertura antes de sacar conclusiones.")
                     elif not fila.get("productos"):
                         lineas.append(f"### {etiqueta}\n\nNo hay registros de venta en el período solicitado; no se asume un total cero.")
                     else:
@@ -1074,19 +1086,22 @@ def process_copilot_chat(
                     if not filas:
                         lineas.append("Sin registros para esta dimensión en los períodos consultados.")
                         continue
-                    filas_tabla = ["| Elemento | Actual | Comparable | Variación | Variación % |", "| --- | ---: | ---: | ---: | ---: |"]
+                    encabezado = "| Elemento | Actual | Período anterior | Diferencia observada* | Diferencia %* |" if cobertura_actual and cobertura_anterior and not tramos_equivalentes else "| Elemento | Actual | Comparable | Variación | Variación % |"
+                    filas_tabla = [encabezado, "| --- | ---: | ---: | ---: | ---: |"]
                     for fila in filas:
                         nombre = str(fila.get("referencia") or fila.get("agrupacion") or "Sin identificar").replace("|", "\\|")
                         if dimension == "sku":
                             nombre += " · " + str(fila.get("producto") or "Sin nombre").replace("|", "\\|")
                         actual, anterior = fila.get("periodo_actual"), fila.get("periodo_anterior")
-                        if actual is None or anterior is None or not tramos_equivalentes:
+                        if actual is None or anterior is None:
                             filas_tabla.append(f"| {nombre} | {mostrar_numero(actual) if actual is not None else 'N/D'} | {mostrar_numero(anterior) if anterior is not None else 'N/D'} | N/D | N/D |")
                         else:
                             diferencia = float(actual) - float(anterior)
                             porcentaje = f"{diferencia / float(anterior) * 100:.2f} %".replace(".", ",") if float(anterior) > 0 else "N/D (base no positiva)"
                             filas_tabla.append(f"| {nombre} | {mostrar_numero(actual)} | {mostrar_numero(anterior)} | {mostrar_numero(diferencia)} | {porcentaje} |")
                     lineas.append("\n".join(filas_tabla))
+                    if cobertura_actual and cobertura_anterior and not tramos_equivalentes:
+                        lineas.append("* Diferencias provisionales entre importes registrados; períodos no comparables hasta verificar cobertura.")
                 elif dimension == "mes":
                     lineas.append("### Meses")
                     if not filas:

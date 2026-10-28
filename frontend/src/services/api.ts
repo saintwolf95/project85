@@ -281,6 +281,17 @@ export interface DataImportValidation {
 }
 
 export interface DataImportStatus {
+  analitica_compartida?: {
+    estado: 'no_instalada' | 'sin_inicializar' | 'pendiente' | 'actualizada';
+    fuente: string;
+    revision_origen?: number;
+    revision_calculada?: number;
+    calculada_en?: string | null;
+    desde?: string | null;
+    hasta?: string | null;
+    fechas_pendientes?: number;
+    advertencia?: string;
+  };
   products: number;
   clients: number;
   inventory_records: number;

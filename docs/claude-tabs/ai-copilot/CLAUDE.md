@@ -1,6 +1,6 @@
 # AI Copilot
 
-## Estado verificado · 27/10/2026 · v2.07
+## Estado verificado · 28/10/2026 · v2.10 local
 
 - Verificado `AiCopilot.tsx` y `app/routers/copilot.py`: chats creables, renombrables y eliminables; conversación exportable a PDF/XLSX/CSV mediante `/copilot/chats/{chat_id}/export`.
 - La exportación de datos de un mensaje es independiente de exportar la conversación. Conserva contexto de negocio, selector de documentos LibrerIA, capacidades y modelo elegido.
@@ -136,13 +136,39 @@ En comparaciones multidimensionales, los extremos de los registros se contrastan
 - Para habilitar los bloques de clientes se debe conceder `SELECT` sobre `public.clientes` al rol real de `DATABASE_RO_URL`, previa identificación con `SELECT current_user` desde esa misma conexión y revisión de RLS/alcance. No usar credenciales de escritura como alternativa. El permiso es sobre toda la tabla salvo que RLS u otra política lo restrinja; el filtro de empresa de la aplicación sigue siendo obligatorio.
 - `cleanup_old_chats` utiliza cascada ORM y una transacción con bloqueo y lote de hasta 100 chats del usuario. Al desplegarlo se reanudará la eliminación efectiva de chats y mensajes con más de 30 días sin actividad: comunicarlo y obtener confirmación consciente antes de activar en producción; conservar una copia antes si el usuario necesita esos históricos.
 
-### Límites confirmados en código
+### Diagnóstico histórico anterior a v2.05 (no describe el estado actual)
 
 - `detectar_agrupacion` devuelve un solo valor y prioriza SKU ante «Top 10 productos». La petición «Dame un resumen de ventas para este mes, con clientes, secciones y Top 10 productos» se reduce a SKU; `es_pregunta_gerencial` no reconoce «resumen de ventas» como dossier.
 - `DIMENSIONES_VENTAS` del dossier no incluye clientes. Sus consultas de impulsores ordenan variación ascendente y limitan a 10; el detalle SKU a 5. No existen bloques simétricos de subidas ni cálculo de demanda caliente ligado a stock en ese plan.
 - El plan gerencial calcula por defecto el período anterior con `_rango_anterior`, sin usar las fechas comparativas explícitas del contrato. Un plan nuevo debe respetar el contrato y distinguir YoY de MoM.
 - Las tarjetas ya existen (`build_metrics_marker` y `CopilotMetricCards`), pero la evidencia del dossier no llega siempre al frontend: el respaldo por ausencia de API añade tarjetas; el respaldo por excepción de API retorna solo texto. El camino normal con LLM pasa un dossier a un constructor de tarjetas pensado también para ese formato, pero se deben comprobar todos los retornos y completar MG/MGD, comparables y cobertura.
 - Hay caché TTL de contexto operativo en `copilot_context.py`; no equivale a precálculos persistentes multidimensionales. Reutilizar las métricas y señales compartidas, no crear una segunda definición de ABC, cobertura o márgenes.
+
+### Actualización v2.08 — contrato de consultas múltiples
+
+- La ruta multidimensional ya reconocía la petición de clientes, secciones y productos desde v2.05; el diagnóstico histórico anterior no debe presentarse como estado vigente. Incluye total y una consulta parametrizada por dimensión, declara los errores por bloque y conserva filas y estados en el informe firmado.
+- Se amplían las dimensiones a familia/marca, tipo de cliente, Product Manager y Kit Digital, y se reconocen formulaciones singulares y SKU sin inventar un filtro; los filtros de valores citados no se convierten en una dimensión adicional.
+- El contrato persiste límites y órdenes explícitos por dimensión. Los rankings ascendentes y descendentes se ordenan en SQL y la presentación multidimensional respeta ese orden; en comparaciones ascendentes se ordena por diferencia absoluta. No confundir menores valores con el catálogo pendiente de caídas/subidas estrictamente negativas/positivas del punto 3.
+- Si la petición multidimensional solicita expresamente caídas o subidas, se informa que ese ranking aún no está preparado: no sustituirlo por un ranking de ventas. Las dimensiones geográficas o de proveedor no soportadas se declaran en lugar de omitirlas silenciosamente.
+- Los JOIN de clientes de esta ruta comprueban también que cliente y producto pertenecen a la misma empresa. Los datos de clientes siguen dependiendo del permiso RO real de producción, que esta versión no modifica.
+- Las métricas múltiples admitidas siguen siendo ventas, unidades, MG y MGD en euros; porcentajes de margen combinados requieren consulta separada. Las series combinadas mantienen los límites de 50 meses sin comparación o 12 con comparación y la cobertura de cargas sigue sin certificarse.
+- `tests/test_copilot_multidimensional_endpoint.py` ejercita el endpoint real, persistencia y consultas con SQLite en memoria y dependencias sustituidas; no abre ni modifica la base de datos del usuario.
+
+### Actualización v2.09 — resumen ejecutivo gerencial
+
+- El dossier gerencial genera seis tarjetas estables (ventas, variación, MG, MGD, unidades y clientes identificados); cuando no hay dato muestra «No disponible», nunca un cero supuesto. El período y el último día con registros se presentan por separado.
+- Si no se puede verificar la comparación por los extremos y la duración de ambos períodos, se conserva el detalle actual de clientes y productos, se marcan las comparativas como N/D y se eliminan del informe los rankings basados en variaciones no verificadas. La igualdad de extremos no certifica la cobertura de cargas.
+- Las tablas muestran importe actual, comparable, diferencia y porcentaje cuando existe una base positiva. Si falla un bloque o la narración, se muestran los datos verificables y el aviso correspondiente. El PDF no dibuja una barra cero para un dato comparable ausente.
+- La cabecera se genera también para «resumen de ventas» con varias dimensiones, utilizando el mismo período y filtros; si no se solicitó otra comparación usa el mismo tramo del año anterior hasta el último registro tanto en las tarjetas como en las tablas. La conclusión determinista describe el cambio y el mejor producto entre los mostrados, sin atribuir causas. Si el bloque de clientes falla, las demás tarjetas siguen visibles y se indica la limitación. El catálogo de subidas y caídas del punto 3 sigue pendiente.
+- Las filas Markdown comparativas y mensuales se construyen como una tabla continua; el detalle de SKU incluye referencia y nombre. Una base anterior cero o negativa se presenta como N/D en el porcentaje, sin alterar la diferencia absoluta cuando es verificable.
+
+### Actualización v2.10 — ventas compartidas
+
+- `shared_sales.py` es la definición común de variación EUR para rankings del Copilot, impulsores por familia del Dashboard y señales comerciales de Control IA. Caídas son diferencias estrictamente negativas y subidas positivas, ordenadas por impacto absoluto; un comparable no positivo se muestra como N/D en porcentaje. Los nombres y secciones proceden del catálogo actual, no de una dimensión histórica certificada.
+- Los agregados diarios se persisten; los rankings se calculan al solicitarlos desde la revisión vigente, con orden y límite en SQL. No hay aún una tabla persistente de rankings precalculados para cada período y filtro.
+- La migración `V2.10__ventas_compartidas.sql` crea agregados diarios por empresa, fecha, producto y cliente, estado de revisión y cola de fechas modificadas. La vista `shared_sales_effective` usa datos originales mientras la revisión esté sin inicializar o pendiente. Los cambios de ventas por carga web o sincronización SQL marcan fechas; una tarea en segundo plano actualiza las pendientes y la carga web reconstruye su ventana en la misma transacción.
+- El estado se expone en la respuesta de Data Engineering y Dashboard. Los extremos registrados no certifican cobertura de importación. El usuario confirmó una única empresa y ausencia de RLS; la migración concede SELECT al rol `copilot_readonly` sobre estas tablas y vista si existe. No ejecutar la migración ni publicar sin aprobación y pruebas en PostgreSQL; deben verificarse los permisos del rol de escritura.
+- Los resúmenes y cálculos que no usan el motor compartido continúan consultando la fuente original. No afirmar que todas las consultas de la aplicación utilicen el agregado ni que la cobertura esté certificada.
 
 ### Orden de implementación recomendado
 

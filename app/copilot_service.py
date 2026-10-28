@@ -62,23 +62,25 @@ def build_sql_export_marker(
 
 def build_metrics_marker(raw_data: Any, sql_query: str = "") -> str:
     """Adjunta KPIs estructurados solo para resultados agregados de una fila."""
+    tipo = "estandar"
     if isinstance(raw_data, dict) and isinstance(raw_data.get("resultados"), dict):
         rows = raw_data["resultados"].get("resumen", [])
         if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
             return ""
         summary = rows[0]
+        tipo = "ejecutivo"
+        tiene_registros = not summary.get("sin_registros_actuales", False)
         numeric_data = {
-            "ventas_eur": summary.get("ventas_periodo_actual"),
+            "ventas_eur": summary.get("ventas_periodo_actual") if tiene_registros else None,
             "variacion_ventas_pct": summary.get("ventas_variacion_pct") if summary.get("comparacion_verificada") and (summary.get("ventas_periodo_anterior") or 0) > 0 else None,
-            "margen_eur": summary.get("margen_periodo_actual"),
-            "mgd_eur": summary.get("mgd_periodo_actual"),
-            "ventas_unidades": summary.get("unidades_periodo_actual"),
-            "clientes_activos": summary.get("clientes_activos"),
+            "margen_eur": summary.get("margen_periodo_actual") if tiene_registros else None,
+            "mgd_eur": summary.get("mgd_periodo_actual") if tiene_registros else None,
+            "ventas_unidades": summary.get("unidades_periodo_actual") if tiene_registros else None,
+            "clientes_activos": summary.get("clientes_activos") if tiene_registros else None,
         }
         numeric_data = {
-            key: float(value)
+            key: float(value) if isinstance(value, Number) and not isinstance(value, bool) else None
             for key, value in numeric_data.items()
-            if isinstance(value, Number) and not isinstance(value, bool)
         }
         formato = "eur"
     elif isinstance(raw_data, list) and len(raw_data) == 1 and isinstance(raw_data[0], dict):
@@ -102,7 +104,7 @@ def build_metrics_marker(raw_data: Any, sql_query: str = "") -> str:
         return ""
     if not numeric_data:
         return ""
-    encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato}).encode("utf-8")).decode("ascii")
+    encoded = base64.b64encode(json.dumps({"data": numeric_data, "formato": formato, "tipo": tipo}).encode("utf-8")).decode("ascii")
     return f"<!-- copilot_metrics: {encoded} -->"
 
 
@@ -565,6 +567,157 @@ def execute_sql(
         # M2: Do not expose raw exception string to the client
         return None, "La consulta SQL no pudo ejecutarse. Verifica que los nombres de las tablas y columnas sean correctos."
 
+
+def calcular_kpis_resumen_multidimensional(db: Session, intento: Any, empresa_id: int) -> tuple[dict[str, Any], str]:
+    """Calcula cabecera ejecutiva con los mismos filtros del desglose solicitado."""
+    from .analitica_ventas import crear_cte_abc_ventas
+    from .copilot_orchestrator import _condiciones_sql, _periodo_interanual_equivalente
+
+    abc = "abc" in intento.parametros
+    usa_clientes = any(campo in intento.parametros for campo in ("cliente_pk", "nombre_cliente", "tipo_cliente", "comercial_cliente"))
+    metricas = any(campo in intento.parametros for campo in ("xyz", "matriz_abc"))
+    prefijo = crear_cte_abc_ventas() if abc else ""
+    join_abc = "LEFT JOIN clasificacion_abc ca ON ca.producto_id = p.id" if abc else ""
+    join_pm = "LEFT JOIN producto_metricas pm ON pm.producto_id = p.id" if metricas else ""
+    condiciones = _condiciones_sql(intento, incluir_periodo=False, campo_abc="ca.abc" if abc else "pm.abc")
+
+    def consulta(clientes: bool) -> str:
+        join_clientes = "LEFT JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id" if clientes or usa_clientes else ""
+        columnas = (
+            "COUNT(DISTINCT CASE WHEN vh.ingreso_total > 0 AND c.cliente_pk <> 'SIN-CLIENTE' THEN vh.cliente_id END) AS clientes_activos"
+            if clientes else
+            "SUM(vh.ingreso_total) AS ventas_periodo_actual, SUM(vh.cantidad_vendida) AS unidades_periodo_actual, "
+            "SUM(vh.margen_bruto_eur) AS margen_periodo_actual, SUM(vh.margen_destino_eur) AS mgd_periodo_actual, "
+            "MIN(vh.fecha_venta) AS fecha_minima_actual, MAX(vh.fecha_venta) AS fecha_maxima_actual"
+        )
+        return f"""{prefijo} SELECT {columnas} FROM ventas_historicas vh
+            JOIN productos p ON p.id = vh.producto_id {join_clientes} {join_abc} {join_pm}
+            WHERE {condiciones} AND vh.fecha_venta BETWEEN :fecha_inicio AND :fecha_fin"""
+
+    parametros = dict(intento.parametros)
+    filas, error = execute_sql(db, consulta(False), empresa_id, parametros, trusted_query=True)
+    if error or not filas:
+        db.rollback()
+        return {"sin_registros_actuales": True, "comparacion_verificada": False}, "No se pudo calcular la cabecera ejecutiva con los filtros solicitados."
+    resumen = dict(filas[0])
+
+    def fecha(valor: Any) -> date | None:
+        try:
+            return date.fromisoformat(str(valor)[:10]) if valor else None
+        except ValueError:
+            return None
+
+    inicio_real, fin_real = fecha(resumen.get("fecha_minima_actual")), fecha(resumen.get("fecha_maxima_actual"))
+    resumen["sin_registros_actuales"] = not bool(inicio_real and fin_real)
+    resumen["comparacion_verificada"] = False
+    aviso = "La primera y la última fecha con registros no garantizan que la carga esté completa."
+    if inicio_real and fin_real:
+        fin_actual = intento.fecha_fin if intento.comparacion else fin_real
+        inicio_prev, fin_prev = (intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion) if intento.comparacion else _periodo_interanual_equivalente(intento.fecha_inicio, fin_actual)
+        if inicio_prev and fin_prev:
+            parametros_prev = {**parametros, "fecha_inicio": inicio_prev, "fecha_fin": fin_prev}
+            anteriores, error_prev = execute_sql(db, consulta(False), empresa_id, parametros_prev, trusted_query=True)
+            if error_prev:
+                db.rollback()
+            anterior = (anteriores or [{}])[0] if not error_prev else {}
+            inicio_reg_prev, fin_reg_prev = fecha(anterior.get("fecha_minima_actual")), fecha(anterior.get("fecha_maxima_actual"))
+            comparable = bool(
+                inicio_reg_prev and fin_reg_prev
+                and (fin_actual - intento.fecha_inicio).days == (fin_prev - inicio_prev).days
+                and (inicio_real - intento.fecha_inicio).days == (inicio_reg_prev - inicio_prev).days
+                and (fin_actual - fin_real).days == (fin_prev - fin_reg_prev).days
+                and (anterior.get("ventas_periodo_actual") or 0) > 0
+            )
+            resumen["comparacion_verificada"] = comparable
+            if comparable:
+                anterior_eur = float(anterior["ventas_periodo_actual"])
+                actual_eur = float(resumen.get("ventas_periodo_actual") or 0)
+                resumen["ventas_periodo_anterior"] = anterior_eur
+                resumen["ventas_variacion_absoluta"] = actual_eur - anterior_eur
+                resumen["ventas_variacion_pct"] = (actual_eur - anterior_eur) / anterior_eur * 100
+            else:
+                aviso += (" No se pudo consultar el período comparable; la variación no está disponible." if error_prev else " La variación no se muestra: no hay base positiva o los períodos registrados no son equivalentes.")
+            aviso += f" Último día con ventas: {fin_real:%d-%m-%Y}. Período comparable solicitado: {inicio_prev:%d-%m-%Y} – {fin_prev:%d-%m-%Y}."
+        clientes, error_clientes = execute_sql(db, consulta(True), empresa_id, parametros, trusted_query=True)
+        if error_clientes:
+            db.rollback()
+            aviso += " No se pudieron calcular los clientes activos identificados."
+        elif clientes:
+            resumen["clientes_activos"] = clientes[0].get("clientes_activos")
+    else:
+        aviso += " No hay registros de ventas en el período solicitado; no se considera que las ventas sean cero."
+    return resumen, aviso
+
+
+def renderizar_rankings_compartidos(db: Session, intento: Any, empresa_id: int, texto: str) -> str:
+    """Rankings sobre la fuente compartida, con respaldo en hechos originales."""
+    from .shared_sales import FILTROS, comprobar_extremos_periodos, comparar_ventas_por_dimension, revision_ventas, ultimo_dia_ventas
+    from .copilot_orchestrator import _periodo_interanual_equivalente
+
+    if intento.medida != "ventas_eur" or intento.metricas_solicitadas:
+        return "Los rankings compartidos de subidas y caídas admiten ventas en euros; solicita las otras métricas por separado."
+    filtros = {k: v for k, v in intento.parametros.items() if not k.startswith("fecha_")}
+    if set(filtros) - set(FILTROS):
+        return "No puedo aplicar todos los filtros solicitados a este ranking. Indica familia, marca, familia/marca, sección, Product Manager o SKU."
+    revision_inicial = revision_ventas(db, empresa_id)
+    try:
+        fin_real = ultimo_dia_ventas(db, empresa_id, intento.fecha_inicio, intento.fecha_fin, filtros)
+        if not fin_real:
+            return "No hay registros de ventas en el período y filtros solicitados; no se interpreta como ventas cero."
+        fin_actual = intento.fecha_fin if intento.comparacion else fin_real
+        actual = (intento.fecha_inicio, fin_actual)
+        anterior = ((intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion) if intento.comparacion else _periodo_interanual_equivalente(*actual))
+        if not anterior[0] or not anterior[1] or not comprobar_extremos_periodos(db, empresa_id, actual, anterior, filtros):
+            return "No puedo calcular rankings comparativos fiables: faltan registros o los extremos de los períodos no son equivalentes. La ausencia de movimientos no demuestra que falten cargas."
+    except Exception:
+        db.rollback()
+        logger.exception("No se pudo verificar el período del ranking compartido")
+        return "No se pudo verificar la cobertura del ranking; no se han inventado variaciones."
+    direcciones = [clave for clave, patron in (("caidas", r"\bcaídas?\b|\bcaidas?\b"), ("subidas", r"\bsubidas?\b")) if re.search(patron, texto)]
+    nombres = {"sku": "Productos", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias"}
+    lineas = [f"## Variación de ventas por dimensión\n\nPeríodo actual: **{actual[0]:%d-%m-%Y} – {actual[1]:%d-%m-%Y}** · Comparable: **{anterior[0]:%d-%m-%Y} – {anterior[1]:%d-%m-%Y}** · Último día con ventas: **{fin_real:%d-%m-%Y}**.",
+              "Los extremos registrados coinciden, pero no certifican que la carga esté completa. Las secciones y nombres corresponden al catálogo actual."]
+    if "cliente" in intento.dimensiones:
+        lineas.append("El ranking de clientes excluye ventas sin cliente identificado; esas ventas siguen incluidas en los totales generales.")
+    resultados: dict[str, Any] = {}
+    estados = []
+    for dimension in intento.dimensiones:
+        for direccion in direcciones:
+            titulo = f"{nombres.get(dimension, dimension)} · {direccion}"
+            if dimension not in nombres:
+                estados.append({"Bloque": titulo, "Estado": "No disponible"})
+                lineas.append(f"### {titulo}\n\nEste desglose todavía no está disponible para rankings comparativos.")
+                continue
+            try:
+                filas = comparar_ventas_por_dimension(db, empresa_id, actual, anterior, dimension, filtros, direccion, intento.limites_dimensiones.get(dimension, intento.limite or 10))
+            except Exception:
+                db.rollback()
+                logger.exception("No se pudo calcular el ranking %s", titulo)
+                estados.append({"Bloque": titulo, "Estado": "Error de cálculo"})
+                lineas.append(f"### {titulo}\n\nNo se pudo calcular este bloque; no se considera que tenga valor cero.")
+                continue
+            resultados[f"{direccion}_{dimension}"] = filas
+            estados.append({"Bloque": titulo, "Estado": "Calculado" if filas else "Sin movimientos de ese signo"})
+            if not filas:
+                lineas.append(f"### {titulo}\n\nNo se han identificado {direccion} en los períodos consultados.")
+                continue
+            tabla = [f"### {titulo}", "| Código | Entidad | Actual | Comparable | Diferencia | Variación |", "| --- | --- | ---: | ---: | ---: | ---: |"]
+            def eur(value: float) -> str:
+                return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
+            for fila in filas:
+                porcentaje = f"{fila['variacion_pct']:.2f} %".replace(".", ",") if fila["variacion_pct"] is not None else "N/D (base no positiva)"
+                codigo = str(fila["codigo"]).replace("|", "\\|")
+                entidad = str(fila["entidad"]).replace("|", "\\|")
+                tabla.append(f"| {codigo} | {entidad} | {eur(fila['actual'])} | {eur(fila['previo'])} | {eur(fila['variacion_eur'])} | {porcentaje} |")
+            lineas.append("\n".join(tabla))
+    resultados["estado_bloques"] = estados
+    revision_final = revision_ventas(db, empresa_id)
+    if revision_inicial != revision_final:
+        return "Los datos de ventas cambiaron durante la consulta. No se publica una comparación mezclando revisiones; inténtalo de nuevo."
+    informe = {"periodo_actual": {"inicio": actual[0].isoformat(), "fin": actual[1].isoformat()},
+               "periodo_anterior": {"inicio": anterior[0].isoformat(), "fin": anterior[1].isoformat()}, "resultados": resultados}
+    return "\n\n".join([*lineas, build_report_artifact_marker(informe)])
+
 def interpret_results(
     history: list,
     sql_query: str,
@@ -724,7 +877,7 @@ def process_copilot_chat(
 
     # El Copilot consulta el mismo motor de señales que Control IA, sin SQL libre.
     normalized_message = user_message.lower()
-    if any(term in normalized_message for term in ("qué está mal", "que esta mal", "señales", "senales", "alertas verificadas")):
+    if not (intento and intento.dimensiones) and any(term in normalized_message for term in ("qué está mal", "que esta mal", "señales", "senales", "alertas verificadas")):
         family_match = re.search(r"familia\s+['\"]?([^'\"?.!,]+)", user_message, flags=re.IGNORECASE)
         signals = buscar_senales(db, empresa_id, entidad=family_match.group(1).strip() if family_match else None)
         if not signals:
@@ -748,9 +901,13 @@ def process_copilot_chat(
     contexto_analisis = contexto_analisis[:MAX_CONTEXT_PROMPT_CHARS]
 
     if intento:
+        if re.search(r"\b(?:caídas?|caidas?|subidas?)\b", normalized_message) and not intento.dimensiones:
+            candidatas = tuple(nombre for nombre, patron in (("cliente", r"\bclientes?\b"), ("seccion", r"\bsecci[oó]n(?:es)?\b"), ("sku", r"\b(?:productos?|art[ií]culos?|referencias?|skus?)\b")) if re.search(patron, normalized_message))
+            if len(candidatas) == 1:
+                return renderizar_rankings_compartidos(db, replace(intento, dimensiones=candidatas), empresa_id, normalized_message)
         if intento.dimensiones:
-            if intento.orden == "asc":
-                return "Todavía no puedo ordenar conjuntamente los desgloses multidimensionales por mayores caídas o menores valores. Solicita cada ranking por separado para no obtener un orden incorrecto."
+            if re.search(r"\b(?:caídas?|caidas?|subidas?)\b", normalized_message):
+                return renderizar_rankings_compartidos(db, intento, empresa_id, normalized_message)
             if intento.metricas_solicitadas:
                 if re.search(r"(?:%\s*(?:mgd?|margen)|(?:mgd?|margen)\s*%|porcentaje\s+(?:de\s+)?(?:mgd?|margen))", normalized_message):
                     return "En el análisis multidimensional aún no puedo combinar porcentajes de margen con otras métricas. Indica cada importe por separado o solicita el porcentaje en otra pregunta."
@@ -767,12 +924,16 @@ def process_copilot_chat(
                         periodo_anterior = informe_metrica.get("periodo_anterior", {})
                         for nombre, valor in informe_metrica.get("resultados", {}).items():
                             bloques[f"{metrica}_{nombre}"] = valor
+                            if metrica == "ventas_eur" and nombre == "resumen":
+                                bloques["resumen"] = valor
                     else:
                         bloques[f"{metrica}_estado"] = [{"Bloque": etiquetas[metrica], "Estado": "No se pudo preparar"}]
                 informe = {"periodo_actual": periodo_actual, "periodo_anterior": periodo_anterior, "resultados": bloques}
                 return "\n\n".join([*respuestas, build_report_artifact_marker(informe)])
             # Las tablas son deterministas: ninguna dimensión solicitada queda
             # a discreción del modelo ni desaparece por el ranking de SKU.
+            if intento.medida in {"margen_pct", "mgd_pct"}:
+                return "El porcentaje de margen por varias dimensiones todavía requiere consultas separadas; no se ha calculado como una media de porcentajes."
             if intento.medida not in {"ventas_eur", "ventas_unidades", "margen_eur", "mgd_eur"}:
                 return "Para este resumen con varias dimensiones, indica una métrica: ventas, unidades, margen bruto o MGD."
             from .analitica_ventas import renderizar_desglose_agrupado, renderizar_ranking_sku
@@ -799,24 +960,47 @@ def process_copilot_chat(
 
             lineas = [f"## Resumen por dimensiones\n\nPeríodo solicitado: **{intento.fecha_inicio:%d-%m-%Y} – {intento.fecha_fin:%d-%m-%Y}**."]
             resultados: dict[str, Any] = {}
+            resumen_kpis: dict[str, Any] | None = None
+            if intento.medida == "ventas_eur" and re.search(r"\bresumen\b", normalized_message):
+                resumen_kpis, aviso_kpis = calcular_kpis_resumen_multidimensional(db, intento, empresa_id)
+                resultados["resumen"] = [resumen_kpis]
+                lineas.insert(0, build_metrics_marker({"resultados": {"resumen": [resumen_kpis]}}))
+                lineas.append(aviso_kpis)
+                if not intento.comparacion and resumen_kpis.get("fecha_maxima_actual"):
+                    from .copilot_orchestrator import _periodo_interanual_equivalente
+                    fin_efectivo = fecha_sql(resumen_kpis["fecha_maxima_actual"])
+                    if fin_efectivo:
+                        inicio_prev, fin_prev = _periodo_interanual_equivalente(intento.fecha_inicio, fin_efectivo)
+                        intento = replace(intento, fecha_fin=fin_efectivo, comparacion=True,
+                                          fecha_inicio_comparacion=inicio_prev, fecha_fin_comparacion=fin_prev,
+                                          parametros={**intento.parametros, "fecha_fin": fin_efectivo,
+                                                      "fecha_inicio_comparacion": inicio_prev, "fecha_fin_comparacion": fin_prev})
             estados: list[dict[str, str]] = []
             cobertura_actual = cobertura_anterior = False
             tramos_equivalentes = False
             for dimension in (None, *intento.dimensiones):
-                etiqueta = {None: "Total", "cliente": "Clientes", "seccion": "Secciones", "familia": "Familias", "marca": "Marcas", "sku": "Productos", "comercial_cliente": "Comerciales asignados", "comercial_factura": "Comerciales de factura", "mes": "Meses"}[dimension]
+                etiqueta = {None: "Total", "cliente": "Clientes", "tipo_cliente": "Tipos de cliente", "seccion": "Secciones", "familia": "Familias", "marca": "Marcas", "familia_marca": "Familias/marcas", "product_manager": "Product Managers", "sku": "Productos", "comercial_cliente": "Comerciales asignados", "comercial_factura": "Comerciales de factura", "kd": "Kit Digital", "mes": "Meses"}[dimension]
                 limite_dimension = (50 if dimension == "mes" else intento.limites_dimensiones.get(dimension, 20)) if dimension else None
-                subintento = replace(intento, agrupacion=dimension, dimensiones=(), limite=limite_dimension)
+                orden_dimension = intento.ordenes_dimensiones.get(dimension, intento.orden)
+                subintento = replace(intento, agrupacion=dimension, dimensiones=(), limite=limite_dimension, orden=orden_dimension)
                 try:
                     if dimension == "mes":
                         meses_actuales = (intento.fecha_fin.year - intento.fecha_inicio.year) * 12 + intento.fecha_fin.month - intento.fecha_inicio.month + 1
                         if meses_actuales > (12 if intento.comparacion else 50):
                             raise ValueError("La serie mensual requiere un período más corto")
                     sql, parametros = crear_consulta_semantica(subintento)
+                    # Una venta de la empresa no puede revelar un cliente de otra,
+                    # incluso si los datos de origen contienen una referencia errónea.
+                    sql = sql.replace("JOIN clientes c ON c.id = vh.cliente_id", "JOIN clientes c ON c.id = vh.cliente_id AND c.empresa_id = p.empresa_id")
                     if dimension and dimension != "sku":
                         # El top se ordena por valor del período actual y se
                         # limita en SQL, no tras recortar las primeras 1.000 filas.
-                        if intento.comparacion and dimension != "mes":
-                            sql = re.sub(r"ORDER BY variacion_pct DESC\s*$", "ORDER BY periodo_actual DESC, agrupacion ASC", sql, flags=re.IGNORECASE)
+                        if dimension != "mes":
+                            if intento.comparacion:
+                                orden_sql = "variacion_absoluta ASC" if orden_dimension == "asc" else "periodo_actual DESC"
+                                sql = re.sub(r"ORDER BY variacion_pct DESC\s*$", f"ORDER BY {orden_sql}, agrupacion ASC", sql, flags=re.IGNORECASE)
+                            elif orden_dimension == "asc":
+                                sql = re.sub(r"ORDER BY (\w+) DESC\s*$", r"ORDER BY \1 ASC, agrupacion ASC", sql, flags=re.IGNORECASE)
                         sql = sql.rstrip() + " LIMIT :limite_dimension"
                         parametros = {**parametros, "limite_dimension": limite_dimension}
                     filas, error = execute_sql(db, sql, empresa_id, parametros, trusted_query=True)
@@ -855,7 +1039,7 @@ def process_copilot_chat(
                             fila["periodo_anterior"] = None
                         if not cobertura_actual or not cobertura_anterior or not tramos_equivalentes:
                             fila["variacion_absoluta"] = fila["variacion_pct"] = None
-                        elif fila.get("periodo_anterior") == 0:
+                        elif fila.get("periodo_anterior") is not None and fila["periodo_anterior"] <= 0:
                             fila["variacion_pct"] = None
                         corregidas.append(fila)
                     filas = corregidas
@@ -890,29 +1074,49 @@ def process_copilot_chat(
                     if not filas:
                         lineas.append("Sin registros para esta dimensión en los períodos consultados.")
                         continue
-                    lineas.append("| Elemento | Actual | Comparable | Variación | Variación % |\n| --- | ---: | ---: | ---: | ---: |")
+                    filas_tabla = ["| Elemento | Actual | Comparable | Variación | Variación % |", "| --- | ---: | ---: | ---: | ---: |"]
                     for fila in filas:
                         nombre = str(fila.get("referencia") or fila.get("agrupacion") or "Sin identificar").replace("|", "\\|")
+                        if dimension == "sku":
+                            nombre += " · " + str(fila.get("producto") or "Sin nombre").replace("|", "\\|")
                         actual, anterior = fila.get("periodo_actual"), fila.get("periodo_anterior")
                         if actual is None or anterior is None or not tramos_equivalentes:
-                            lineas.append(f"| {nombre} | {mostrar_numero(actual) if actual is not None else 'N/D'} | {mostrar_numero(anterior) if anterior is not None else 'N/D'} | N/D | N/D |")
+                            filas_tabla.append(f"| {nombre} | {mostrar_numero(actual) if actual is not None else 'N/D'} | {mostrar_numero(anterior) if anterior is not None else 'N/D'} | N/D | N/D |")
                         else:
                             diferencia = float(actual) - float(anterior)
-                            porcentaje = f"{diferencia / abs(float(anterior)) * 100:.2f} %".replace(".", ",") if anterior else "N/D (base cero)"
-                            lineas.append(f"| {nombre} | {mostrar_numero(actual)} | {mostrar_numero(anterior)} | {mostrar_numero(diferencia)} | {porcentaje} |")
+                            porcentaje = f"{diferencia / float(anterior) * 100:.2f} %".replace(".", ",") if float(anterior) > 0 else "N/D (base no positiva)"
+                            filas_tabla.append(f"| {nombre} | {mostrar_numero(actual)} | {mostrar_numero(anterior)} | {mostrar_numero(diferencia)} | {porcentaje} |")
+                    lineas.append("\n".join(filas_tabla))
                 elif dimension == "mes":
                     lineas.append("### Meses")
                     if not filas:
                         lineas.append("Sin registros mensuales en el período solicitado.")
                     else:
-                        lineas.append("| Mes | Valor |\n| --- | ---: |")
+                        filas_tabla = ["| Mes | Valor |", "| --- | ---: |"]
                         for fila in filas:
-                            lineas.append(f"| {fila.get('agrupacion')} | {mostrar_numero(fila.get(intento.medida))} |")
+                            filas_tabla.append(f"| {fila.get('agrupacion')} | {mostrar_numero(fila.get(intento.medida))} |")
+                        lineas.append("\n".join(filas_tabla))
                         lineas.append("Solo se muestran meses con registros; un mes ausente no se interpreta automáticamente como cero.")
                 elif dimension == "sku":
                     lineas.append("### Productos\n\n" + renderizar_ranking_sku(filas or [], intento.medida, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion))
                 else:
-                    lineas.append(f"### {etiqueta}\n\n" + renderizar_desglose_agrupado(filas, intento.medida, dimension, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion, limite=limite_dimension))
+                    lineas.append(f"### {etiqueta}\n\n" + renderizar_desglose_agrupado(filas, intento.medida, dimension, intento.fecha_inicio, intento.fecha_fin, intento.comparacion, intento.fecha_inicio_comparacion, intento.fecha_fin_comparacion, limite=limite_dimension, mantener_orden_sql=True))
+            if resumen_kpis and not resumen_kpis.get("sin_registros_actuales"):
+                conclusiones = []
+                variacion = resumen_kpis.get("ventas_variacion_absoluta")
+                porcentaje = resumen_kpis.get("ventas_variacion_pct")
+                if resumen_kpis.get("comparacion_verificada") and variacion is not None and porcentaje is not None:
+                    sentido = "suben" if variacion > 0 else "bajan" if variacion < 0 else "no varían"
+                    porcentaje_texto = f"{abs(porcentaje):.2f}".replace(".", ",")
+                    conclusiones.append(f"Las ventas {sentido} {mostrar_numero(abs(variacion))} ({porcentaje_texto} %) frente al período comparable." if variacion else "Las ventas no varían frente al período comparable.")
+                productos = [fila for fila in resultados.get("sku", []) if isinstance(fila, dict) and fila.get("periodo_actual" if intento.comparacion else "ventas_eur") is not None]
+                if productos:
+                    campo = "periodo_actual" if intento.comparacion else "ventas_eur"
+                    mejor = max(productos, key=lambda fila: float(fila[campo]))
+                    nombre = str(mejor.get("referencia") or "Sin referencia").replace("|", "\\|")
+                    conclusiones.append(f"Entre los productos mostrados, {nombre} registra {mostrar_numero(mejor[campo])} en ventas actuales.")
+                if conclusiones:
+                    lineas.append("### Conclusiones\n\n" + "\n".join(f"- {conclusion}" for conclusion in conclusiones))
             resultados["estado_bloques"] = estados
             informe = {
                 "periodo_actual": {"inicio": intento.fecha_inicio.isoformat(), "fin": intento.fecha_fin.isoformat()},
@@ -1084,9 +1288,13 @@ def process_copilot_chat(
                         db.rollback()
                         continue
                     dossier["resultados"][consulta.nombre] = datos
+                if not dossier["resultados"]:
+                    marker = build_metrics_marker({"resultados": {"resumen": [{}]}})
+                    return f"{marker}\n\nNo pude calcular el resumen general ni los desgloses. No se ha considerado que las ventas sean cero; inténtalo de nuevo."
                 if dossier["resultados"]:
                     if "resumen" in bloques_fallidos or not dossier["resultados"].get("resumen"):
-                        return "No pude calcular el resumen general. No se ha considerado que las ventas sean cero; inténtalo de nuevo."
+                        marker = build_metrics_marker({"resultados": {"resumen": [{}]}})
+                        return f"{marker}\n\nNo pude calcular el resumen general. No se ha considerado que las ventas sean cero; inténtalo de nuevo."
                     resumen_filas = dossier["resultados"].get("resumen") or []
                     resumen = resumen_filas[0] if resumen_filas else {}
                     clientes_filas = dossier["resultados"].get("clientes_activos") or []
@@ -1103,40 +1311,68 @@ def process_copilot_chat(
                     fin_prev = fecha_evidencia(resumen.get("fecha_maxima_anterior"))
                     fechas_equivalentes = bool(
                         inicio_real and fin_real and inicio_prev and fin_prev
+                        and (plan_analitico.periodo_actual[1] - plan_analitico.periodo_actual[0]).days == (plan_analitico.periodo_anterior[1] - plan_analitico.periodo_anterior[0]).days
                         and (inicio_real - plan_analitico.periodo_actual[0]).days == (inicio_prev - plan_analitico.periodo_anterior[0]).days
                         and (plan_analitico.periodo_actual[1] - fin_real).days == (plan_analitico.periodo_anterior[1] - fin_prev).days
                     )
                     comparacion_verificada = fechas_equivalentes and (resumen.get("ventas_periodo_anterior") or 0) > 0
                     resumen["comparacion_verificada"] = comparacion_verificada
-                    marker = build_metrics_marker(dossier) if inicio_real else ""
+                    resumen["sin_registros_actuales"] = not bool(inicio_real and fin_real)
+                    marker = build_metrics_marker(dossier)
                     fechas = (
                         f"**Período solicitado:** {plan_analitico.periodo_actual[0]:%d-%m-%Y} – {plan_analitico.periodo_actual[1]:%d-%m-%Y}. "
-                        f"**Último día con registros en el período:** {fin_real:%d-%m-%Y}. "
-                        f"**Comparado con:** {plan_analitico.periodo_anterior[0]:%d-%m-%Y} – {plan_analitico.periodo_anterior[1]:%d-%m-%Y}."
-                        if fin_real else "No hay registros de ventas en el período solicitado; no se considera que las ventas sean cero."
+                        + (f"**Último día con registros en el período:** {fin_real:%d-%m-%Y}. " if fin_real else "**Último día con registros:** no disponible en el período. ")
+                        + f"**Período comparable solicitado:** {plan_analitico.periodo_anterior[0]:%d-%m-%Y} – {plan_analitico.periodo_anterior[1]:%d-%m-%Y}."
                     )
                     aviso = "Las fechas registradas no certifican una carga completa; pueden existir días sin movimientos o huecos de importación. Los clientes activos identificados son clientes distintos con al menos una venta positiva; se excluye la clave SIN-CLIENTE."
                     if "clientes_activos" in bloques_fallidos:
                         aviso += " No se pudo consultar clientes activos; revisa los permisos de lectura o la disponibilidad de la tabla de clientes."
                     if not comparacion_verificada:
                         motivo = "La venta comparable es cero o negativa; no se presenta una variación porcentual sin revisar esa base." if fechas_equivalentes else "No se presenta la variación ni los impulsores comparativos porque faltan registros o los tramos registrados no coinciden; puede deberse a actividad comercial o a una carga incompleta."
-                        return "\n\n".join(parte for parte in (marker, fechas, aviso, motivo) if parte)
-                    if {"clientes_activos", "clientes_comparativa"}.intersection(bloques_fallidos):
+                        # No dejar datos comparativos no verificados en el artefacto.
+                        for nombre, filas in dossier["resultados"].items():
+                            if not isinstance(filas, list):
+                                continue
+                            for fila in filas:
+                                if not isinstance(fila, dict):
+                                    continue
+                                for clave in fila:
+                                    if clave.endswith(("_periodo_anterior", "_variacion_absoluta", "_variacion_pct")):
+                                        fila[clave] = None
+                                    elif not inicio_real and clave.endswith("_periodo_actual"):
+                                        fila[clave] = None
+                        respuesta = f"## Resumen ejecutivo\n\n{motivo}"
+                    elif bloques_fallidos:
                         # Sin evidencia de clientes no permitir que el modelo
                         # complete cifras o atribuciones de cliente por su cuenta.
                         from .analitica_ventas import renderizar_respuesta_analitica
+                        dossier["bloques_fallidos"] = bloques_fallidos
                         respuesta = renderizar_respuesta_analitica(dossier)
                     else:
-                        respuesta = interpret_results(
-                            history,
-                            "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
-                            dossier,
-                            model_preference=model_preference,
-                            contexto=contexto_analisis,
-                            trusted_query=True,
-                            usage_context=usage_context,
-                        )
-                    seguimiento = build_dynamic_followups_marker(dossier)
+                        try:
+                            respuesta = interpret_results(
+                                history,
+                                "Dossier analitico multiconsulta: resumen, tendencia, impulsores y detalle por SKU.",
+                                dossier,
+                                model_preference=model_preference,
+                                contexto=contexto_analisis,
+                                trusted_query=True,
+                                usage_context=usage_context,
+                            )
+                        except Exception:
+                            logger.exception("No se pudo narrar el dossier; se usa el respaldo determinista")
+                            from .analitica_ventas import renderizar_respuesta_analitica
+                            respuesta = renderizar_respuesta_analitica(dossier)
+                    if not comparacion_verificada:
+                        # Estas consultas se ordenaron por una diferencia que no
+                        # puede verificarse; no mostrar ni exportar sus rankings.
+                        for nombre in tuple(dossier["resultados"]):
+                            if nombre.startswith("impulsores_") or nombre == "top_caidas_sku":
+                                dossier["resultados"].pop(nombre)
+                    dossier["resultados"]["estado_bloques"] = [
+                        {"Bloque": nombre, "Estado": "Error de cálculo"} for nombre in bloques_fallidos
+                    ] + [{"Bloque": "Comparación", "Estado": "Verificada por extremos" if comparacion_verificada else "No verificable"}]
+                    seguimiento = build_dynamic_followups_marker(dossier) if comparacion_verificada else ""
                     informe = build_report_artifact_marker(dossier)
                     logger.info(
                         "[AUDIT ANALITICA] empresa_id=%s modelo=%s bloques_ok=%s bloques_fallidos=%s latencia_ms=%s",
@@ -1154,20 +1390,26 @@ def process_copilot_chat(
                         ("top_productos", "Productos · top 10 por ventas actuales", "sku"),
                     ):
                         filas_tabla = dossier["resultados"].get(clave)
+                        if clave == "impulsores_seccion" and not comparacion_verificada:
+                            tablas.append(f"### {titulo}\n\nNo se puede seleccionar un ranking comparativo con la cobertura disponible.")
+                            continue
                         if filas_tabla is None:
                             tablas.append(f"### {titulo}\n\nNo se pudo calcular este bloque; no se considera que sus ventas sean cero.")
                             continue
                         if not filas_tabla:
                             tablas.append(f"### {titulo}\n\nSin registros para los períodos consultados.")
                             continue
-                        lineas_tabla = [f"### {titulo}", "| Elemento | Actual | Comparable | Diferencia |", "| --- | ---: | ---: | ---: |"]
+                        lineas_tabla = [f"### {titulo}", "| Elemento | Actual | Comparable | Diferencia | Variación |", "| --- | ---: | ---: | ---: | ---: |"]
                         for fila in filas_tabla:
                             nombre = str(fila.get(campo) or "Sin identificar").replace("|", "\\|")
                             if campo == "sku":
                                 nombre += " · " + str(fila.get("nombre") or "Sin nombre").replace("|", "\\|")
                             def eur(valor: Any) -> str:
-                                return f"{float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
-                            lineas_tabla.append(f"| {nombre} | {eur(fila.get('ventas_periodo_actual'))} | {eur(fila.get('ventas_periodo_anterior'))} | {eur(fila.get('ventas_variacion_absoluta'))} |")
+                                return "N/D" if valor is None else f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") + " €"
+                            anterior = fila.get("ventas_periodo_anterior")
+                            porcentaje = fila.get("ventas_variacion_pct")
+                            porcentaje_texto = f"{float(porcentaje):.2f} %".replace(".", ",") if porcentaje is not None and anterior is not None and float(anterior) > 0 else "N/D"
+                            lineas_tabla.append(f"| {nombre} | {eur(fila.get('ventas_periodo_actual'))} | {eur(anterior)} | {eur(fila.get('ventas_variacion_absoluta'))} | {porcentaje_texto} |")
                         tablas.append("\n".join(lineas_tabla))
                     return "\n\n".join(parte for parte in (marker, fechas, aviso, respuesta, *tablas, seguimiento, informe) if parte)
 

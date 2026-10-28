@@ -500,7 +500,7 @@ class EvaluacionCopilotTests(unittest.TestCase):
         metricas = json.loads(base64.b64decode(match.group(1)))['data']
         self.assertEqual(metricas['ventas_eur'], 120)
         self.assertEqual(metricas['clientes_activos'], 2)
-        self.assertNotIn('variacion_ventas_pct', metricas)
+        self.assertIsNone(metricas['variacion_ventas_pct'])
 
     def test_resumen_gerencial_compara_hasta_ultimo_dia_disponible(self):
         class SesionFicticia:
@@ -558,7 +558,74 @@ class EvaluacionCopilotTests(unittest.TestCase):
         import base64, json, re
         metricas = json.loads(base64.b64decode(re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", respuesta).group(1)))['data']
         self.assertEqual(metricas['ventas_eur'], 120)
-        self.assertNotIn('clientes_activos', metricas)
+        self.assertIsNone(metricas['clientes_activos'])
+
+    def test_resumen_mantiene_tablas_y_no_exporta_comparativa_sin_cobertura(self):
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+            def rollback(self):
+                pass
+        plan = SimpleNamespace(periodo_actual=(date(2026, 10, 1), date(2026, 10, 27)), periodo_anterior=(date(2025, 10, 1), date(2025, 10, 27)), consultas=tuple(SimpleNamespace(nombre=n, sql=n, parametros={}) for n in ("resumen", "clientes_comparativa", "top_productos", "impulsores_seccion")))
+        resumen = {"ventas_periodo_actual": 120, "ventas_periodo_anterior": 90, "ventas_variacion_absoluta": 30, "ventas_variacion_pct": 33.33, "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-27"}
+        detalle = {"agrupacion": "Cliente A", "sku": "S1", "nombre": "Producto", "ventas_periodo_actual": 120, "ventas_periodo_anterior": 90, "ventas_variacion_absoluta": 30}
+        def ejecutar(_db, sql, *_args, **_kwargs):
+            if "AS fecha_ultima" in sql:
+                return [{"fecha_ultima": "2026-10-27"}], None
+            return ([dict(resumen)] if sql == "resumen" else [dict(detalle)]), None
+        with (patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)), patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan), patch("app.copilot_context.construir_resumen_operativo", return_value=""), patch("app.copilot_service.execute_sql", side_effect=ejecutar), patch("app.copilot_service.interpret_results") as interpretar):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "¿Cómo va la empresa este mes?"}], 7)
+        interpretar.assert_not_called()
+        self.assertIn("Cliente A", respuesta)
+        self.assertIn("Producto", respuesta)
+        self.assertIn("N/D", respuesta)
+        self.assertIn("No se puede seleccionar un ranking comparativo", respuesta)
+        informe = extract_signed_report_artifact(respuesta)
+        self.assertIsNone(informe["resultados"]["resumen"][0]["ventas_periodo_anterior"])
+        self.assertIsNone(informe["resultados"]["clientes_comparativa"][0]["ventas_variacion_absoluta"])
+        self.assertNotIn("impulsores_seccion", informe["resultados"])
+
+    def test_resumen_sin_registros_muestra_kpis_no_disponibles(self):
+        import base64, json, re
+        from app.copilot_service import build_metrics_marker
+        marker = build_metrics_marker({"resultados": {"resumen": [{"sin_registros_actuales": True, "ventas_periodo_actual": 0, "margen_periodo_actual": 0, "mgd_periodo_actual": 0, "unidades_periodo_actual": 0, "clientes_activos": 0}]}})
+        payload = json.loads(base64.b64decode(re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", marker).group(1)))
+        self.assertEqual(payload["tipo"], "ejecutivo")
+        self.assertEqual(len(payload["data"]), 6)
+        self.assertTrue(all(valor is None for valor in payload["data"].values()))
+
+    def test_resumen_sigue_disponible_si_falla_narracion(self):
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+        plan = SimpleNamespace(periodo_actual=(date(2026, 10, 1), date(2026, 10, 27)), periodo_anterior=(date(2025, 10, 1), date(2025, 10, 27)), consultas=(SimpleNamespace(nombre="resumen", sql="resumen", parametros={}),))
+        fila = {"ventas_periodo_actual": 120, "ventas_periodo_anterior": 100, "ventas_variacion_absoluta": 20, "ventas_variacion_pct": 20, "fecha_minima_actual": "2026-10-01", "fecha_maxima_actual": "2026-10-27", "fecha_minima_anterior": "2025-10-01", "fecha_maxima_anterior": "2025-10-27"}
+        with (patch("app.copilot_orchestrator._fecha_hoy", return_value=date(2026, 10, 27)), patch("app.analitica_ventas.crear_plan_analitico_ventas", return_value=plan), patch("app.copilot_context.construir_resumen_operativo", return_value=""), patch("app.copilot_service.execute_sql", side_effect=lambda _db, sql, *_args, **_kwargs: ([{"fecha_ultima": "2026-10-27"}], None) if "AS fecha_ultima" in sql else ([dict(fila)], None)), patch("app.copilot_service.interpret_results", side_effect=RuntimeError("error simulado"))):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "¿Cómo va la empresa este mes?"}], 7)
+        self.assertIn("<!-- copilot_metrics:", respuesta)
+        self.assertIn("Resumen ejecutivo", respuesta)
+        self.assertIn("20,00", respuesta)
+        self.assertIsNotNone(extract_signed_report_artifact(respuesta))
+
+    def test_cabecera_multidimensional_con_error_clientes_conserva_las_ventas(self):
+        import base64, json, re
+        class SesionFicticia:
+            def get_bind(self):
+                return object()
+            def rollback(self):
+                pass
+        def ejecutar(_db, sql, _empresa_id, params, trusted_query=False):
+            if "COUNT(DISTINCT CASE WHEN vh.ingreso_total" in sql:
+                return None, "sin permiso"
+            if "SUM(vh.ingreso_total) AS ventas_periodo_actual" in sql:
+                return [{"ventas_periodo_actual": 100, "margen_periodo_actual": 10, "mgd_periodo_actual": 8, "unidades_periodo_actual": 4, "fecha_minima_actual": params["fecha_inicio"], "fecha_maxima_actual": params["fecha_fin"]}], None
+            return [{"agrupacion": "Detalle", "referencia": "S1", "ventas_eur": 100, "productos": 1}], None
+        with (patch("app.copilot_context.construir_resumen_operativo", return_value=""), patch("app.copilot_service.execute_sql", side_effect=ejecutar)):
+            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "Resumen de ventas desde 01/05/2026 hasta 31/05/2026 con clientes y productos"}], 7)
+        datos = json.loads(base64.b64decode(re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", respuesta).group(1)))["data"]
+        self.assertEqual(datos["ventas_eur"], 100)
+        self.assertIsNone(datos["clientes_activos"])
+        self.assertIn("No se pudieron calcular los clientes activos", respuesta)
 
     def test_resumen_multidimensional_incluye_todos_los_bloques_y_reporta_fallos(self):
         class SesionFicticia:
@@ -586,7 +653,7 @@ class EvaluacionCopilotTests(unittest.TestCase):
               patch("app.copilot_service.execute_sql", side_effect=ejecutar)):
             respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "Dame un resumen de ventas para este mes, con clientes, secciones y Top 10 productos"}], 7)
 
-        self.assertEqual(len(llamadas), 4)
+        self.assertEqual(len(llamadas), 5)
         self.assertIn("### Total", respuesta)
         self.assertIn("### Clientes", respuesta)
         self.assertIn("No se pudo calcular este bloque", respuesta)
@@ -598,12 +665,12 @@ class EvaluacionCopilotTests(unittest.TestCase):
     def test_resumen_multidimensional_consulta_sql_y_aisla_empresas(self):
         engine = create_engine("sqlite:///:memory:")
         with engine.begin() as conexion:
-            conexion.execute(text("CREATE TABLE productos (id INTEGER PRIMARY KEY, empresa_id INTEGER, sku TEXT, nombre TEXT, familia TEXT, seccion TEXT, marca TEXT)"))
-            conexion.execute(text("CREATE TABLE clientes (id INTEGER PRIMARY KEY, cliente_pk TEXT, nombre TEXT, comercial_cliente TEXT)"))
-            conexion.execute(text("CREATE TABLE ventas_historicas (producto_id INTEGER, cliente_id INTEGER, fecha_venta DATE, ingreso_total NUMERIC, cantidad_vendida NUMERIC, margen_bruto_eur NUMERIC, margen_destino_eur NUMERIC, comercial_factura TEXT)"))
-            conexion.execute(text("INSERT INTO productos VALUES (1, 7, 'S1', 'Producto A', 'Familia', 'Sección A', 'Marca A'), (2, 8, 'S2', 'Otra empresa', 'Familia', 'Otra sección', 'Marca B')"))
-            conexion.execute(text("INSERT INTO clientes VALUES (1, 'C1', 'Cliente A', 'Comercial Asignado A')"))
-            conexion.execute(text("INSERT INTO ventas_historicas VALUES (1, 1, '2026-05-10', 40, 2, 8, 6, 'Factura A'), (2, 1, '2026-05-10', 9999, 1, 2, 1, 'Factura B'), (1, 1, '2025-05-10', 30, 1, 6, 4, 'Factura A')"))
+            conexion.execute(text("CREATE TABLE productos (id INTEGER PRIMARY KEY, empresa_id INTEGER, sku TEXT, nombre TEXT, familia TEXT, seccion TEXT, marca TEXT, familia_marca TEXT, product_manager TEXT)"))
+            conexion.execute(text("CREATE TABLE clientes (id INTEGER PRIMARY KEY, empresa_id INTEGER, cliente_pk TEXT, nombre TEXT, comercial_cliente TEXT, tipo_cliente TEXT)"))
+            conexion.execute(text("CREATE TABLE ventas_historicas (producto_id INTEGER, cliente_id INTEGER, fecha_venta DATE, ingreso_total NUMERIC, cantidad_vendida NUMERIC, margen_bruto_eur NUMERIC, margen_destino_eur NUMERIC, comercial_factura TEXT, kd TEXT)"))
+            conexion.execute(text("INSERT INTO productos VALUES (1, 7, 'S1', 'Producto A', 'Familia', 'Sección A', 'Marca A', 'Familia-Marca A', 'Gestora A'), (2, 8, 'S2', 'Otra empresa', 'Familia', 'Otra sección', 'Marca B', 'Familia-Marca B', 'Gestor B')"))
+            conexion.execute(text("INSERT INTO clientes VALUES (1, 7, 'C1', 'Cliente A', 'Comercial Asignado A', 'Distribuidor')"))
+            conexion.execute(text("INSERT INTO ventas_historicas VALUES (1, 1, '2026-05-10', 40, 2, 8, 6, 'Factura A', 'No'), (2, 1, '2026-05-10', 9999, 1, 2, 1, 'Factura B', 'No'), (1, 1, '2025-05-10', 30, 1, 6, 4, 'Factura A', 'No')"))
         with Session(engine) as sesion, patch("app.copilot_context.construir_resumen_operativo", return_value=""):
             respuesta = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con clientes, secciones y Top 10 productos"}], 7)
             respuesta_multimetrica = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas, unidades, margen bruto y MGD desde 01/05/2026 hasta 31/05/2026 con clientes, secciones y Top 10 productos"}], 7)
@@ -613,6 +680,8 @@ class EvaluacionCopilotTests(unittest.TestCase):
             respuesta_comercial_factura = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con clientes y comerciales de factura"}], 7)
             respuesta_comercial_asignado = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con clientes y comerciales asignados"}], 7)
             respuesta_mensual = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas mensuales desde 01/05/2026 hasta 31/05/2026 con clientes"}], 7)
+            respuesta_compuesta = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 por familia/marca y tipos de cliente"}], 7)
+            respuesta_resumen = process_copilot_chat(sesion, [{"role": "user", "content": "Dame un resumen de ventas de la familia 'Familia' desde 01/05/2026 hasta 31/05/2026 con clientes, secciones y top 10 productos"}], 7)
         self.assertIn("Cliente A", respuesta)
         self.assertIn("Sección A", respuesta)
         self.assertIn("Producto A", respuesta)
@@ -649,6 +718,21 @@ class EvaluacionCopilotTests(unittest.TestCase):
         self.assertIn("2026-05", respuesta_mensual)
         self.assertIn("### Clientes", respuesta_mensual)
         self.assertNotIn("No se pudo calcular", respuesta_mensual)
+        self.assertIn("Familia-Marca A", respuesta_compuesta)
+        self.assertIn("Distribuidor", respuesta_compuesta)
+        self.assertNotIn("No se pudo calcular", respuesta_compuesta)
+        import base64, json, re
+        datos_resumen = json.loads(base64.b64decode(re.search(r"<!-- copilot_metrics: ([A-Za-z0-9+/=]+) -->", respuesta_resumen).group(1)))['data']
+        self.assertEqual(datos_resumen['ventas_eur'], 40)
+        self.assertEqual(datos_resumen['margen_eur'], 8)
+        self.assertEqual(datos_resumen['mgd_eur'], 6)
+        self.assertEqual(datos_resumen['ventas_unidades'], 2)
+        self.assertEqual(datos_resumen['clientes_activos'], 1)
+        self.assertAlmostEqual(datos_resumen['variacion_ventas_pct'], 100 / 3)
+        self.assertIn("10-05-2026", respuesta_resumen)
+        self.assertIn("### Conclusiones", respuesta_resumen)
+        self.assertIn("Las ventas suben 10,00 € (33,33 %)", respuesta_resumen)
+        self.assertEqual(extract_signed_report_artifact(respuesta_resumen)['resultados']['resumen'][0]['ventas_periodo_actual'], 40)
 
     def test_limites_independientes_se_persisten_en_el_contrato(self):
         from app.copilot_orchestrator import restaurar_intento
@@ -684,13 +768,78 @@ class EvaluacionCopilotTests(unittest.TestCase):
                 self.assertIsNone(intento)
                 self.assertIn(dimension, aclaracion)
 
-    def test_ranking_ascendente_multidimensional_no_usa_orden_incorrecto(self):
+    def test_ordenes_independientes_y_dimensiones_compuestas_se_persisten(self):
+        from app.copilot_orchestrator import restaurar_intento
+        intento, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes con los peores clientes y top 10 productos"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(intento.ordenes_dimensiones, {"cliente": "asc", "sku": "desc"})
+        self.assertEqual(restaurar_intento(serializar_intento(intento)).ordenes_dimensiones, intento.ordenes_dimensiones)
+        compuesto, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes por familia/marca y tipos de cliente"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(compuesto.dimensiones, ("familia_marca", "tipo_cliente"))
+        singular, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes con cliente y sección"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(singular.dimensiones, ("cliente", "seccion"))
+        self.assertNotIn("nombre_cliente", singular.parametros)
+        sku, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes por clientes y top 10 SKU"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(sku.dimensiones, ("cliente", "sku"))
+        limites, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes con los cinco peores clientes y 10 mejores productos"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(limites.limites_dimensiones, {"cliente": 5, "sku": 10})
+        filtrado, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas del SKU A123 este mes por clientes y secciones"}])
+        self.assertIsNone(aclaracion)
+        self.assertEqual(filtrado.dimensiones, ("cliente", "seccion"))
+        self.assertEqual(filtrado.parametros["sku"], "A123")
+
+    def test_multidimension_no_omite_dimension_desconocida(self):
+        intento, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes por clientes, productos y por región"}])
+        self.assertIsNone(intento)
+        self.assertIn("desglose validado", aclaracion)
+        intento, aclaracion = analizar_intencion([{"role": "user", "content": "Ventas este mes por clientes y región"}])
+        self.assertIsNone(intento)
+        self.assertIn("desglose validado", aclaracion)
+
+    def test_multidimension_declara_cualquier_fallo_en_respuesta_y_exportacion(self):
         class SesionFicticia:
             def get_bind(self):
                 return object()
-        with patch("app.copilot_context.construir_resumen_operativo", return_value=""):
-            respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "Ventas de este mes con los peores clientes y productos"}], 7)
-        self.assertIn("orden incorrecto", respuesta)
+            def rollback(self):
+                pass
+
+        for bloque, fragmento in (("Clientes", "c.cliente_pk"), ("Secciones", "p.seccion"), ("Productos", "p.sku AS referencia")):
+            def ejecutar(_db, sql, _empresa_id, _parametros, trusted_query=False):
+                if fragmento in sql:
+                    return None, "fallo simulado"
+                if "p.sku AS referencia" in sql:
+                    return [{"referencia": "S1", "producto": "Producto", "familia": "Familia", "ventas_eur": 40}], None
+                return [{"agrupacion": "Detalle", "ventas_eur": 40, "productos": 1}], None
+            with self.subTest(bloque=bloque), patch("app.copilot_context.construir_resumen_operativo", return_value=""), patch("app.copilot_service.execute_sql", side_effect=ejecutar):
+                respuesta = process_copilot_chat(SesionFicticia(), [{"role": "user", "content": "Ventas de este mes con clientes, secciones y top 10 productos"}], 7)
+                self.assertIn(f"### {bloque}\n\nNo se pudo calcular este bloque", respuesta)
+                informe = extract_signed_report_artifact(respuesta)
+                self.assertIn({"Bloque": bloque, "Estado": "Error de cálculo"}, informe["resultados"]["estado_bloques"])
+                self.assertEqual(len(informe["resultados"]["estado_bloques"]), 4)
+
+    def test_ranking_multidimensional_respeta_orden_y_empresa_del_cliente(self):
+        engine = create_engine("sqlite:///:memory:")
+        with engine.begin() as conexion:
+            conexion.execute(text("CREATE TABLE productos (id INTEGER PRIMARY KEY, empresa_id INTEGER, sku TEXT, nombre TEXT, familia TEXT, seccion TEXT, marca TEXT)"))
+            conexion.execute(text("CREATE TABLE clientes (id INTEGER PRIMARY KEY, empresa_id INTEGER, cliente_pk TEXT, nombre TEXT)"))
+            conexion.execute(text("CREATE TABLE ventas_historicas (producto_id INTEGER, cliente_id INTEGER, fecha_venta DATE, ingreso_total NUMERIC, cantidad_vendida NUMERIC, margen_bruto_eur NUMERIC, margen_destino_eur NUMERIC)"))
+            conexion.execute(text("INSERT INTO productos VALUES (1, 7, 'A', 'Mayor', 'F', 'S', 'M'), (2, 7, 'B', 'Menor', 'F', 'S', 'M'), (3, 7, 'C', 'Otro', 'F', 'S', 'M')"))
+            conexion.execute(text("INSERT INTO clientes VALUES (1, 7, 'C1', 'Grande'), (2, 7, 'C2', 'Pequeño'), (3, 8, 'C3', 'Dato de otra empresa')"))
+            conexion.execute(text("INSERT INTO ventas_historicas VALUES (1, 1, '2026-05-10', 100, 1, 10, 8), (2, 2, '2026-05-10', 20, 1, 2, 1), (3, 3, '2026-05-10', 30, 1, 3, 2)"))
+        with Session(engine) as sesion, patch("app.copilot_context.construir_resumen_operativo", return_value=""):
+            respuesta = process_copilot_chat(sesion, [{"role": "user", "content": "Ventas desde 01/05/2026 hasta 31/05/2026 con los peores clientes y top 2 productos"}], 7)
+        self.assertNotIn("Dato de otra empresa", respuesta)
+        clientes = respuesta.split("### Clientes", 1)[1].split("### Productos", 1)[0]
+        productos = respuesta.split("### Productos", 1)[1]
+        self.assertLess(clientes.index("Pequeño"), clientes.index("Grande"))
+        self.assertLess(productos.index("Mayor"), productos.index("Otro"))
+        self.assertNotIn("Menor", productos)
+        informe = extract_signed_report_artifact(respuesta)
+        self.assertEqual([fila["referencia"] for fila in informe["resultados"]["sku"]], ["A", "C"])
 
     def test_multidimension_exporta_estados_y_no_inventa_comparativa_sin_cobertura(self):
         class SesionFicticia:

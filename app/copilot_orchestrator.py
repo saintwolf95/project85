@@ -11,7 +11,7 @@ from .analitica_ventas import crear_cte_abc_ventas, es_pregunta_gerencial, rango
 
 
 ZONA_NEGOCIO = ZoneInfo("Europe/Madrid")
-DIMENSIONES_MULTIPLES = frozenset({"cliente", "seccion", "familia", "marca", "sku", "comercial_cliente", "comercial_factura", "mes"})
+DIMENSIONES_MULTIPLES = frozenset({"cliente", "tipo_cliente", "seccion", "familia", "marca", "familia_marca", "product_manager", "sku", "comercial_cliente", "comercial_factura", "kd", "mes"})
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,7 @@ class IntentoSemantico:
     ajuste_fecha: str | None = None
     dimensiones: tuple[str, ...] = ()
     limites_dimensiones: dict[str, int] = field(default_factory=dict)
+    ordenes_dimensiones: dict[str, str] = field(default_factory=dict)
     metricas_solicitadas: tuple[str, ...] = ()
 
 
@@ -61,6 +62,7 @@ def serializar_intento(intento: IntentoSemantico | None) -> dict[str, Any] | Non
         "ajuste_fecha": intento.ajuste_fecha,
         "dimensiones": list(intento.dimensiones),
         "limites_dimensiones": intento.limites_dimensiones,
+        "ordenes_dimensiones": intento.ordenes_dimensiones,
         "metricas_solicitadas": list(intento.metricas_solicitadas),
     }
 
@@ -101,6 +103,7 @@ def restaurar_intento(datos: dict[str, Any] | None) -> IntentoSemantico | None:
         ajuste_fecha=datos.get("ajuste_fecha") if isinstance(datos.get("ajuste_fecha"), str) else None,
         dimensiones=tuple(d for d in datos.get("dimensiones", []) if d in DIMENSIONES_MULTIPLES) if isinstance(datos.get("dimensiones"), list) else (),
         limites_dimensiones={k: v for k, v in (datos.get("limites_dimensiones") or {}).items() if k in DIMENSIONES_MULTIPLES and isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 50} if isinstance(datos.get("limites_dimensiones"), dict) else {},
+        ordenes_dimensiones={k: v for k, v in (datos.get("ordenes_dimensiones") or {}).items() if k in DIMENSIONES_MULTIPLES and v in {"asc", "desc"}} if isinstance(datos.get("ordenes_dimensiones"), dict) else {},
         metricas_solicitadas=tuple(m for m in datos.get("metricas_solicitadas", []) if m in {"ventas_eur", "ventas_unidades", "margen_eur", "mgd_eur"}) if isinstance(datos.get("metricas_solicitadas"), list) else (),
     )
 
@@ -446,20 +449,30 @@ def detectar_dimensiones_multiples(texto: str) -> tuple[str, ...]:
     """Reconoce las dimensiones explícitas de un resumen multidimensional."""
     texto = normalizar_texto(texto)
     texto = re.sub(r"\b(?:numero|cantidad|conteo)\s+de\s+skus?\s+(?:con\s+venta|vendidos?)\b", "", texto)
+    texto = re.sub(r"\bsku\s*[:#]?\s*(?=[a-z0-9_-]*[0-9_-])[a-z0-9_-]+\b", "", texto)
+    # Un filtro concreto no pide un desglose adicional de esa dimensión.
+    texto = re.sub(r"\b(?:familia|marca|seccion|cliente|product manager)\s*(?:es|:)?\s*['\"][^'\"]+['\"]", "", texto)
     comercial_factura = r"\bcomerciales?\s+(?:de\s+)?factura\b"
     comercial_cliente = r"\bcomerciales?\s+(?:asignad[oa]s?|del?\s+cliente)\b|\bnombres?\s+comerciales?\b"
     texto_sin_tipo_comercial = re.sub(f"(?:{comercial_factura}|{comercial_cliente})", "", texto)
+    familia_marca = r"\bfamilia\s*/\s*marca\b|\bpor\s+familia\s+y\s+marca\b"
+    tipo_cliente = r"\btipo(?:s)?\s+(?:de\s+)?cliente(?:s)?\b"
+    texto_simple = re.sub(f"(?:{familia_marca}|{tipo_cliente})", "", texto)
     patrones = (
-        ("cliente", r"\bclientes\b|\b(?:por|cada)\s+cliente\b"),
-        ("seccion", r"\bsecciones\b|\b(?:por|cada)\s+seccion\b"),
-        ("familia", r"\bfamilias\b|\b(?:por|cada)\s+familia\b"),
-        ("marca", r"\bmarcas\b|\b(?:por|cada)\s+marca\b"),
-        ("sku", r"\b(?:productos|articulos|referencias|skus?)\b|\b(?:por|cada)\s+(?:producto|articulo|referencia)\b"),
+        ("cliente", r"\bclientes\b|\b(?:por|cada|con|y)\s+cliente\b"),
+        ("seccion", r"\bsecciones\b|\b(?:por|cada|con|y)\s+seccion\b"),
+        ("familia", r"\bfamilias\b|\b(?:por|cada|con|y)\s+familia\b"),
+        ("marca", r"\bmarcas\b|\b(?:por|cada|con|y)\s+marca\b"),
+        ("sku", r"\b(?:productos|articulos|referencias|skus?)\b|\b(?:por|cada|con|y)\s+(?:producto|articulo|referencia)\b"),
         ("comercial_factura", comercial_factura),
         ("comercial_cliente", comercial_cliente),
-        ("mes", r"\b(?:por|cada)\s+mes(?:es)?\b|\bmensuales\b"),
+        ("familia_marca", familia_marca),
+        ("tipo_cliente", tipo_cliente),
+        ("product_manager", r"\bproduct\s+managers?\b|\b(?:por|cada)\s+pm\b"),
+        ("kd", r"\b(?:por|cada)\s+(?:kit digital|kd)\b"),
+        ("mes", r"\b(?:por|cada)\s+mes(?:es)?\b|\bmensual(?:es)?\b"),
     )
-    dimensiones = tuple(nombre for nombre, patron in patrones if re.search(patron, texto))
+    dimensiones = tuple(nombre for nombre, patron in patrones if re.search(patron, texto_simple if nombre in {"cliente", "familia", "marca"} else texto))
     if re.search(r"\b(?:por|cada|y|con)\s+comerciales?\b", texto_sin_tipo_comercial):
         dimensiones += ("comercial",)
     return dimensiones if len(dimensiones) > 1 else ()
@@ -468,13 +481,30 @@ def detectar_dimensiones_multiples(texto: str) -> tuple[str, ...]:
 def detectar_limites_dimensiones(texto: str) -> dict[str, int]:
     """Vincula cada top a su dimensión, no a las demás tablas."""
     texto = normalizar_texto(texto)
-    nombres = {"cliente": r"clientes?", "seccion": r"seccion(?:es)?", "familia": r"familias?", "marca": r"marcas?", "sku": r"(?:productos?|articulos?|referencias?|skus?)", "comercial_factura": r"comerciales?\s+(?:de\s+)?factura", "comercial_cliente": r"comerciales?\s+(?:asignad[oa]s?|del?\s+cliente)"}
+    nombres = {"cliente": r"clientes?", "tipo_cliente": r"tipos?\s+(?:de\s+)?clientes?", "seccion": r"seccion(?:es)?", "familia": r"familias?", "marca": r"marcas?", "familia_marca": r"familia\s*/\s*marca", "product_manager": r"product\s+managers?", "sku": r"(?:productos?|articulos?|referencias?|skus?)", "comercial_factura": r"comerciales?\s+(?:de\s+)?factura", "comercial_cliente": r"comerciales?\s+(?:asignad[oa]s?|del?\s+cliente)"}
     limites = {}
+    numeros = {"uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10}
     for dimension, sustantivo in nombres.items():
-        coincidencia = re.search(rf"\b(?:top|primeros?|primeras?|mejores?|mayores?|peores?)\s*(\d{{1,2}})\s+(?:de\s+)?{sustantivo}\b", texto)
+        coincidencia = re.search(rf"\b(?:top|primeros?|primeras?|mejores?|mayores?|peores?)\s*(\d{{1,2}})\s+(?:de\s+)?{sustantivo}\b|\b(\d{{1,2}}|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:mejores?|mayores?|peores?|menores?)\s+{sustantivo}\b", texto)
         if coincidencia:
-            limites[dimension] = min(max(int(coincidencia.group(1)), 1), 50)
+            cantidad = coincidencia.group(1) or coincidencia.group(2)
+            limites[dimension] = min(max(numeros[cantidad] if cantidad in numeros else int(cantidad), 1), 50)
     return limites
+
+
+def detectar_ordenes_dimensiones(texto: str) -> dict[str, str]:
+    """Conserva un orden explícito para cada ranking solicitado."""
+    texto = normalizar_texto(texto)
+    nombres = {"cliente": r"clientes?", "seccion": r"seccion(?:es)?", "familia": r"familias?", "marca": r"marcas?", "sku": r"(?:productos?|articulos?|referencias?|skus?)"}
+    ordenes = {}
+    for dimension, sustantivo in nombres.items():
+        coincidencia = re.search(
+            rf"\b(?:(top|ranking)\s*)?(?:\d{{1,2}}\s+)?(peores?|menores?|mejores?|mayores?)?\s*(?:\d{{1,2}}\s+)?{sustantivo}\b",
+            texto,
+        )
+        if coincidencia and (coincidencia.group(1) or coincidencia.group(2)):
+            ordenes[dimension] = "asc" if coincidencia.group(2) in {"peor", "peores", "menor", "menores"} else "desc"
+    return ordenes
 
 
 def detectar_metricas_multiples(texto: str) -> tuple[str, ...]:
@@ -560,7 +590,7 @@ def detectar_filtros(texto: str) -> dict[str, str]:
         )
         if sin_comillas:
             valor = sin_comillas.group(1).strip()
-            if valor:
+            if valor and not re.match(r"^(?:y|con|por|top|ranking)\b", normalizar_texto(valor)):
                 filtros[campo] = valor
     return filtros
 
@@ -593,15 +623,16 @@ def _tiene_filtro_no_soportado(texto: str) -> bool:
     medida, _ = detectar_medida(normalizado)
     if medida in ("productos_alerta", "productos_sobrestock", "matriz_productos", "acciones_prioritarias", "productos_oportunidad"):
         return False
-    if _contiene(normalizado, ("producto", "articulo")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
+    if _contiene(normalizado, ("producto", "articulo")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado) and not detectar_dimensiones_multiples(texto):
         return True
-    if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm", "cliente", "comercial", "kd")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado):
+    if _contiene(normalizado, ("familia", "marca", "seccion", "product manager", "pm", "cliente", "comercial", "kd")) and not detectar_filtros(texto) and not detectar_agrupacion(normalizado) and not detectar_dimensiones_multiples(texto):
         return True
     menciona_recuento_sku = bool(re.search(
         r"\b(?:numero|cantidad|recuento)\s+de\s+sku\b|\bsku\s+con\s+venta\b",
         normalizado,
     ))
-    if _contiene(normalizado, ("sku",)) and not menciona_recuento_sku and not detectar_filtros(texto):
+    if (_contiene(normalizado, ("sku",)) and not menciona_recuento_sku and not detectar_filtros(texto)
+            and detectar_agrupacion(normalizado) != "sku" and "sku" not in detectar_dimensiones_multiples(texto)):
         return True
     return False
 
@@ -707,6 +738,9 @@ def analizar_intencion(
 
     if not dimensiones and len(mensajes_usuario) > 1 and not intento_anterior:
         dimensiones = detectar_dimensiones_multiples(texto_analizado)
+
+    if re.search(r"\b(?:por|cada|y|con)\s+(?:region(?:es)?|pais(?:es)?|provincias?|zonas?|canales?|proveedores?)\b", normalizar_texto(actual)):
+        return None, "No tengo un desglose validado para la región, país, provincia, zona, canal o proveedor solicitado. Indica una dimensión disponible para no omitirla de la respuesta."
 
     if not medida:
         if _es_pregunta_agregada(actual):
@@ -840,6 +874,10 @@ def analizar_intencion(
         dimensiones=dimensiones if tipo in ("ventas", "rentabilidad") else (),
         limites_dimensiones=(
             {**(intento_anterior.limites_dimensiones if intento_anterior else {}), **detectar_limites_dimensiones(actual if intento_anterior else texto_analizado)}
+            if dimensiones else {}
+        ),
+        ordenes_dimensiones=(
+            {**(intento_anterior.ordenes_dimensiones if intento_anterior else {}), **detectar_ordenes_dimensiones(actual if intento_anterior else texto_analizado)}
             if dimensiones else {}
         ),
         metricas_solicitadas=(detectar_metricas_multiples(texto_analizado) if dimensiones else ()),

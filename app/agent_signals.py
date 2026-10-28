@@ -205,20 +205,13 @@ def _sales_signals(db: Session, empresa_id: int) -> list[dict]:
     previous_start, previous_end, current_start, anchor, days = window
     confidence = min(1.0, days / 30)
     params = {"empresa_id": empresa_id, "ps": previous_start, "pe": previous_end, "cs": current_start, "ce": anchor}
-    rows = db.execute(text("""
-        SELECT COALESCE(p.familia, 'Sin familia') AS entidad,
-          COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END),0) previo,
-          COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END),0) actual,
-          COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.cantidad_vendida ELSE 0 END),0) unidades_previas,
-          COALESCE(SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.cantidad_vendida ELSE 0 END),0) unidades_actuales
-        FROM ventas_historicas v JOIN productos p ON p.id=v.producto_id
-        WHERE p.empresa_id=:empresa_id AND v.fecha_venta BETWEEN :ps AND :ce
-        GROUP BY COALESCE(p.familia, 'Sin familia')
-        HAVING SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END) > 0
-    """), params).mappings().all()
+    from .shared_sales import comparar_ventas_por_dimension
+    rows = comparar_ventas_por_dimension(db, empresa_id, (current_start, anchor), (previous_start, previous_end), "familia")
     signals = []
     for row in rows:
         previous, current = _number(row["previo"]), _number(row["actual"])
+        if previous <= 0:
+            continue
         change = current - previous
         threshold_rule = resolve_detector_threshold(db, empresa_id, "caida_facturacion_familia", default=max(250, previous * .08), on_date=anchor)
         threshold = _number(threshold_rule.value, max(250, previous * .08))

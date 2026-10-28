@@ -734,6 +734,7 @@ def renderizar_desglose_agrupado(
     inicio_anterior: date | None = None,
     fin_anterior: date | None = None,
     limite: int = 20,
+    mantener_orden_sql: bool = False,
 ) -> str:
     """Tabla determinista para dimensiones comerciales de cualquier cardinalidad."""
     etiqueta = _etiqueta_medida(medida)
@@ -745,7 +746,7 @@ def renderizar_desglose_agrupado(
         copia = dict(fila)
         copia["valor"] = _numero(copia.get(medida))
         preparadas.append(copia)
-    visibles = _filas_desglose_visibles(preparadas, comparacion, limite)
+    visibles = preparadas[:limite] if mantener_orden_sql else _filas_desglose_visibles(preparadas, comparacion, limite)
     if not visibles:
         return (
             f"**{etiqueta} por {dimension.lower()}**\n\n"
@@ -1121,7 +1122,7 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
             f"respecto al periodo anterior. Explica el movimiento observado, no su causa comercial."
         )
     else:
-        lineas.append("- No hay un impulsor negativo identificable con los datos del periodo comparable.")
+        lineas.append("- No se pudo identificar un impulsor negativo con la evidencia disponible." if dossier.get("bloques_fallidos") else "- No hay un impulsor negativo identificable con los datos del periodo comparable.")
 
     lineas.extend(("\n## Top 5 movimientos", "| SKU | Producto | Familia | ABC | Actual | Anterior | Variación |", "| --- | --- | --- | --- | ---: | ---: | ---: |"))
     caidas = [
@@ -1137,7 +1138,8 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
                 f"{_eur(fila.get('ventas_variacion_absoluta'))} |"
             )
     else:
-        lineas.append("| N/D | No se identifican SKU con caída en el periodo | - | - | - | - | - |")
+        detalle = "No se pudo calcular el ranking de SKU" if "top_caidas_sku" in dossier.get("bloques_fallidos", []) else "No se identifican SKU con caída en el periodo"
+        lineas.append(f"| N/D | {detalle} | - | - | - | - | - |")
 
     lineas.extend(("\n## Lectura ABC", "| Clase | Productos | Ventas actuales | Variación |", "| --- | ---: | ---: | ---: |"))
     abc = resultados.get("abc_ventas", [])
@@ -1148,7 +1150,7 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
                 f"{_eur(fila.get('ventas_periodo_actual'))} | {_eur(fila.get('ventas_variacion_absoluta'))} |"
             )
     else:
-        lineas.append("| N/D | 0 | €0,00 | €0,00 |")
+        lineas.append("| N/D | N/D | N/D | N/D |")
 
     lineas.append("\n## Qué haría ahora")
     if impulsor:
@@ -1170,6 +1172,8 @@ def renderizar_respuesta_analitica(dossier: dict[str, Any]) -> str:
         "\n## Calidad del análisis",
         "- La comparación usa ventanas equivalentes. Las variaciones están verificadas en ventas; atribuir una causa exige contrastar documentos, unidades, precio, disponibilidad o promociones.",
     ))
+    if dossier.get("bloques_fallidos"):
+        lineas.append("- No se pudieron calcular todos los bloques; las conclusiones se limitan a la evidencia disponible.")
     return "\n".join(lineas)
 
 

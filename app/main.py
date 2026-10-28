@@ -271,6 +271,8 @@ async def lifespan(app: FastAPI):
     models.AgentNotificationRecipient.__table__.create(bind=engine, checkfirst=True)
     models.AgentNotificationLog.__table__.create(bind=engine, checkfirst=True)
     ensure_copilot_schema()
+    from .shared_sales_materialized import ciclo_materializacion
+    shared_sales_task = asyncio.create_task(ciclo_materializacion(SessionLocal))
     daily_task = None
     if ENABLE_DAILY_AGENT_REPORTS:
         from .daily_agents import daily_reports_loop
@@ -290,6 +292,7 @@ async def lifespan(app: FastAPI):
         finally:
             if daily_task:
                 daily_task.cancel()
+            shared_sales_task.cancel()
         return
 
     # Inicializa las tablas al iniciar la aplicación
@@ -360,12 +363,13 @@ async def lifespan(app: FastAPI):
     finally:
         if daily_task:
             daily_task.cancel()
+        shared_sales_task.cancel()
     # No eliminamos las tablas al cerrar para persistir durante la vida de la app
 
 app = FastAPI(
     title="API de Supply Chain",
     description="Backend Multi-Tenant con FastAPI y SQLite in-memory",
-    version="2.07.0",
+    version="2.10.0",
     lifespan=lifespan
 )
 

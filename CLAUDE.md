@@ -499,3 +499,21 @@ No modificar archivos ajenos a la solicitud ni usar operaciones destructivas de 
 
 - El resumen financiero no depende de `clientes`: el conteo de clientes activos es un bloque separado de solo lectura. Si falta acceso, se muestran las métricas verificadas restantes, se declara la ausencia de clientes y se usa una narración determinista sin inventar datos de clientes. No elevar la cuenta RO ni sustituirla por la cuenta de escritura.
 - La limpieza elimina mediante cascada ORM hasta 100 chats caducados del usuario a la vez, bloqueando los registros seleccionados y confirmando mensajes y chats en la misma transacción. Un error revierte todo. Al activarse en producción volverá a eliminar chats y mensajes con más de 30 días de inactividad: antes de desplegar, comprobar que el usuario acepta esa consecuencia y valorar una copia de seguridad.
+
+## Actualización v2.08 local — consultas múltiples
+
+- El ejemplo de ventas con clientes, secciones y Top 10 productos ya seguía la ruta multidimensional desde v2.05; no repetir el diagnóstico anterior que afirmaba que solo se consultaban productos. Cada bloque solicitado se ejecuta por separado y su estado aparece también en el informe firmado.
+- Se conservan los órdenes por dimensión y la salida respeta el orden SQL, incluidos rankings ascendentes y órdenes mixtos. Se amplía el reconocimiento de dimensiones y el JOIN de clientes de esta ruta comprueba empresa. El permiso RO de clientes en producción sigue pendiente; no sustituirlo con credenciales de escritura.
+- No presentar esta mejora como implementación de rankings de caídas/subidas del punto 3, ni como certificación de cobertura de importaciones. Los porcentajes de margen combinados siguen pidiéndose por separado.
+
+## Actualización v2.09 local — resumen visual gerencial
+
+- El dossier gerencial entrega seis tarjetas ejecutivas con N/D cuando falta evidencia. Si una comparación no es fiable, se conservan los detalles actuales, se suprimen las variaciones y rankings afectados también del informe firmado, y se señalan las fechas y la limitación. El PDF no convierte un comparable ausente en cero para el gráfico.
+- El respaldo determinista protege el informe si falla la narración o alguno de sus bloques. Los resúmenes de ventas multidimensionales incluyen la misma cabecera con filtros y período, y los KPI viajan en el informe firmado. No confundir la comparación conservadora por extremos con una certificación de cobertura.
+
+## Actualización v2.10 local — analítica de ventas compartida
+
+- `app/shared_sales.py` centraliza comparaciones por SKU, cliente, sección y familia. Copilot utiliza los rankings estrictos de subidas y caídas, Dashboard los impulsores por familia y Control IA la comparación para señales comerciales. Los demás cálculos aún pueden consultar `ventas_historicas` directamente.
+- Se persisten los agregados diarios; los rankings se obtienen bajo demanda de la revisión vigente y no se guardan aún como rankings precalculados por período y filtro.
+- `migrations/V2.10__ventas_compartidas.sql` añade agregados diarios, revisiones, fechas pendientes y una vista de respaldo que consulta hechos originales si no hay revisión vigente. Los triggers cubren INSERT/UPDATE/DELETE/TRUNCATE; la carga web recalcula antes de confirmar y una tarea repara pendientes externos. El historial de nombres y secciones no se conoce: se usa el catálogo actual.
+- Requiere pruebas reales de migración, triggers, permisos y concurrencia en PostgreSQL antes de aplicar a producción. La migración concede SELECT a `copilot_readonly` si existe; el rol de escritura también necesita permisos sobre las tablas agregadas. No activar sin autorización expresa ni presentar la cobertura de extremos como carga certificada.

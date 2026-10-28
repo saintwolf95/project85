@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
-from sqlalchemy import func, inspect
+from sqlalchemy import func, inspect, text
 from sqlalchemy.orm import Session
 
 from ..api.deps import get_current_active_admin
@@ -1292,6 +1292,18 @@ async def load_import(
             created = max(0, len(records) - updated)
 
         db.flush()
+        # La revisión se publica en la misma transacción que la carga, incluso
+        # cuando el usuario pospone el recálculo ABC/XYZ para el final del lote.
+        if dataset == "sales" and valid_rows:
+            from ..shared_sales_materialized import materializacion_instalada, marcar_fechas, recalcular_ventas_compartidas
+            if materializacion_instalada(db):
+                marcar_fechas(db, empresa_id, min(row["fecha_venta"] for row in valid_rows), max(row["fecha_venta"] for row in valid_rows))
+                recalcular_ventas_compartidas(db, empresa_id)
+        elif dataset == "products" and replace_existing:
+            from ..shared_sales_materialized import materializacion_instalada, recalcular_ventas_compartidas
+            if materializacion_instalada(db):
+                db.execute(text("UPDATE shared_sales_state SET initialized=FALSE WHERE empresa_id=:empresa_id"), {"empresa_id": empresa_id})
+                recalcular_ventas_compartidas(db, empresa_id)
         if refresh_metrics:
             _refresh_metrics(db, empresa_id)
         else:
@@ -1360,7 +1372,9 @@ def import_status(
         func.min(VentaHistorica.fecha_venta),
         func.max(VentaHistorica.fecha_venta),
     ).join(Producto).filter(Producto.empresa_id == empresa_id).one()
+    from ..shared_sales_materialized import estado_ventas_compartidas
     return {
+        "analitica_compartida": estado_ventas_compartidas(db, empresa_id),
         "products": int(product_count),
         "inventory_records": int(inventory_count),
         "inventory_history_records": int(inventory_summary[0] or 0),

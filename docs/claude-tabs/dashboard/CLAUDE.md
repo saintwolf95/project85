@@ -77,3 +77,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 
 - `DashboardCharts` reutiliza `AbcxyzLegend` y `content/abcxyz.ts` con la misma explicación y paleta de Inteligencia ABCXYZ. Las tarjetas muestran el foco de gestión con texto y color, en claro y oscuro.
 - La selección de inventario, ventas o SKU cambia la cifra, no el significado del color. La leyenda explica los tramos acumulados 80/15/5 y que XYZ mide capital en stock, no estabilidad de demanda ni alertas confirmadas.
+
+## Actualización v2.10 local — ventas compartidas
+
+- Los impulsores por familia usan `shared_sales.comparar_ventas_por_dimension`, la misma definición de diferencia que Copilot y Control IA. La respuesta incluye el estado de revisión de la materialización; ante una revisión pendiente la vista usa los hechos originales.
+- La caché del Dashboard ejecutivo se retiró para evitar servir una revisión anterior después de una sincronización externa. El resto del Dashboard puede seguir consultando las tablas originales. La migración y triggers están pendientes de ensayo en PostgreSQL antes de producción.

@@ -179,7 +179,7 @@ def _exportar_informe_ejecutivo(informe: dict[str, Any], message_id: int, format
             fila_resumen = resumen_evidencia[0]
             comparable = _numero_informe(fila_resumen.get("ventas_periodo_anterior"))
             actual = _numero_informe(fila_resumen.get("ventas_periodo_actual"))
-            if comparable >= 0 and actual >= 0:
+            if fila_resumen.get("ventas_periodo_anterior") is not None and fila_resumen.get("ventas_periodo_actual") is not None and comparable >= 0 and actual >= 0:
                 contenido.append(Paragraph("Ventas comparables frente a actuales", estilos["Heading2"]))
                 dibujo = Drawing(420, 170)
                 barras = VerticalBarChart()
@@ -200,7 +200,7 @@ def _exportar_informe_ejecutivo(informe: dict[str, Any], message_id: int, format
             columnas = list(filas[0].keys())[:7]
             tabla = [[Paragraph(escape(str(columna)), estilos["BodyText"]) for columna in columnas]]
             for fila in filas[:20]:
-                tabla.append([Paragraph(escape(str(fila.get(columna, "")))[:150], estilos["BodyText"]) for columna in columnas])
+                tabla.append([Paragraph(escape(str(fila.get(columna) if fila.get(columna) is not None else "N/D"))[:150], estilos["BodyText"]) for columna in columnas])
             ancho_total = 27.0 * cm
             componente = Table(tabla, repeatRows=1, hAlign="LEFT", colWidths=[ancho_total / max(len(columnas), 1)] * len(columnas))
             componente.setStyle(TableStyle([

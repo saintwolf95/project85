@@ -345,6 +345,20 @@ export const DataEngineering = () => {
         </div>
       </section>
 
+      {status?.analitica_compartida && (
+        <section aria-label="Estado de analítica de ventas compartida" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-900">
+          <p className="font-semibold text-slate-900 dark:text-white">
+            Analítica de ventas compartida · {status.analitica_compartida.estado === 'actualizada' ? 'Actualizada' : status.analitica_compartida.estado === 'pendiente' ? 'Pendiente de recálculo' : 'Sin materializar'}
+          </p>
+          <p className="mt-1 text-slate-600 dark:text-slate-400">
+            {status.analitica_compartida.estado === 'actualizada'
+              ? `Revisión ${status.analitica_compartida.revision_calculada}. Datos registrados: ${status.analitica_compartida.desde || 'sin ventas'} – ${status.analitica_compartida.hasta || 'sin ventas'}.`
+              : 'Mientras no haya una revisión completa, las consultas usan las ventas originales para evitar cifras desactualizadas.'}
+          </p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Las fechas con registros no garantizan que las cargas estén completas.</p>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
         <nav className="space-y-1" aria-label="Orden de carga">
           <p className="mb-3 text-xs font-semibold uppercase text-slate-500 dark:text-slate-400">Orden recomendado</p>

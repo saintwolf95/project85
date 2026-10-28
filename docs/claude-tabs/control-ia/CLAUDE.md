@@ -205,3 +205,8 @@ Hereda las normas de `CLAUDE.md` de la raíz, especialmente el versionado obliga
 - El recorrido se abre desde `Cómo funciona`, se persiste con `/agents/onboarding/control_ia_tour` y debe mantener foco atrapado, anuncio de paso, Escape, salto y comportamiento de hoja inferior en móvil.
 - `/ai-control/guia` es la guía permanente. El checklist de `/ai-control` consulta estado real mediante `/agents/setup-checklist`; nunca debe permitir marcar una configuración no comprobada.
 - Los estados vacíos comunican cobertura insuficiente, ausencia de cambios relevantes, falta de feedback o ausencia de decisiones y enlazan al siguiente paso útil.
+
+## Actualización v2.10 local — señales de ventas compartidas
+
+- La comparación de facturación por familia del detector comercial usa `shared_sales.comparar_ventas_por_dimension`; conserva sus propios umbrales y validación estadística. Los demás detectores no se han migrado y pueden leer las ventas originales.
+- La vista de ventas compartidas retrocede automáticamente a hechos originales si hay una revisión pendiente. Ensayar migración y concurrencia en PostgreSQL antes de producción; no inferir que los extremos de fecha certifican la carga.

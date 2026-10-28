@@ -52,7 +52,7 @@ const cleanCopilotContent = (content: string) => content.replace(SQL_EXPORT_PATT
 const hasCopilotExport = (content: string) => /<!-- sql_export: [\s\S]*? -->/.test(content);
 const hasCopilotReport = (content: string) => REPORT_MARKER_PATTERN.test(content);
 
-type CopilotMetricPayload = { data: Record<string, number>; formato?: 'eur' | 'unidades' | 'porcentaje' };
+type CopilotMetricPayload = { data: Record<string, number | null>; formato?: 'eur' | 'unidades' | 'porcentaje'; tipo?: 'ejecutivo' | 'estandar' };
 
 const parseCopilotMetrics = (content: string): CopilotMetricPayload | null => {
   const match = METRICS_MARKER_PATTERN.exec(content);
@@ -75,11 +75,11 @@ const METRIC_LABELS: Record<string, string> = {
   inventario_eur: 'Inventario',
   inventario_unidades: 'Unidades en stock',
   beneficio_eur: 'Beneficio',
-  margen_eur: 'Margen',
+  margen_eur: 'MG · margen bruto',
   margen_periodo_actual: 'Margen · período actual',
   margen_periodo_anterior: 'Margen · período comparable',
   margen_pct: 'Margen %',
-  mgd_eur: 'Margen en destino',
+  mgd_eur: 'MGD · margen en destino',
   mgd_periodo_actual: 'MGD · período actual',
   mgd_periodo_anterior: 'MGD · período comparable',
   mgd_pct: 'Margen en destino %',
@@ -114,18 +114,18 @@ const formatMetricValue = (key: string, value: number, formato?: CopilotMetricPa
 const CopilotMetricCards = ({ content }: { content: string }) => {
   const payload = parseCopilotMetrics(content);
   if (!payload) return null;
-  const entries = Object.entries(payload.data).filter(([, value]) => typeof value === 'number').slice(0, 6);
+  const entries = Object.entries(payload.data).filter(([, value]) => typeof value === 'number' || (payload.tipo === 'ejecutivo' && value === null)).slice(0, 6);
   if (!entries.length) return null;
   return (
     <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
       {entries.map(([key, value]) => {
         const isVariation = key.startsWith('variacion');
-        const positive = value >= 0;
+        const positive = value !== null && value >= 0;
         return (
-          <div key={key} className="rounded-[12px] border border-black/[0.08] bg-white px-3.5 py-3 dark:border-slate-700 dark:bg-slate-900/50">
-            <p className="text-[11px] font-medium text-[#6e6e73] dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
-            <p className={`ai-tnum mt-1 text-[18px] font-semibold ${isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-[#1d1d1f] dark:text-white'}`}>
-              {formatMetricValue(key, value, payload.formato)}
+          <div key={key} className="rounded-[14px] border border-black/[0.08] bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900/50">
+            <p className="text-[12px] font-medium text-[#6e6e73] dark:text-slate-400">{METRIC_LABELS[key] || key.replaceAll('_', ' ')}</p>
+            <p className={`ai-tnum mt-2 text-[20px] font-semibold ${value === null ? 'text-slate-500' : isVariation ? (positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400') : 'text-[#1d1d1f] dark:text-white'}`}>
+              {value === null ? 'No disponible' : formatMetricValue(key, value, payload.formato)}
             </p>
           </div>
         );

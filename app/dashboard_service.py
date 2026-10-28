@@ -46,17 +46,11 @@ FILTER_SQL = """
  AND (CAST(:product_manager AS TEXT) IS NULL OR LOWER(COALESCE(p.product_manager, '')) = LOWER(CAST(:product_manager AS TEXT)))
  AND (CAST(:articulo AS TEXT) IS NULL OR LOWER(COALESCE(p.sku, '')) = LOWER(CAST(:articulo AS TEXT)))
 """
-_dashboard_cache = TTLCache(maxsize=256, ttl=300)
-_dashboard_cache_lock = RLock()
 _filter_options_cache = TTLCache(maxsize=64, ttl=900)
 _filter_options_cache_lock = RLock()
 
 
 def invalidate_dashboard_cache(empresa_id: int) -> None:
-    with _dashboard_cache_lock:
-        for key in list(_dashboard_cache):
-            if key[0] == empresa_id:
-                _dashboard_cache.pop(key, None)
     with _filter_options_cache_lock:
         _filter_options_cache.pop(empresa_id, None)
 
@@ -237,11 +231,6 @@ def _filter_options(db: Session, empresa_id: int) -> dict:
     return options
 
 
-@cached(_dashboard_cache, key=lambda _db, empresa_id, period="fytd", familia=None, marca=None,
-        familia_marca=None, seccion=None, breakdown="comercial", product_manager=None, articulo=None: (
-            empresa_id, period, *[(_clean(value) or "").casefold()
-            for value in (familia, marca, familia_marca, seccion, product_manager, articulo)], breakdown,
-        ), lock=_dashboard_cache_lock)
 def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd",
                               familia: str | None = None, marca: str | None = None,
                               familia_marca: str | None = None, seccion: str | None = None,
@@ -297,21 +286,11 @@ def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd"
         inventory.update({key: (_number(row[key]) if key.endswith("_eur") else int(row[key] or 0))
                           for key in inventory if key != "fecha"})
 
-    family_rows = db.execute(text(f"""
-        SELECT COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia') familia,
-          SUM(CASE WHEN v.fecha_venta BETWEEN :cs AND :ce THEN v.ingreso_total ELSE 0 END) actual_eur,
-          SUM(CASE WHEN v.fecha_venta BETWEEN :ps AND :pe THEN v.ingreso_total ELSE 0 END) anterior_eur
-        FROM ventas_historicas v JOIN productos p ON p.id = v.producto_id
-        WHERE p.empresa_id = :empresa_id
-          AND ((v.fecha_venta BETWEEN :ps AND :pe) OR (v.fecha_venta BETWEEN :cs AND :ce)) {FILTER_SQL}
-        GROUP BY COALESCE(NULLIF(TRIM(p.familia), ''), 'Sin familia')
-    """), {"empresa_id": empresa_id, "cs": cs, "ce": ce, "ps": ps, "pe": pe, **filters}).mappings().all()
-    drivers = [{"familia": row["familia"], "actual_eur": _number(row["actual_eur"]),
-                "anterior_eur": _number(row["anterior_eur"]),
-                "variacion_eur": _number(row["actual_eur"]) - _number(row["anterior_eur"]),
-                "variacion_pct": _pct(_number(row["actual_eur"]), _number(row["anterior_eur"]))}
-               for row in family_rows]
-    drivers.sort(key=lambda item: abs(item["variacion_eur"]), reverse=True)
+    from .shared_sales import comparar_ventas_por_dimension
+    filtros_compartidos = {("sku" if clave == "articulo" else clave): valor for clave, valor in filters.items()}
+    family_rows = comparar_ventas_por_dimension(db, empresa_id, (cs, ce), (ps, pe), "familia", filtros_compartidos)
+    drivers = [{"familia": row["entidad"], "actual_eur": row["actual"], "anterior_eur": row["previo"],
+                "variacion_eur": row["variacion_eur"], "variacion_pct": row["variacion_pct"]} for row in family_rows]
 
     quadrants = []
     if inventory_date:
@@ -336,9 +315,11 @@ def build_executive_dashboard(db: Session, empresa_id: int, period: str = "fytd"
                       "ventas_90d_eur": _number(row["ventas_90d_eur"])} for row in rows]
 
     options = _filter_options(db, empresa_id)
+    from .shared_sales_materialized import estado_ventas_compartidas
+    estado_compartido = estado_ventas_compartidas(db, empresa_id)
     comparable_complete = coverage["ventas_desde"] <= ps
     return {
-        "ready": True, "period": period, "familia": filters["familia"],
+        "ready": True, "period": period, "familia": filters["familia"], "analitica_compartida": estado_compartido,
         "filtros": {"seleccion": filters, "opciones": options},
         "periodo_actual": {"inicio": cs, "fin": ce}, "periodo_comparable": {"inicio": ps, "fin": pe},
         "cobertura": {"ventas_desde": coverage["ventas_desde"], "ventas_hasta": anchor,

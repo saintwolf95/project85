@@ -67,3 +67,8 @@ La sustitución de ventas se limita al intervalo entre la primera y la última f
 
 - El límite por archivo CSV/XLSX es 200.000 filas. No reducirlo sin una medición de capacidad que contemple los lotes fiscales exportados de Power BI.
 - La validación sigue descartando pies de totales y filtros de Power BI antes de contabilizar los registros operativos.
+
+## Actualización v2.10 local — recálculo de ventas compartidas
+
+- Las cargas web de ventas marcan las fechas afectadas y recalculan la capa diaria dentro de la transacción de carga, incluso con el recálculo ABC/XYZ diferido. La migración marca los cambios externos y el proceso del backend reconstruye pendientes en segundo plano.
+- El endpoint de estado incorpora `analitica_compartida`, con revisión de origen, revisión calculada, fechas y estado. No interpretar las fechas con movimientos como prueba de cobertura completa. Antes de publicar, validar la migración, los permisos del rol de escritura y los triggers en PostgreSQL con una copia representativa.
